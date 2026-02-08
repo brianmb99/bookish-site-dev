@@ -155,7 +155,6 @@ button.secondary:hover, .btn.secondary:hover{
   background:var(--color-bg-surface);
   border:1px solid var(--color-border-subtle);
   border-radius:14px;
-  overflow:hidden;
   display:flex;
   gap:12px;
   padding:12px;
@@ -466,7 +465,7 @@ button.secondary:hover, .btn.secondary:hover{
   width:100%;
   padding:14px 20px;
 }
-.account-link{
+.account-modal .account-link{
   display:block;
   margin-top:20px;
   padding-top:16px;
@@ -476,7 +475,7 @@ button.secondary:hover, .btn.secondary:hover{
   text-decoration:none;
   cursor:pointer;
 }
-.account-link:hover{
+.account-modal .account-link:hover{
   color:#94a3b8;
 }
 /* Balance display states */
@@ -647,6 +646,14 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .status-dot[data-tip]:hover::after{
   opacity:1;
 }
+/* Superuser mode: hide book status dots by default, show only in superuser mode */
+body:not([data-superuser]) .card .status-dot{display:none}
+/* Gear icon active state when superuser mode is on */
+#geekBtn.superuser-active{
+  color:var(--color-accent)!important;
+  text-decoration:none!important;
+  text-shadow:0 0 8px rgba(245,158,11,.3);
+}
 .card.deleting{opacity:.35;filter:grayscale(.85)}
 /* book search UI */
 #bookSearchUI{display:none;margin:8px 0 12px;background:#101418;border:1px solid #2b333b;border-radius:8px;padding:12px 14px 14px}
@@ -731,10 +738,15 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .add-mode #modalTitle{display:none} /* hide generic title when adding */
 .add-mode form.inline{margin-top:0}
 .add-mode form.inline .form-as-tile{display:flex;flex-direction:column;align-items:center;gap:16px}
-.add-mode .tile-cover{width:66%;max-width:340px;aspect-ratio:2/3;background:#101418;border:1px solid #2b333b;border-radius:18px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
+.add-mode .tile-cover{width:45%;max-width:220px;aspect-ratio:2/3;min-height:180px;background:#101418;border:1px solid #2b333b;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
 .add-mode .tile-cover:hover{border-color:#3a4652;box-shadow:0 4px 14px -4px rgba(0,0,0,.6)}
 .add-mode .tile-cover img{width:100%;height:100%;object-fit:cover;display:block}
 .add-mode .tile-cover .placeholder{font-size:.6rem;opacity:.4;text-align:center;padding:0 12px}
+/* Cover placeholder icon (SVG book + label) */
+.placeholder-icon{display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.3;color:var(--color-text-muted)}
+.placeholder-icon span{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em}
+.placeholder-loading{font-size:.6rem;opacity:.4;animation:pulse-opacity 1.5s ease-in-out infinite}
+@keyframes pulse-opacity{0%,100%{opacity:.3}50%{opacity:.7}}
 .add-mode .fields-cluster{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
 .add-mode .field-block{display:flex;flex-direction:column;gap:4px}
 .add-mode .field-block label{font-size:.55rem;letter-spacing:.08em;opacity:.55;margin:0;text-transform:uppercase;font-weight:600}
@@ -781,6 +793,14 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 /* Search status message (progressive loading feedback) */
 .search-status{font-size:.6rem;padding:4px 8px;opacity:.5;border-bottom:1px solid #252d35;pointer-events:none}
+/* Compact geek panel */
+.geek-panel{margin:6px 0 10px;padding:6px 10px;border:1px solid var(--color-border-subtle);border-radius:8px;background:var(--color-bg-deep);color:var(--color-text-secondary);font-size:.7rem;font-family:var(--font-mono)}
+.geek-header{display:flex;align-items:center;gap:8px}
+.geek-title{font-family:var(--font-body);font-weight:600;font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;opacity:.5}
+.geek-stats{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.geek-close{background:transparent!important;border:none!important;color:var(--color-text-muted)!important;font-size:.85rem!important;padding:2px 6px!important;cursor:pointer;opacity:.5;min-height:auto!important}
+.geek-close:hover{opacity:1;color:var(--color-text-primary)!important}
+.geek-status-line{opacity:.45;margin-top:2px;min-height:1em;font-size:.6rem}
 
 /* Account modal styles */
 .modal-content{background:#1e242b;border:1px solid #2b333b;border-radius:16px;padding:20px;width:100%;max-width:420px;position:relative}

@@ -62,6 +62,23 @@ export function resetKeyState() {
 let walletError = null; // Track wallet errors for UI status manager
 window.BOOKISH_DEBUG=true; function dbg(...a){ if(window.BOOKISH_DEBUG) console.debug('[Bookish]',...a); }
 
+// --- Superuser mode ---
+const SU_KEY = 'bookish_superuser';
+function isSuperuser(){ return document.body.hasAttribute('data-superuser'); }
+function setSuperuser(on){
+  if(on){
+    document.body.setAttribute('data-superuser','');
+    localStorage.setItem(SU_KEY,'true');
+    if(geekBtn) geekBtn.classList.add('superuser-active');
+  } else {
+    document.body.removeAttribute('data-superuser');
+    localStorage.removeItem(SU_KEY);
+    if(geekBtn) geekBtn.classList.remove('superuser-active');
+  }
+}
+// Restore superuser state on load
+if(localStorage.getItem(SU_KEY)==='true') setSuperuser(true);
+
 /**
  * Get balance status for UI status manager
  * @returns {Object} { error }
@@ -78,6 +95,9 @@ function formatDisplayDate(iso){ if(!iso) return ''; const d=new Date(iso+'T00:0
 // --- Modal helpers ---
 function openModal(entry){
   modal.classList.add('active');
+  // Toggle add-mode class: new book (no entry) gets the tile layout, edit does not
+  const inner = modal.querySelector('.modal-inner');
+  if(inner){ if(!entry) inner.classList.add('add-mode'); else inner.classList.remove('add-mode'); }
   // Ensure all inputs enabled (was previously gated by edit toggle)
   const inputs=[...form.querySelectorAll('input,select,textarea')];
   inputs.forEach(i=>{ if(i.name==='priorTxid') return; i.disabled=false; });
@@ -101,7 +121,7 @@ function openModal(entry){
   updateDirty();
   if(window.bookSearch) window.bookSearch.handleModalOpen(!!entry);
 }
-function closeModal(){ modal.classList.remove('active'); form.reset(); coverPreview.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; if(window.bookSearch) window.bookSearch.handleModalOpen(true); }
+function closeModal(){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); coverPreview.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; if(window.bookSearch) window.bookSearch.handleModalOpen(true); }
 function clearBooks(){ entries=[]; render(); }
 window.bookishApp={ openModal, clearBooks };
 // Dirty tracking helpers
@@ -313,7 +333,7 @@ function render(){
     const rawFmt=(e.format||'').toLowerCase(); let fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
     div.className='card'+(e._deleting?' deleting':''); div.dataset.txid=e.txid||e.id||''; div.dataset.fmt=fmtVariant; div.dataset.format=rawFmt;
     const dotClass = (!e.txid) ? 'local' : (e.onArweave ? 'arweave' : 'irys');
-    const dotTitle = (!e.txid) ? 'Local only - not uploaded' : (e.onArweave ? 'Permanent on Arweave' : 'On Irys - settling to Arweave...');
+    const dotTitle = (!e.txid) ? 'Saved on this device' : (e.onArweave ? 'Backed up permanently' : 'Syncing to cloud...');
     const dateDisp=formatDisplayDate(e.dateRead);
     div.innerHTML=`
       <div class="status-dot ${dotClass}" data-tip="${dotTitle}"></div>
@@ -347,15 +367,15 @@ async function updateBookDots(){
     if(!e.txid) {
       // Local only - not uploaded
       dot.classList.add('local');
-      dot.dataset.tip = 'Local only - not uploaded';
+      dot.dataset.tip = 'Saved on this device';
     } else if(e.onArweave) {
       // Final state - on Arweave, stop checking
       dot.classList.add('arweave');
-      dot.dataset.tip = 'Permanent on Arweave';
+      dot.dataset.tip = 'Backed up permanently';
     } else {
       // On Irys - check if reached Arweave
       dot.classList.add('irys');
-      dot.dataset.tip = 'On Irys - settling to Arweave...';
+      dot.dataset.tip = 'Syncing to cloud...';
 
       // Probe in background (only for entries needing it)
       probeAndUpdateDot(e, dot);
@@ -378,7 +398,7 @@ async function probeAndUpdateDot(entry, dot) {
       // Update dot immediately
       dot.classList.remove('irys');
       dot.classList.add('arweave');
-      dot.dataset.tip = 'Permanent on Arweave';
+      dot.dataset.tip = 'Backed up permanently';
     }
   } catch(err) {
     // Probe failed - will retry on next update
@@ -805,33 +825,38 @@ window.addEventListener('online',()=>{ uiStatusManager.refresh(); replayOps(); }
 // Expose sync manager methods for account UI
 window.bookishSyncManager = { getSyncStatus: getSyncStatusForUI, triggerPersistenceCheck };
 
-// --- Geek panel wiring ---
+// --- Geek panel wiring (superuser toggle) ---
 function updateGeekPanel(){
   if(!geekBody) return;
-  // Hide sync status when not logged in
   if(!storageManager.isLoggedIn()){
     geekBody.textContent = 'Sign in to view sync status';
     return;
   }
   const net = window.bookishNet || { reads:{ irys:0, arweave:0, errors:0 } };
-  geekBody.textContent = `Reads – Irys: ${net.reads.irys||0}, Arweave: ${net.reads.arweave||0}, Errors: ${net.reads.errors||0}`;
+  geekBody.textContent = `Irys: ${net.reads.irys||0}  Arweave: ${net.reads.arweave||0}  Err: ${net.reads.errors||0}`;
+}
+function openSuperuser(){
+  setSuperuser(true);
+  if(geekPanel) geekPanel.style.display='block';
+  updateGeekPanel();
+  setTimeout(()=>{ if(typeof updateBookDots==='function') updateBookDots(); }, 10);
+  diagIdle=true; diagIdleSeed();
+  if(diagTickTimer) clearInterval(diagTickTimer);
+  diagTickTimer=setInterval(()=>{ if(diagIdle) diagIdleSeed(); else diagRender(); }, 1000);
+}
+function closeSuperuser(){
+  setSuperuser(false);
+  if(geekPanel) geekPanel.style.display='none';
+  diagClear(); if(diagTickTimer){ clearInterval(diagTickTimer); diagTickTimer=null; }
+  setTimeout(()=>{ if(typeof updateBookDots==='function') updateBookDots(); }, 10);
 }
 if(geekBtn && geekPanel && geekClose){
   geekBtn.addEventListener('click',()=>{
-    const open = (geekPanel.style.display==='none' || !geekPanel.style.display);
-    geekPanel.style.display = open?'block':'none';
-    updateGeekPanel();
-    setTimeout(()=>{ if(typeof updateBookDots==='function') updateBookDots(); }, 10);
-    if(!open){
-      diagClear(); if(diagTickTimer) { clearInterval(diagTickTimer); diagTickTimer=null; }
-    } else {
-      diagIdle=true; diagIdleSeed();
-      if(diagTickTimer) clearInterval(diagTickTimer);
-      diagTickTimer=setInterval(()=>{ if(diagIdle) diagIdleSeed(); else diagRender(); }, 1000);
-    }
+    if(isSuperuser()) closeSuperuser(); else openSuperuser();
   });
-  geekClose.addEventListener('click',()=>{ geekPanel.style.display='none'; diagClear(); if(diagTickTimer){ clearInterval(diagTickTimer); diagTickTimer=null; } setTimeout(()=>{ if(typeof updateBookDots==='function') updateBookDots(); }, 10); });
-  // Removed 5s interval - now handled by 30s sync loop
+  geekClose.addEventListener('click',()=>{ closeSuperuser(); });
+  // Restore geek panel if superuser was already on
+  if(isSuperuser()) openSuperuser();
 }
 
 // --- Pinch / wheel zoom (restore) ---

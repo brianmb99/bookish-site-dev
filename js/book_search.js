@@ -6,6 +6,15 @@ import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary 
   const ui=document.getElementById('bookSearchUI'); const input=document.getElementById('bookSearchInput'); const resultsEl=document.getElementById('bookSearchResults');
   const editionNav=document.getElementById('editionNav'); const prevBtn=document.getElementById('prevEdition'); const nextBtn=document.getElementById('nextEdition'); const editionInfo=document.getElementById('editionInfo');
   const controls=document.getElementById('searchControls');
+  // SVG book icon for cover placeholders (matches library card placeholder)
+  const BOOK_SVG='<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
+  function setCoverPlaceholder(ph,state){
+    if(!ph) return;
+    ph.style.display='flex';
+    if(state==='loading') ph.innerHTML='<div class="placeholder-loading">Loading cover\u2026</div>';
+    else if(state==='no-cover') ph.innerHTML='<div class="placeholder-icon">'+BOOK_SVG+'<span>No cover</span></div>';
+    else ph.innerHTML='<div class="placeholder-icon">'+BOOK_SVG+'<span>Click or search to add cover</span></div>';
+  }
   let sortMode='relevance'; let activeFilter='all';
   // precision state
   let lastQuery=''; let queryTokens=[]; let strictActive=false; // whether strict pass produced results
@@ -107,27 +116,15 @@ import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary 
     markDirty();
     if(payload.artwork){ const hi=payload.artwork.replace(/100x100/,'600x600');
       const ph = document.getElementById('coverPlaceholder');
-      if(ph) {
-        ph.style.display = 'flex';
-        ph.textContent = 'Loading cover...';
-      }
+      setCoverPlaceholder(ph,'loading');
       coverPreview.style.display = 'none';
       try{ const resp=await fetch(hi); if(resp.ok){ const blob=await resp.blob(); const b64=await blobToBase64(blob); coverPreview.src=b64; coverPreview.style.display='block'; coverPreview.dataset.b64=b64.split(',')[1]; coverPreview.dataset.mime=blob.type||'image/jpeg'; if(ph) ph.style.display='none'; markDirty(); } else {
-          if(ph) {
-            ph.style.display = 'flex';
-            ph.textContent = 'No cover available';
-          }
+          setCoverPlaceholder(ph,'no-cover');
         } }catch(e){
-        if(ph) {
-          ph.style.display = 'flex';
-          ph.textContent = 'No cover available';
-        }
+        setCoverPlaceholder(ph,'no-cover');
       } } else {
       const ph = document.getElementById('coverPlaceholder');
-      if(ph) {
-        ph.style.display = 'flex';
-        ph.textContent = 'No cover available';
-      }
+      setCoverPlaceholder(ph,'no-cover');
     } }
   function populateFromBasic(meta){ if(!meta) return;
     // Always set fields (not just when empty)
@@ -139,10 +136,7 @@ import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary 
       loadCoverById(meta.cover_i);
     } else {
       const ph = document.getElementById('coverPlaceholder');
-      if(ph) {
-        ph.style.display = 'flex';
-        ph.textContent = 'No cover available';
-      }
+      setCoverPlaceholder(ph,'no-cover');
       coverPreview.style.display = 'none';
     } }
 
@@ -152,10 +146,7 @@ import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary 
     } else {
       // Edition has no cover - show placeholder
       const ph = document.getElementById('coverPlaceholder');
-      if(ph) {
-        ph.style.display = 'flex';
-        ph.textContent = 'No cover available';
-      }
+      setCoverPlaceholder(ph,'no-cover');
       coverPreview.src = '';
       coverPreview.style.display = 'none';
       delete coverPreview.dataset.b64;
@@ -165,29 +156,18 @@ import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary 
   form && form.addEventListener('booksearch:applied', markDirty);
   async function loadCoverById(id){ const ph = document.getElementById('coverPlaceholder');
     if(!id) {
-      // No cover ID - show placeholder
-      if(ph) {
-        ph.style.display = 'flex';
-        ph.textContent = 'No cover available';
-      }
+      setCoverPlaceholder(ph,'no-cover');
       coverPreview.style.display = 'none';
       return;
     }
     // Show loading state
-    if(ph) {
-      ph.style.display = 'flex';
-      ph.textContent = 'Loading cover...';
-    }
+    setCoverPlaceholder(ph,'loading');
     coverPreview.style.display = 'none';
     try {
       const url = `https://covers.openlibrary.org/b/id/${id}-L.jpg`;
       const resp = await fetch(url);
       if(!resp.ok) {
-        // Fetch failed - show placeholder
-        if(ph) {
-          ph.style.display = 'flex';
-          ph.textContent = 'No cover available';
-        }
+        setCoverPlaceholder(ph,'no-cover');
         return;
       }
       const blob = await resp.blob();
@@ -200,11 +180,7 @@ import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary 
       if(ph) ph.style.display = 'none';
       markDirty();
     } catch(e) {
-      // Error - show placeholder
-      if(ph) {
-        ph.style.display = 'flex';
-        ph.textContent = 'No cover available';
-      }
+      setCoverPlaceholder(ph,'no-cover');
     } }
   function blobToBase64(blob){ return new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(blob); }); }
   input.addEventListener('input',()=>{ if(debounceTimer) clearTimeout(debounceTimer); debounceTimer=setTimeout(()=>searchTitle(input.value),350); });

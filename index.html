@@ -17,17 +17,17 @@
     <div id="status" style="display:none"></div>
     <button id="installBtn" class="refresh-link" style="display:none" title="Install">Install</button>
     <button id="accountBtn" class="refresh-link account-link" title="Account">Account</button>
-    <button id="geekBtn" class="refresh-link" title="Network status" aria-controls="geekPanel">⚙︎</button>
+    <button id="geekBtn" class="refresh-link" title="Developer mode" aria-controls="geekPanel">⚙︎</button>
   </div>
 </header>
 <!-- status banner removed; status now shown inside geek panel -->
-<div id="geekPanel" class="layer-above" style="display:none;margin:10px 0;padding:8px;border:1px dashed #94a3b8;border-radius:8px;background:#0b1220;color:#e2e8f0;font-size:.75rem">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <strong>Arweave/Irys Status</strong>
-    <button id="geekClose" class="refresh-link" style="font-size:.7rem">close</button>
+<div id="geekPanel" class="geek-panel" style="display:none">
+  <div class="geek-header">
+    <span class="geek-title">Network</span>
+    <span id="geekBody" class="geek-stats"></span>
+    <button id="geekClose" class="geek-close" title="Turn off developer mode">&times;</button>
   </div>
-  <div id="geekBody">Reads: —</div>
-  <div id="geekStatusLine" style="opacity:.7;margin-top:4px;min-height:1.2em"></div>
+  <div id="geekStatusLine" class="geek-status-line"></div>
 </div>
 <div style="display:flex;gap:8px;margin:4px 0 12px">
   <button id="newBtn" class="new-compact" title="Add new">＋ New</button>
@@ -99,7 +99,7 @@
       <div class="form-as-tile">
         <div class="tile-cover" id="tileCoverClick">
           <img class="preview" id="coverPreview" style="display:none"/>
-          <div class="placeholder" id="coverPlaceholder">Click or search to add cover</div>
+          <div class="placeholder" id="coverPlaceholder"><div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Click or search to add cover</span></div></div>
           <input type="file" name="coverFile" accept="image/*" style="display:none" id="hiddenCoverInput"/>
         </div>
         <div class="fields-cluster">
