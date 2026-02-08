@@ -15,7 +15,7 @@ import { openOnrampWidget, isCoinbaseOnrampConfigured } from './core/coinbase_on
 import { formatBalanceAsBooks, getBalanceStatus } from './core/balance_display.js';
 import { requestFaucetFunding, isEligibleForFaucet } from './core/faucet_client.js';
 import { deriveCredentialKeys, normalizeUsername, encryptCredentialPayload, decryptCredentialPayload, assessPasswordStrength, isValidEmail } from './core/credential_core.js';
-import { uploadCredentialMapping, downloadCredentialMapping } from './core/credential_mapping.js';
+import { uploadCredentialMapping, downloadCredentialMapping, credentialMappingExists } from './core/credential_mapping.js';
 
 // Global state
 let currentBalanceETH = null;
@@ -676,12 +676,47 @@ async function runAccountCreationFlow(email, displayName, password) {
   `, false);
 
   try {
-    // Step 1: Create account locally
+    // Step 1a: Derive credential keys first (PBKDF2 - 0.5-3s)
+    // Done before seed generation so we can check for duplicates
+    const { lookupKey, encryptionKey } = await deriveCredentialKeys(email, password);
+
+    // Step 1b: Check if an account already exists with these credentials
+    // Same email + same password = same lookup key → would shadow existing account
+    try {
+      const existingMapping = await credentialMappingExists(lookupKey);
+      if (existingMapping) {
+        console.log('[Bookish:AccountUI] Credential mapping already exists for these credentials');
+        // Show error and offer to sign in instead
+        showAccountModal(`
+          <div class="modal-content-enter" style="text-align:center;padding:20px 0;">
+            <h3 style="margin:0 0 16px 0;">Account Already Exists</h3>
+            <p style="font-size:.875rem;line-height:1.6;color:var(--color-text-secondary);margin:0 0 20px 0;">
+              An account with this email and password already exists. Would you like to sign in instead?
+            </p>
+            <button id="goToSignInBtn" class="btn primary" style="width:100%;padding:14px 20px;margin-bottom:12px;">Sign In</button>
+            <button id="backToCreateBtn" class="btn secondary" style="width:100%;padding:12px 20px;">Back to Create Account</button>
+          </div>
+        `);
+        document.getElementById('goToSignInBtn').onclick = () => {
+          closeHelperModal();
+          handleSignIn();
+        };
+        document.getElementById('backToCreateBtn').onclick = () => {
+          closeHelperModal();
+          handleCreateAccount();
+        };
+        return;
+      }
+    } catch (checkErr) {
+      // Network error checking existence — continue with creation
+      // (if the mapping truly exists, the user will just end up with a shadowed account,
+      // but this is better than blocking creation when Arweave is temporarily unreachable)
+      console.warn('[Bookish:AccountUI] Could not check for existing mapping (continuing):', checkErr.message);
+    }
+
+    // Step 1c: Create account locally (generate new seed)
     const account = await createNewAccount();
     console.log('[Bookish:AccountUI] Account created:', account.address);
-
-    // Derive credential keys (PBKDF2 - 0.5-3s)
-    const { lookupKey, encryptionKey } = await deriveCredentialKeys(email, password);
 
     // Encrypt entire credential payload (seed + metadata) per spec
     const createdAt = Date.now();
