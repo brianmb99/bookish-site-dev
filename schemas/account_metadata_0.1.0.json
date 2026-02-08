@@ -1,0 +1,23 @@
+{
+  "$id": "https://your.repo/bookish/schemas/account-metadata-0.1.0.json",
+  "title": "Bookish Account Metadata v0.1.0",
+  "description": "Encrypted account profile stored on Arweave, keyed by wallet address hash.",
+  "type": "object",
+  "required": ["schema", "version", "encryptedData"],
+  "properties": {
+    "schema": { "const": "account-metadata" },
+    "version": { "const": "0.1.0" },
+    "encryptedData": {
+      "type": "object",
+      "required": ["iv", "ciphertext"],
+      "properties": {
+        "iv": { "type": "string", "description": "Base64-encoded initialization vector" },
+        "ciphertext": { "type": "string", "description": "Base64-encoded encrypted account profile (displayName, settings, bookmarks). Does NOT contain seed phrase." }
+      },
+      "additionalProperties": true,
+      "description": "Encrypted with bookish.sym (derived from seed, same key used for book entries)"
+    }
+  },
+  "additionalProperties": true,
+  "$comment": "Arweave tags: App-Name=Bookish, Type=account-metadata, Account-Lookup-Key=SHA256(walletAddress + 'bookish'), Enc=aes-256-gcm"
+}

@@ -1,0 +1,159 @@
+<!doctype html><html><head><meta charset="utf-8"/><title>Bookish</title><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#2563eb"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png"/>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-192.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css"/>
+</head><body><div id="app">
+<header>
+  <h1>Bookish</h1>
+  <div style="display:flex;align-items:center;gap:10px;font-size:.65rem">
+    <div id="status" style="display:none"></div>
+    <button id="installBtn" class="refresh-link" style="display:none" title="Install">Install</button>
+    <button id="accountBtn" class="refresh-link account-link" title="Account">Account</button>
+    <button id="geekBtn" class="refresh-link" title="Network status" aria-controls="geekPanel">⚙︎</button>
+  </div>
+</header>
+<!-- status banner removed; status now shown inside geek panel -->
+<div id="geekPanel" class="layer-above" style="display:none;margin:10px 0;padding:8px;border:1px dashed #94a3b8;border-radius:8px;background:#0b1220;color:#e2e8f0;font-size:.75rem">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <strong>Arweave/Irys Status</strong>
+    <button id="geekClose" class="refresh-link" style="font-size:.7rem">close</button>
+  </div>
+  <div id="geekBody">Reads: —</div>
+  <div id="geekStatusLine" style="opacity:.7;margin-top:4px;min-height:1.2em"></div>
+</div>
+<div style="display:flex;gap:8px;margin:4px 0 12px">
+  <button id="newBtn" class="new-compact" title="Add new">＋ New</button>
+</div>
+<div id="accountBanner" class="account-banner" role="button" tabindex="0" style="display:none;"></div>
+<div id="accountNudgeBanner" class="nudge-banner" style="display:none;">
+  <div class="nudge-content">
+    <span class="nudge-icon">💡</span>
+    <div class="nudge-text">
+      <div class="nudge-headline">Want to access your books from other devices?</div>
+      <button id="nudgeCreateAccountBtn" class="btn-link nudge-cta">Create Free Account →</button>
+    </div>
+  </div>
+  <button id="nudgeDismissBtn" class="nudge-dismiss" title="Dismiss">×</button>
+</div>
+
+<!-- Account Modal -->
+<div id="accountModal" class="modal-overlay" style="display:none;">
+  <div class="modal-backdrop"></div>
+  <div class="modal account-modal">
+    <button class="modal-close" id="accountModalClose" aria-label="Close">×</button>
+    <div id="accountModalContent"></div>
+  </div>
+</div>
+
+<div id="cards" class="cards"></div>
+<div id="empty" class="empty-state" style="display:none">
+  <div class="empty-illustration">📚</div>
+  <h2 class="empty-headline">Your reading journey starts here</h2>
+  <p class="empty-subtext">Your personal reading list — encrypted, permanent, and truly yours.</p>
+  <button id="emptyAddBookBtn" class="btn primary empty-cta">Add Your First Book</button>
+  <p class="empty-hint">No sign-up needed. Start adding books right away.</p>
+</div>
+<div id="celebrationToast" class="toast celebration-toast" style="display:none;">
+  <span class="toast-icon">🎉</span>
+  <span class="toast-message">First book added! You're on your way.</span>
+</div>
+<footer>Bookish • Alpha • v0.1.17</footer>
+</div>
+
+<div id="modal" class="modal">
+  <div class="modal-inner">
+    <button class="close" id="closeModal">×</button>
+    <div id="bookSearchUI">
+      <h3>Lookup Book</h3>
+      <input id="bookSearchInput" placeholder="Search title…" autocomplete="off"/>
+      <div id="searchControls" class="search-controls" style="display:none">
+        <div class="filters">
+          <span class="tiny-label">Filter:</span>
+          <button type="button" class="filter-btn active" data-filter="all">All</button>
+          <button type="button" class="filter-btn" data-filter="audiobook">Audio</button>
+          <button type="button" class="filter-btn" data-filter="paperback">Paperback</button>
+          <button type="button" class="filter-btn" data-filter="hardcover">Hardcover</button>
+        </div>
+        <div class="sorters">
+          <span class="tiny-label">Sort:</span>
+          <button type="button" class="sort-btn active" data-mode="relevance" title="Original relevance order">Relevance</button>
+          <button type="button" class="sort-btn" data-mode="newest" title="Newest year first">Newest</button>
+        </div>
+      </div>
+      <div id="bookSearchResults" style="display:none"></div>
+      <div id="editionNav">
+        <button type="button" id="prevEdition">◀</button>
+        <div id="editionInfo"></div>
+        <button type="button" id="nextEdition">▶</button>
+      </div>
+    </div>
+    <form id="entryForm" class="inline" novalidate>
+      <div class="form-as-tile">
+        <div class="tile-cover" id="tileCoverClick">
+          <img class="preview" id="coverPreview" style="display:none"/>
+          <div class="placeholder" id="coverPlaceholder">Click or search to add cover</div>
+          <input type="file" name="coverFile" accept="image/*" style="display:none" id="hiddenCoverInput"/>
+        </div>
+        <div class="fields-cluster">
+          <div class="field-block"><label>Title</label><input name="title" required placeholder="Title"></div>
+          <div class="field-block"><label>Author</label><input name="author" required placeholder="Author"></div>
+            <div class="field-block"><label>Edition</label><input name="edition" placeholder="Edition / Year"></div>
+          <div class="field-block"><label>Format</label><select name="format"><option>paperback</option><option>hardcover</option><option>ebook</option><option>audiobook</option><option>other</option></select></div>
+          <div class="field-block"><label>Date Read</label><div class="date-input-wrap"><input name="dateRead" type="date"><button type="button" class="cal-btn" id="openCalendarBtn" title="Pick date">📅</button></div></div>
+        </div>
+      </div>
+      <input type="hidden" name="priorTxid"/>
+      <div class="row-actions primary-actions">
+        <button type="submit" class="btn" id="saveBtn" disabled>Save</button>
+        <button type="button" class="btn secondary edit-only" id="cancelBtn">Cancel</button>
+        <button type="button" class="btn danger edit-only" id="deleteBtn" title="Soft delete (tombstone)">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+ if('serviceWorker' in navigator){
+  window.addEventListener('load',async()=>{
+    try{
+      const registration=await navigator.serviceWorker.register('./sw.js');
+      // Check for updates on page load
+      registration.update();
+      // Check for updates periodically (every 60 minutes)
+      setInterval(()=>registration.update(),60*60*1000);
+    }catch(err){
+      console.warn('SW registration failed:',err);
+    }
+  });
+  // Reload when new service worker takes control
+  let refreshing=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(refreshing) return;
+    refreshing=true;
+    window.location.reload();
+  });
+ }
+ // Minimal install prompt handling
+ let deferredPrompt; const installBtn=document.getElementById('installBtn');
+ window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; installBtn.style.display='inline-flex'; });
+ installBtn?.addEventListener('click', async ()=>{ if(!deferredPrompt) return; installBtn.disabled=true; try{ deferredPrompt.prompt(); await deferredPrompt.userChoice; }finally{ installBtn.style.display='none'; deferredPrompt=null; }
+ });
+</script>
+<!-- Arweave web bundle + browser client (serverless mode) -->
+<script src="https://unpkg.com/arweave/bundles/web.bundle.min.js"></script>
+<script type="module" src="js/browser_client.js"></script>
+<script type="module" src="js/wallet.js"></script>
+<script type="module" src="js/irys_client_browser.js"></script>
+<script type="module" src="js/cache.js"></script>
+<script type="module" src="js/sync_manager.js"></script>
+<script type="module" src="js/app.js"></script>
+<script defer src="js/date_picker.js"></script>
+<script type="module" src="js/book_search.js"></script>
+</body></html>
