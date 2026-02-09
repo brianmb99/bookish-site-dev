@@ -200,10 +200,7 @@ async function renderAccountModalContent(container) {
         balanceStatus = 'empty';
       }
 
-      // Determine protection type
       const accountObj = JSON.parse(accountData);
-      const isCredentialAuth = accountObj.derivation === 'credential';
-      const protectionType = isCredentialAuth ? '🔑 Email + Password' : '🔑 Manual Seed';
       const accountEmail = accountObj.email || '';
 
       // Check if account is backed up
@@ -238,19 +235,16 @@ async function renderAccountModalContent(container) {
         <div class="account-balance" style="margin-top: 12px; font-size: 0.85rem;">
           Balance: <span id="accountBalanceDisplay" class="balance-display balance-${balanceStatus}">${balanceText}</span>
         </div>
-        <div class="account-protection" style="margin-top: 8px; font-size: 0.85rem; color: #94a3b8;">
-          Protection: ${protectionType}
-        </div>
       </div>
 
       <div class="account-actions" style="margin-top: 24px;">
-        ${!isBackedUp ? (() => {
-          const buttonText = isFunded ? 'Add Credit' : 'Enable Cloud Backup';
+        ${(() => {
+          const buttonText = !isFunded ? 'Enable Cloud Backup' : 'Add Credit';
           return `<button id="enableBackupBtn" class="btn primary" style="width: 100%; margin-bottom: 12px;">${buttonText}</button>`;
-        })() : ''}
-        <div style="display: flex; gap: 12px; margin-top: 12px;">
-          <button id="logoutBtn" class="btn secondary" style="flex: 1;">Sign Out</button>
-          <button id="viewRecoveryBtn" class="btn secondary" style="flex: 1;">Recovery Phrase</button>
+        })()}
+        <div style="display: flex; justify-content: center; gap: 16px; margin-top: 16px; font-size: 0.8rem;">
+          <button id="viewRecoveryBtn" style="background: transparent; border: none; color: #64748b; cursor: pointer; text-decoration: underline; font-size: 0.8rem; padding: 4px;">Recovery Phrase</button>
+          <button id="logoutBtn" style="background: transparent; border: none; color: #64748b; cursor: pointer; text-decoration: underline; font-size: 0.8rem; padding: 4px;">Sign Out</button>
         </div>
       </div>
     `;
@@ -2201,7 +2195,7 @@ function getPersistenceIndicatorHTML(state) {
   const titles = {
     local: 'Account stored locally only',
     syncing: 'Syncing to Arweave...',
-    confirmed: 'Backed up on Arweave'
+    confirmed: 'Saved to Arweave'
   };
   const cls = classes[state] || 'local';
   const title = titles[state] || titles.local;

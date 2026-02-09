@@ -333,7 +333,7 @@ function render(){
     const rawFmt=(e.format||'').toLowerCase(); let fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
     div.className='card'+(e._deleting?' deleting':''); div.dataset.txid=e.txid||e.id||''; div.dataset.fmt=fmtVariant; div.dataset.format=rawFmt;
     const dotClass = (!e.txid) ? 'local' : (e.onArweave ? 'arweave' : 'irys');
-    const dotTitle = (!e.txid) ? 'Saved on this device' : (e.onArweave ? 'Backed up permanently' : 'Syncing to cloud...');
+    const dotTitle = (!e.txid) ? 'Local only' : (e.onArweave ? 'Saved to Arweave' : 'Saved to Irys \u2014 settling to Arweave\u2026');
     const dateDisp=formatDisplayDate(e.dateRead);
     div.innerHTML=`
       <div class="status-dot ${dotClass}" data-tip="${dotTitle}"></div>
@@ -367,15 +367,15 @@ async function updateBookDots(){
     if(!e.txid) {
       // Local only - not uploaded
       dot.classList.add('local');
-      dot.dataset.tip = 'Saved on this device';
+      dot.dataset.tip = 'Local only';
     } else if(e.onArweave) {
       // Final state - on Arweave, stop checking
       dot.classList.add('arweave');
-      dot.dataset.tip = 'Backed up permanently';
+      dot.dataset.tip = 'Saved to Arweave';
     } else {
       // On Irys - check if reached Arweave
       dot.classList.add('irys');
-      dot.dataset.tip = 'Syncing to cloud...';
+      dot.dataset.tip = 'Saved to Irys \u2014 settling to Arweave\u2026';
 
       // Probe in background (only for entries needing it)
       probeAndUpdateDot(e, dot);
@@ -419,7 +419,7 @@ async function probeAndUpdateDot(entry, dot) {
       }
       dot.classList.remove('irys');
       dot.classList.add('arweave');
-      dot.dataset.tip = 'Backed up permanently';
+      dot.dataset.tip = 'Saved to Arweave';
     } else {
       // Not on Arweave yet — increment backoff
       const prev = probeBackoff.get(txid) || { fails: 0, lastAttempt: 0 };
