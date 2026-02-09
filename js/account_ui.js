@@ -223,15 +223,6 @@ async function renderAccountModalContent(container) {
         ${accountEmail ? `
           <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px;">${accountEmail}</div>
         ` : ''}
-        ${fullAddress ? `
-          <div class="account-address-row" style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
-            <span style="font-size: 0.8rem; color: #64748b;">Address:</span>
-            <span class="account-address" style="font-family: var(--font-mono); font-size: 0.8rem; color: #94a3b8;">${shortAddress}</span>
-            <button id="copyAddressBtn" class="btn-icon copy-btn" style="background: transparent; border: 1px solid #334155; color: #94a3b8; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; display: flex; align-items: center; gap: 4px;" title="Copy address">
-              📋 Copy
-            </button>
-          </div>
-        ` : ''}
         <div class="account-balance" style="margin-top: 12px; font-size: 0.85rem;">
           Balance: <span id="accountBalanceDisplay" class="balance-display balance-${balanceStatus}">${balanceText}</span>
         </div>
@@ -250,26 +241,6 @@ async function renderAccountModalContent(container) {
     `;
 
     // Setup event listeners for logged-in state
-    document.getElementById('copyAddressBtn')?.addEventListener('click', async () => {
-      if (fullAddress) {
-        try {
-          await copyAddressToClipboard(fullAddress);
-          const btn = document.getElementById('copyAddressBtn');
-          if (btn) {
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '✓ Copied';
-            btn.style.color = '#10b981';
-            setTimeout(() => {
-              btn.innerHTML = originalText;
-              btn.style.color = '#94a3b8';
-            }, 2000);
-          }
-        } catch (e) {
-          console.error('[Bookish:AccountUI] Failed to copy address:', e);
-        }
-      }
-    });
-
     document.getElementById('enableBackupBtn')?.addEventListener('click', () => {
       // DO NOT close account modal - open funding dialog on top
       handleBuyStorage();
@@ -1628,40 +1599,33 @@ function showFundingValueModal(address, isFunded = false) {
   let advancedExpanded = false;
 
   // Adapt messaging based on funding status
-  const title = isFunded ? 'Add More Credit' : 'Make Your Books Permanent';
-  const icon = isFunded ? '💰 → ☁️' : '☁️ + 🔒 = ♾️';
-  const introText = isFunded
-    ? 'You have some credit, but need more to back up all your books.'
-    : 'Right now, your books only exist on this device. Enable cloud backup to:';
-  const costLabel = isFunded ? 'Recommended: ~$5' : 'One-time cost: ~$5';
+  const title = isFunded ? 'Add Credit' : 'Make Your Books Permanent';
   const paymentPrompt = isFunded ? 'How would you like to add credit?' : 'How would you like to pay?';
 
   showAccountModal(`
     <div style="text-align:center;padding:20px 0;">
       <h3 style="margin:0 0 16px 0;">${title}</h3>
-      <div style="font-size:2.5rem;margin:16px 0;opacity:.9;">${icon}</div>
-      <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:0 0 24px 0;text-align:left;">
-        ${introText}
-      </p>
       ${!isFunded ? `
+      <div style="font-size:2.5rem;margin:16px 0;opacity:.9;">☁️ + 🔒 = ♾️</div>
+      <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:0 0 24px 0;text-align:left;">
+        Right now, your books only exist on this device. Enable cloud backup to:
+      </p>
       <div style="text-align:left;margin:0 0 24px 0;">
         <div style="font-size:.875rem;line-height:2;margin:8px 0;">✓ Access from any device</div>
         <div style="font-size:.875rem;line-height:2;margin:8px 0;">✓ Never lose your reading history</div>
         <div style="font-size:.875rem;line-height:2;margin:8px 0;">✓ Keep your data forever</div>
       </div>
-      ` : `
-      <div style="text-align:left;margin:0 0 24px 0;">
-        <div style="font-size:.875rem;line-height:2;margin:8px 0;">✓ Back up all your books</div>
-        <div style="font-size:.875rem;line-height:2;margin:8px 0;">✓ Keep them synced across devices</div>
-        <div style="font-size:.875rem;line-height:2;margin:8px 0;">✓ Ensure permanent storage</div>
-      </div>
-      `}
       <div style="background:#1e3a5f;border:1px solid #2563eb;border-radius:8px;padding:12px 16px;margin:0 0 24px 0;">
         <div style="font-size:.85rem;line-height:1.5;">
-          <strong>${costLabel}</strong><br>
+          <strong>One-time cost: ~$5</strong><br>
           <span style="opacity:.8;">(covers years of storage)</span>
         </div>
       </div>
+      ` : `
+      <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:0 0 24px 0;text-align:left;">
+        Add funds to keep your books backed up. Your balance covers storage for years — a little goes a long way.
+      </p>
+      `}
       <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:0 0 16px 0;">${paymentPrompt}</p>
       <button id="payWithCoinbaseBtn" class="btn" style="width:100%;padding:14px 20px;background:#2563eb;margin-bottom:12px;">Pay with Coinbase</button>
       <button id="payWithCardBtn" class="btn secondary" style="width:100%;padding:12px 20px;margin-bottom:12px;opacity:.6;cursor:not-allowed;" disabled>Pay with Card (Coming Soon)</button>
