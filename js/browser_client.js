@@ -147,6 +147,8 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
       {name:'Visibility', values:['private']},
       ...(pub? [{name:'Pub-Addr', values:[pub]}]: [])
     ];
+
+    // --- Arweave query (existing: supports sort, owners, block info) ---
     const q = owner ? `query($after:String,$first:Int,$tags:[TagFilter!],$owners:[String!]){
       t1: transactions(after:$after,first:$first,sort:HEIGHT_DESC,tags:$tags){pageInfo{hasNextPage}edges{cursor node{id tags{name value} block{timestamp height}}}}
       t2: transactions(after:$after,first:$first,sort:HEIGHT_DESC,owners:$owners,tags:$tags){pageInfo{hasNextPage}edges{cursor node{id tags{name value} block{timestamp height}}}}
@@ -154,14 +156,56 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
       t1: transactions(after:$after,first:$first,sort:HEIGHT_DESC,tags:$tags){pageInfo{hasNextPage}edges{cursor node{id tags{name value} block{timestamp height}}}}
     }`;
     const variables = owner ? { after: cursor??null, first: limit, tags, owners:[owner] } : { after: cursor??null, first: limit, tags };
-    const resp = await fetch('https://arweave.net/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,variables})});
-    const json = await resp.json(); if(!json.data) throw new Error('graphql');
-    const edges1 = json.data.t1?.edges||[];
-    const edges2 = json.data.t2?.edges||[];
-    const seen=new Set();
-    const merged=[...edges1, ...edges2].filter(e=>{ if(seen.has(e.node.id)) return false; seen.add(e.node.id); return true; });
-    const hasNext = (json.data.t1?.pageInfo?.hasNextPage) || (json.data.t2?.pageInfo?.hasNextPage);
-    return { edges: merged, pageInfo: { hasNextPage: !!hasNext } };
+
+    const arweavePromise = fetch('https://arweave.net/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,variables})})
+      .then(r=>r.json())
+      .catch(err=>{ console.warn('[Bookish] Arweave book search failed:', err.message); return null; });
+
+    // --- Irys supplemental query (first page only — catches recently uploaded data) ---
+    // Irys GraphQL: no sort, no owners, no block info; cursors are gateway-specific
+    let irysPromise = Promise.resolve(null);
+    if (!cursor && pub) {
+      const irysTagsStr = tags.map(t=>`{name:"${t.name}",values:${JSON.stringify(t.values)}}`).join(',');
+      const irysQ = `{transactions(tags:[${irysTagsStr}],first:${limit}){edges{node{id tags{name value}}}}}`;
+      irysPromise = fetch('https://node1.irys.xyz/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:irysQ})})
+        .then(r=>r.json())
+        .catch(err=>{ console.warn('[Bookish] Irys book search failed:', err.message); return null; });
+    }
+
+    // Run both in parallel
+    const [arJson, irJson] = await Promise.all([arweavePromise, irysPromise]);
+
+    // Extract Arweave edges
+    let arweaveHasNext = false;
+    const seen = new Set();
+    const merged = [];
+
+    if (arJson?.data) {
+      const edges1 = arJson.data.t1?.edges||[];
+      const edges2 = arJson.data.t2?.edges||[];
+      for(const e of [...edges1, ...edges2]){
+        if(!seen.has(e.node.id)){ seen.add(e.node.id); merged.push(e); }
+      }
+      arweaveHasNext = !!(arJson.data.t1?.pageInfo?.hasNextPage || arJson.data.t2?.pageInfo?.hasNextPage);
+    }
+
+    // Supplement with Irys-only entries (not yet indexed on arweave.net)
+    let irysOnlyCount = 0;
+    if (irJson?.data?.transactions?.edges) {
+      for(const e of irJson.data.transactions.edges){
+        if(!seen.has(e.node.id)){
+          seen.add(e.node.id);
+          merged.push({ ...e, node:{ ...e.node, block:null } });
+          irysOnlyCount++;
+        }
+      }
+    }
+    if(irysOnlyCount>0) console.log(`[Bookish] Found ${irysOnlyCount} entries on Irys not yet indexed on Arweave`);
+
+    // If both gateways failed, throw
+    if(merged.length===0 && !arJson?.data && !irJson?.data) throw new Error('graphql');
+
+    return { edges: merged, pageInfo: { hasNextPage: arweaveHasNext } };
   }
 
   function isTomb(e){ return e.node.tags?.some(t=>t.name==='Op' && t.value==='tombstone'); }
