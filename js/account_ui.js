@@ -1551,13 +1551,22 @@ function showSeedPhraseModal(seed) {
 
   showAccountModal(`
     <h3>Your Recovery Phrase</h3>
-    <div style="background:#f59e0b1a;border:1px solid #f59e0b;border-radius:6px;padding:16px;margin:16px 0;">
-      <p style="font-size:.875rem;line-height:1.6;color:#f59e0b;margin:0;">
-        <strong>Keep this private and secure.</strong> Anyone with this recovery phrase can access your account.
+    <div style="background:#4a90e21a;border:1px solid #4a90e2;border-radius:6px;padding:16px;margin:16px 0;">
+      <p style="font-size:.875rem;line-height:1.6;color:#93c5fd;margin:0;">
+        Your recovery phrase is a master key to your account. If you ever forget your email or password and can't reach us for help, you can use these 12 words to regain access on any device.
+      </p>
+      <p style="font-size:.8rem;line-height:1.5;color:#93c5fd;margin:10px 0 0 0;opacity:.85;">
+        Most users won't need this — you can always sign in with your email and password, and we can help if you forget.
       </p>
     </div>
 
-    <div style="background:#0b1220;border:1px solid #334155;border-radius:6px;padding:16px;margin:16px 0;">
+    <div style="background:#f59e0b1a;border:1px solid #f59e0b;border-radius:6px;padding:12px 16px;margin:0 0 16px 0;">
+      <p style="font-size:.8rem;line-height:1.5;color:#f59e0b;margin:0;">
+        <strong>Keep this private and secure.</strong> Anyone with these words can access your account.
+      </p>
+    </div>
+
+    <div style="background:#0b1220;border:1px solid #334155;border-radius:6px;padding:16px;margin:0 0 16px 0;">
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;font-family:monospace;font-size:.875rem;">
         ${words.map((word, i) => `
           <div style="display:flex;gap:8px;">
