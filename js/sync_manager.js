@@ -1,5 +1,6 @@
 // sync_manager.js - Unified sync coordination for books and account metadata
 // Manages: balance checking, auto-persistence, book sync, and global sync status
+// Uses adaptive intervals: Active (30s) → Cooling (60s) → Idle (5min)
 
 import { getWalletBalance } from './core/wallet_core.js';
 import * as storageManager from './core/storage_manager.js';
@@ -11,9 +12,23 @@ let initialSynced = false;
 let currentBalanceETH = null;
 let previousFundingState = false;
 let autoPersistenceTriggered = false;
+let syncCycleCount = 0;
 
-// Configuration
-const SYNC_DELAY_MS = 30000; // 30 seconds delay after each cycle completes
+// Adaptive interval state
+let lastWriteAt = 0;        // Timestamp of last local book write
+let dirtyFlag = false;       // Set on write, cleared after next sync
+let forceBalanceCheck = false; // Force balance check on next cycle (Sync Now)
+
+// Balance throttle state
+let lastBalanceCheckAt = 0;
+
+// Configuration — adaptive intervals
+const INTERVAL_ACTIVE_MS  = 30000;   // 30s — after a local write or login
+const INTERVAL_COOLING_MS = 60000;   // 60s — 2min since last write
+const INTERVAL_IDLE_MS    = 300000;  // 5min — no writes for 5+ min
+const ACTIVE_WINDOW_MS    = 120000;  // 2min — how long Active lasts after a write
+const COOLING_WINDOW_MS   = 300000;  // 5min — how long Cooling lasts
+const BALANCE_THROTTLE_MS = 300000;  // 5min — skip balance RPC when confirmed
 const MIN_FUNDING_ETH = 0.00002;
 
 // Callbacks for external modules
@@ -43,13 +58,34 @@ window.bookishSyncManager = {
 };
 
 /**
+ * Compute the current sync interval based on activity state.
+ * @returns {number} delay in ms before next sync cycle
+ */
+function computeSyncInterval() {
+  const elapsed = Date.now() - lastWriteAt;
+
+  // If a write happened recently or the dirty flag is set, stay in Active
+  if (dirtyFlag || (lastWriteAt > 0 && elapsed < ACTIVE_WINDOW_MS)) {
+    return INTERVAL_ACTIVE_MS;
+  }
+
+  // Cooling period: 2–5 min since last write
+  if (lastWriteAt > 0 && elapsed < COOLING_WINDOW_MS) {
+    return INTERVAL_COOLING_MS;
+  }
+
+  // Idle: no recent writes (or no writes ever)
+  return INTERVAL_IDLE_MS;
+}
+
+/**
  * Initialize sync manager
  * @param {Object} config - Configuration object
- * @param {Function} config.onStatusChange - Callback for status updates (status: string) => void
- * @param {Function} config.onBookSync - Callback to trigger book sync () => Promise<{entries, tombstones}>
- * @param {Function} config.onAccountPersistence - Callback to trigger account persistence (isAutoTrigger: boolean) => Promise<void>
- * @param {Function} config.getWalletInfo - Callback to get wallet info () => {address, privateKey} | null
- * @param {Function} config.updateBalance - Callback to update balance display (balanceETH: string) => void
+ * @param {Function} config.onStatusChange - Callback for status updates
+ * @param {Function} config.onBookSync - Callback to trigger book sync
+ * @param {Function} config.onAccountPersistence - Callback to trigger account persistence
+ * @param {Function} config.getWalletInfo - Callback to get wallet info
+ * @param {Function} config.updateBalance - Callback to update balance display
  */
 export function initSyncManager(config) {
   statusCallback = config.onStatusChange;
@@ -62,7 +98,7 @@ export function initSyncManager(config) {
 }
 
 /**
- * Start unified sync loop - runs continuously with 30s delay between cycles
+ * Start unified sync loop with adaptive interval
  */
 export function startSync() {
   if (syncInterval) {
@@ -72,14 +108,18 @@ export function startSync() {
 
   console.log('[Bookish:SyncManager] Starting sync loop');
 
-  // Start the recursive sync loop
+  // Mark as recently active so first cycles run at Active interval
+  lastWriteAt = Date.now();
+
   async function syncLoop() {
     await runSyncCycle();
-    // Schedule next cycle 30s after this one completes
-    syncInterval = setTimeout(syncLoop, SYNC_DELAY_MS);
+    const delay = computeSyncInterval();
+    // Expose next-sync time for geek panel countdown
+    window.bookishNextSyncAt = Date.now() + delay;
+    syncInterval = setTimeout(syncLoop, delay);
   }
 
-  // Run first cycle immediately (0 delay)
+  // Run first cycle immediately
   syncLoop();
 }
 
@@ -95,34 +135,81 @@ export function stopSync() {
 }
 
 /**
+ * Mark data as dirty — resets to Active interval.
+ * Call from app.js on create/edit/delete.
+ */
+export function markDirty() {
+  dirtyFlag = true;
+  lastWriteAt = Date.now();
+}
+
+/**
+ * Trigger an immediate sync cycle (Sync Now).
+ * Resets to Active interval and forces a fresh balance check.
+ * @returns {Promise<void>}
+ */
+export async function triggerSyncNow() {
+  console.log('[Bookish:SyncManager] Sync Now triggered');
+  lastWriteAt = Date.now();
+  dirtyFlag = true;
+  forceBalanceCheck = true;
+
+  // If a sync is already running, just let it finish — the dirty flag
+  // ensures the next scheduled cycle will run at Active interval.
+  if (isSyncing) {
+    console.log('[Bookish:SyncManager] Sync in progress, will run at Active interval next');
+    return;
+  }
+
+  // Cancel the pending scheduled cycle and run immediately
+  if (syncInterval) {
+    clearTimeout(syncInterval);
+    syncInterval = null;
+  }
+
+  await runSyncCycle();
+
+  // Re-enter the loop at Active interval
+  const delay = computeSyncInterval();
+  window.bookishNextSyncAt = Date.now() + delay;
+
+  async function syncLoop() {
+    await runSyncCycle();
+    const d = computeSyncInterval();
+    window.bookishNextSyncAt = Date.now() + d;
+    syncInterval = setTimeout(syncLoop, d);
+  }
+  syncInterval = setTimeout(syncLoop, delay);
+}
+
+/**
  * Run a complete sync cycle
  * 1. Check balance (auto-persist if needed)
  * 2. Sync books
  * 3. Update status based on combined state
  */
 async function runSyncCycle() {
-  console.log('[Bookish:SyncManager] runSyncCycle called, isSyncing:', isSyncing);
+  syncCycleCount++;
 
   if (isSyncing) {
-    console.log('[Bookish:SyncManager] Sync already in progress, skipping');
+    console.debug('[Bookish:SyncManager] Sync already in progress, skipping');
     return;
   }
 
   isSyncing = true;
-  transientSyncState.isRefreshing = false; // No more manual sync
-  transientSyncState.error = null; // Clear previous errors
-  if (statusCallback) statusCallback(); // Trigger UI refresh
+  dirtyFlag = false; // Clear dirty flag at the start of the cycle
+  transientSyncState.isRefreshing = false;
+  transientSyncState.error = null;
+  if (statusCallback) statusCallback();
 
   try {
     // Step 1: Check balance and trigger auto-persistence if needed
     await checkBalanceAndAutoPersist();
 
     // Step 2: Sync books (if callback provided)
-    let booksSynced = false;
     if (bookSyncCallback) {
       try {
         await bookSyncCallback();
-        booksSynced = true;
       } catch (error) {
         console.error('[Bookish:SyncManager] Book sync failed:', error);
         transientSyncState.error = error.message || 'Sync failed';
@@ -139,7 +226,7 @@ async function runSyncCycle() {
       // Clear success flag after 2 seconds
       setTimeout(() => {
         transientSyncState.justCompleted = false;
-        if (statusCallback) statusCallback(); // Refresh UI after transient state expires
+        if (statusCallback) statusCallback();
       }, 2000);
     } else {
       transientSyncState.isRefreshing = false;
@@ -151,7 +238,7 @@ async function runSyncCycle() {
     transientSyncState.isRefreshing = false;
   } finally {
     isSyncing = false;
-    if (statusCallback) statusCallback(); // Trigger UI refresh
+    if (statusCallback) statusCallback();
 
     // Update book status dots and geek panel after sync completes
     if (typeof window.updateBookDots === 'function') {
@@ -167,81 +254,76 @@ async function runSyncCycle() {
 }
 
 /**
- * Check wallet balance and trigger auto-persistence if funded
+ * Check wallet balance and trigger auto-persistence if funded.
+ * Throttles RPC calls when account is already confirmed and no force flag.
  */
 async function checkBalanceAndAutoPersist() {
-  console.log('[Bookish:SyncManager] checkBalanceAndAutoPersist - callback exists:', !!getWalletInfoCallback);
-
-  // Get wallet info via callback
   if (!getWalletInfoCallback) return;
   const walletInfo = await getWalletInfoCallback();
-  console.log('[Bookish:SyncManager] walletInfo:', walletInfo ? 'found' : 'null');
   if (!walletInfo?.address) return;
 
   try {
-    // Check balance
-    const { balanceETH } = await getWalletBalance(walletInfo.address);
-    currentBalanceETH = balanceETH;
+    const accountState = getAccountPersistenceState();
 
-    // Update UI via callback
-    if (updateBalanceCallback) {
-      updateBalanceCallback(balanceETH);
+    // Balance throttle: skip RPC when confirmed and recently checked
+    const now = Date.now();
+    const canThrottle = accountState === 'confirmed'
+      && !forceBalanceCheck
+      && currentBalanceETH !== null
+      && (now - lastBalanceCheckAt) < BALANCE_THROTTLE_MS;
+
+    if (canThrottle) {
+      // Reuse cached balance — no RPC call
+      console.debug(`[Bookish:SyncManager] Balance throttled (cached ${currentBalanceETH}), next check in ${Math.round((BALANCE_THROTTLE_MS - (now - lastBalanceCheckAt)) / 1000)}s`);
+    } else {
+      // Perform actual balance check
+      const { balanceETH } = await getWalletBalance(walletInfo.address);
+      const balanceChanged = currentBalanceETH !== null && currentBalanceETH !== balanceETH;
+      currentBalanceETH = balanceETH;
+      lastBalanceCheckAt = now;
+      forceBalanceCheck = false;
+
+      if (updateBalanceCallback) {
+        updateBalanceCallback(balanceETH);
+      }
+
+      if (balanceChanged) {
+        console.log('[Bookish:SyncManager] Balance changed:', balanceETH);
+      } else {
+        console.debug('[Bookish:SyncManager] Balance:', balanceETH);
+      }
     }
 
     // Check if wallet just became funded (transition from underfunded to funded)
-    const isFunded = balanceETH >= MIN_FUNDING_ETH;
+    const isFunded = currentBalanceETH >= MIN_FUNDING_ETH;
     const justFunded = isFunded && !previousFundingState;
     previousFundingState = isFunded;
 
-    console.log('[Bookish:SyncManager] Balance check:', { balanceETH, isFunded, justFunded, autoPersistenceTriggered });
-
     // Trigger auto-persistence on funding (only once)
-    if (justFunded && !autoPersistenceTriggered) {
-      const accountState = getAccountPersistenceState();
-
-      console.log('[Bookish:SyncManager] Just funded, account state:', accountState);
-
-      // Update progress modal to "waiting" state (mark step 2 as complete)
-      try {
-        if (window.__updateFundingProgress) {
-          window.__updateFundingProgress('waiting');
+    if (isFunded && !autoPersistenceTriggered && accountState === 'local') {
+      // Update progress modal if this is a fresh funding transition
+      if (justFunded) {
+        try {
+          if (window.__updateFundingProgress) {
+            window.__updateFundingProgress('waiting');
+          }
+        } catch (error) {
+          console.error('[Bookish:SyncManager] Failed to update progress modal:', error);
         }
-      } catch (error) {
-        console.error('[Bookish:SyncManager] Failed to update progress modal:', error);
-        // Continue with persistence anyway
+        console.log('[Bookish:SyncManager] Just funded, triggering auto-persistence...');
+      } else {
+        console.log('[Bookish:SyncManager] Already funded, account needs persistence, triggering...');
       }
 
-      if (accountState === 'local') {
-        console.log('[Bookish:SyncManager] Wallet funded, triggering auto-persistence...');
-        autoPersistenceTriggered = true;
+      autoPersistenceTriggered = true;
 
-        if (accountPersistenceCallback) {
-          try {
-            await accountPersistenceCallback(true); // isAutoTrigger = true
-            console.log('[Bookish:SyncManager] Auto-persistence completed');
-          } catch (error) {
-            console.error('[Bookish:SyncManager] Auto-persistence failed:', error);
-            autoPersistenceTriggered = false; // Allow retry
-          }
-        }
-      }
-    } else if (isFunded && !autoPersistenceTriggered) {
-      // Wallet is funded but wasn't a transition - check if we should persist anyway
-      const accountState = getAccountPersistenceState();
-      console.log('[Bookish:SyncManager] Already funded, account state:', accountState);
-
-      if (accountState === 'local') {
-        console.log('[Bookish:SyncManager] Account needs persistence, triggering...');
-        autoPersistenceTriggered = true;
-
-        if (accountPersistenceCallback) {
-          try {
-            await accountPersistenceCallback(true); // isAutoTrigger = true
-            console.log('[Bookish:SyncManager] Auto-persistence completed');
-          } catch (error) {
-            console.error('[Bookish:SyncManager] Auto-persistence failed:', error);
-            autoPersistenceTriggered = false; // Allow retry
-          }
+      if (accountPersistenceCallback) {
+        try {
+          await accountPersistenceCallback(true); // isAutoTrigger = true
+          console.log('[Bookish:SyncManager] Auto-persistence completed');
+        } catch (error) {
+          console.error('[Bookish:SyncManager] Auto-persistence failed:', error);
+          autoPersistenceTriggered = false; // Allow retry
         }
       }
     }
@@ -257,27 +339,14 @@ async function checkBalanceAndAutoPersist() {
  */
 function getAccountPersistenceState() {
   try {
-    // Must be logged in to have a meaningful persistence state
-    if (!storageManager.isLoggedIn()) {
-      return 'local';
-    }
-
-    // Check if account is persisted to Arweave
-    if (storageManager.isAccountPersisted()) {
-      return 'confirmed';
-    }
-
+    if (!storageManager.isLoggedIn()) return 'local';
+    if (storageManager.isAccountPersisted()) return 'confirmed';
     return 'local';
   } catch (error) {
     console.error('[Bookish:SyncManager] Failed to get account state:', error);
     return 'local';
   }
 }
-
-/**
- * Trigger manual sync
- */
-// Manual sync removed - sync loop runs automatically when logged in
 
 /**
  * Get current sync status (legacy)
@@ -293,7 +362,6 @@ export function getSyncStatus() {
 
 /**
  * Get sync status for UI status manager
- * @returns {Object} { isSyncing, pendingBooks, isRefreshing, justCompleted, completedTime, error }
  */
 export function getSyncStatusForUI() {
   return {
@@ -321,6 +389,7 @@ function setStatus(status) {
  */
 export function triggerPersistenceCheck() {
   console.log('[Bookish:SyncManager] Manual persistence check triggered');
+  forceBalanceCheck = true;
   checkBalanceAndAutoPersist().catch(error => {
     console.error('[Bookish:SyncManager] Manual persistence check failed:', error);
   });
@@ -332,4 +401,28 @@ export function triggerPersistenceCheck() {
 export function resetAutoPersistenceTrigger() {
   autoPersistenceTriggered = false;
   previousFundingState = false;
+}
+
+/**
+ * Reset all internal state (for testing only)
+ */
+export function resetForTesting() {
+  stopSync();
+  isSyncing = false;
+  initialSynced = false;
+  currentBalanceETH = null;
+  previousFundingState = false;
+  autoPersistenceTriggered = false;
+  syncCycleCount = 0;
+  lastWriteAt = 0;
+  dirtyFlag = false;
+  forceBalanceCheck = false;
+  lastBalanceCheckAt = 0;
+  transientSyncState = {
+    justCompleted: false,
+    completedTime: 0,
+    pendingBooks: 0,
+    isRefreshing: false,
+    error: null
+  };
 }

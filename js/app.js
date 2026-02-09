@@ -1,6 +1,6 @@
 // Bookish app.js (pure serverless variant)
 
-import { initSyncManager, startSync, stopSync, getSyncStatusForUI, triggerPersistenceCheck } from './sync_manager.js';
+import { initSyncManager, startSync, stopSync, getSyncStatusForUI, triggerPersistenceCheck, markDirty, triggerSyncNow } from './sync_manager.js';
 import * as storageManager from './core/storage_manager.js';
 import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
@@ -384,25 +384,52 @@ async function updateBookDots(){
 }
 
 /**
+ * Probe backoff state — exponential backoff per entry after failures
+ * Prevents spamming gateways with HEAD requests for entries not yet on Arweave
+ */
+const probeBackoff = new Map(); // txid → { fails: number, lastAttempt: number }
+const PROBE_BASE_MS = 60000;   // 60s base backoff
+const PROBE_MAX_MS  = 900000;  // 15 min max backoff
+
+/** Reset all probe backoff counters (called on Sync Now) */
+function resetProbeBackoff() { probeBackoff.clear(); }
+
+/**
  * Probe Arweave availability and update entry state
+ * Uses exponential backoff per entry to avoid continuous error traffic
  */
 async function probeAndUpdateDot(entry, dot) {
+  const txid = entry.txid;
+  const state = probeBackoff.get(txid);
+  if (state) {
+    const backoff = Math.min(PROBE_BASE_MS * Math.pow(2, state.fails), PROBE_MAX_MS);
+    if (Date.now() - state.lastAttempt < backoff) {
+      return; // Still in backoff window
+    }
+  }
+
   try {
-    const rec = await window.bookishNet?.probeAvailability?.(entry.txid);
+    const rec = await window.bookishNet?.probeAvailability?.(txid);
     if(rec?.arweave) {
       // Reached Arweave - persist this flag so we stop probing
       entry.onArweave = true;
+      probeBackoff.delete(txid); // Success — clear backoff
       if(window.bookishCache) {
         await window.bookishCache.putEntry(entry);
       }
-      // Update dot immediately
       dot.classList.remove('irys');
       dot.classList.add('arweave');
       dot.dataset.tip = 'Backed up permanently';
+    } else {
+      // Not on Arweave yet — increment backoff
+      const prev = probeBackoff.get(txid) || { fails: 0, lastAttempt: 0 };
+      probeBackoff.set(txid, { fails: prev.fails + 1, lastAttempt: Date.now() });
     }
   } catch(err) {
-    // Probe failed - will retry on next update
-    console.debug('[Bookish] Arweave probe failed for', entry.txid, err);
+    // Probe failed — increment backoff
+    const prev = probeBackoff.get(txid) || { fails: 0, lastAttempt: 0 };
+    probeBackoff.set(txid, { fails: prev.fails + 1, lastAttempt: Date.now() });
+    console.debug('[Bookish] Arweave probe failed for', txid, err);
   }
 }
 
@@ -592,6 +619,7 @@ async function createServerless(payload){ if(window.bookishCache){ const dup=awa
   const rec={id:localId, txid:null, ...payload, createdAt:Date.now(), status:'pending', pending:true, seenRemote:false, onArweave:false, _committed:false};
   entries.push(rec);
   if(window.bookishCache) await window.bookishCache.putEntry(rec);
+  markDirty(); // Signal sync manager that local data changed
   orderEntries(); render();
 
   // Phase 2: First-book celebration
@@ -653,7 +681,7 @@ async function createServerless(payload){ if(window.bookishCache){ const dup=awa
     }
   }
 }
-async function editServerless(priorTxid,payload){ const old=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid); if(!old) throw new Error('Entry not found'); const snapshot={...old}; Object.assign(old,payload); old.pending=true; old.status='pending'; old.seenRemote=false; old._committed=false; await window.bookishCache.putEntry(old); orderEntries(); render(); if(!old.txid){ /* local-only entry — saved to cache, no upload needed */ return; } try { const haveKeys = await ensureKeys(); if (!haveKeys) throw new Error('Cannot upload: encryption keys not available'); payload.bookId=old.bookId; diagMaybeSet(['Saving via Irys\u2026']); const res=await browserClient.uploadEntry({ ...payload },{ extraTags:[{name:'Prev',value:priorTxid}] }); const oldTxid=priorTxid; old.txid=res.txid; old.id=res.txid; old.pending=false; old.status='confirmed'; old.seenRemote=true; await window.bookishCache.replaceProvisional(oldTxid,old); walletError=null; orderEntries(); render(); uiStatusManager.refresh(); diagMaybeClear(); } catch(e){ if(e && e.code==='irys-required'){ // revert UI and prompt refresh
+async function editServerless(priorTxid,payload){ const old=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid); if(!old) throw new Error('Entry not found'); const snapshot={...old}; Object.assign(old,payload); old.pending=true; old.status='pending'; old.seenRemote=false; old._committed=false; await window.bookishCache.putEntry(old); markDirty(); orderEntries(); render(); if(!old.txid){ /* local-only entry — saved to cache, no upload needed */ return; } try { const haveKeys = await ensureKeys(); if (!haveKeys) throw new Error('Cannot upload: encryption keys not available'); payload.bookId=old.bookId; diagMaybeSet(['Saving via Irys\u2026']); const res=await browserClient.uploadEntry({ ...payload },{ extraTags:[{name:'Prev',value:priorTxid}] }); const oldTxid=priorTxid; old.txid=res.txid; old.id=res.txid; old.pending=false; old.status='confirmed'; old.seenRemote=true; await window.bookishCache.replaceProvisional(oldTxid,old); walletError=null; orderEntries(); render(); uiStatusManager.refresh(); diagMaybeClear(); } catch(e){ if(e && e.code==='irys-required'){ // revert UI and prompt refresh
     Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render();
     const pending = { type:'edit', priorTxid, payload };
     lastPendingOp = pending;
@@ -672,7 +700,7 @@ async function editServerless(priorTxid,payload){ const old=entries.find(e=>e.tx
     walletError='Auto-fund blocked: Base wallet low on ETH. Top up and retry from Account.'; uiStatusManager.refresh();
   diagMaybeSet(['Base wallet low on ETH','Add a small amount, then retry']);
   } else { Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render(); walletError='Save failed'; uiStatusManager.refresh(); diagMaybeSet(['Save failed']); } } }
-async function deleteServerless(priorTxid){ const entry=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid); if(!entry) return; markDeletingVisual(entry); uiStatusManager.refresh(); if(!entry.txid){ /* local-only entry — just remove from cache and entries */ if(window.bookishCache) await window.bookishCache.deleteById(entry.id); entries=entries.filter(e=>e!==entry); orderEntries(); render(); uiStatusManager.refresh(); return; } try { const haveKeys = await ensureKeys(); if (!haveKeys) throw new Error('Cannot delete: encryption keys not available'); await browserClient.tombstone(priorTxid,{ note:'user delete' }); entry.status='tombstoned'; entry.tombstonedAt=Date.now(); await window.bookishCache.putEntry(entry); entries=entries.filter(e=>e.status!=='tombstoned'); walletError=null; orderEntries(); render(); uiStatusManager.refresh(); } catch{ entry._deleting=false; render(); walletError='Delete failed'; uiStatusManager.refresh(); } }
+async function deleteServerless(priorTxid){ const entry=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid); if(!entry) return; markDeletingVisual(entry); uiStatusManager.refresh(); if(!entry.txid){ /* local-only entry — just remove from cache and entries */ if(window.bookishCache) await window.bookishCache.deleteById(entry.id); entries=entries.filter(e=>e!==entry); orderEntries(); render(); uiStatusManager.refresh(); return; } try { const haveKeys = await ensureKeys(); if (!haveKeys) throw new Error('Cannot delete: encryption keys not available'); await browserClient.tombstone(priorTxid,{ note:'user delete' }); entry.status='tombstoned'; entry.tombstonedAt=Date.now(); await window.bookishCache.putEntry(entry); entries=entries.filter(e=>e.status!=='tombstoned'); walletError=null; markDirty(); orderEntries(); render(); uiStatusManager.refresh(); } catch{ entry._deleting=false; render(); walletError='Delete failed'; uiStatusManager.refresh(); } }
 
 // --- Form handlers ---
 form.addEventListener('submit',ev=>{ ev.preventDefault(); const priorTxid=form.priorTxid.value||undefined; const payload={ title:form.title.value.trim(), author:form.author.value.trim(), edition:form.edition.value.trim(), format:form.format.value, dateRead:form.dateRead.value }; if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; } uiStatusManager.refresh(); if(priorTxid){ // immediate close, background edit
@@ -857,6 +885,25 @@ if(geekBtn && geekPanel && geekClose){
   geekClose.addEventListener('click',()=>{ closeSuperuser(); });
   // Restore geek panel if superuser was already on
   if(isSuperuser()) openSuperuser();
+}
+
+// --- Sync Now button (superuser-only) ---
+const syncNowBtn = document.getElementById('syncNowBtn');
+if (syncNowBtn) {
+  syncNowBtn.addEventListener('click', async () => {
+    syncNowBtn.disabled = true;
+    syncNowBtn.textContent = 'Syncing\u2026';
+    resetProbeBackoff(); // Clear all probe backoff counters
+    try {
+      await triggerSyncNow();
+    } catch (e) {
+      console.error('[Bookish] Sync Now error:', e);
+    } finally {
+      syncNowBtn.textContent = 'Sync';
+      // Prevent button spam — re-enable after 2s
+      setTimeout(() => { syncNowBtn.disabled = false; }, 2000);
+    }
+  });
 }
 
 // --- Pinch / wheel zoom (restore) ---

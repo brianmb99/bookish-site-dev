@@ -648,6 +648,10 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 }
 /* Superuser mode: hide book status dots by default, show only in superuser mode */
 body:not([data-superuser]) .card .status-dot{display:none}
+/* Sync Now button: visible only in superuser mode */
+body:not([data-superuser]) #syncNowBtn{display:none!important}
+body[data-superuser] #syncNowBtn{display:inline-flex!important}
+#syncNowBtn:disabled{opacity:.5;cursor:not-allowed}
 /* Gear icon active state when superuser mode is on */
 #geekBtn.superuser-active{
   color:var(--color-accent)!important;
