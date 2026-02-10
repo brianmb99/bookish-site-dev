@@ -10,8 +10,9 @@ export const PROTOCOL_CONFIG = {
   FEE_BPS: 2500,
 
   // Minimum fee in wei - skip fee if below this (saves gas)
-  // ~$0.001 worth of ETH at $3000/ETH = 0.00000033 ETH = 330000000000 wei
-  MIN_FEE_WEI: '300000000000',
+  // ~$0.0001 worth of ETH at $3000/ETH = 0.000000033 ETH = 33000000000 wei
+  // Low threshold so fee is collected even on small Irys fundings (~740B wei typical)
+  MIN_FEE_WEI: '33000000000',
 
   // Feature flag - easy to disable if issues
   FEE_ENABLED: true,

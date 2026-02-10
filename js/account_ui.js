@@ -455,7 +455,20 @@ async function handleCreateAccount() {
         <span class="field-match" id="passwordMatch" aria-live="polite"></span>
       </div>
 
-      <button type="submit" id="createAccountSubmitBtn" class="btn primary" style="width:100%;padding:14px 20px;" disabled>Create Account</button>
+      <div class="form-group" style="margin-top:20px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.8rem;color:var(--color-text-secondary);">
+          <input type="checkbox" id="escrowOptIn" checked style="width:16px;height:16px;accent-color:var(--color-primary);cursor:pointer;">
+          Enable account recovery
+        </label>
+        <div id="escrowDetails" style="display:none;margin-top:8px;font-size:.75rem;line-height:1.5;color:var(--color-text-muted);padding:10px 12px;background:var(--color-bg-base);border:1px solid var(--color-border-subtle);border-radius:6px;">
+          If you forget your password, the Bookish team can help you recover your account.
+          This means we store an encrypted backup that only we can access.
+          <strong style="display:block;margin-top:6px;color:#f59e0b;">Turning this off means nobody can help if you forget your password.</strong>
+        </div>
+        <button type="button" id="escrowLearnMore" class="link-btn" style="font-size:.7rem;margin-top:4px;color:var(--color-text-muted);">Learn more</button>
+      </div>
+
+      <button type="submit" id="createAccountSubmitBtn" class="btn primary" style="width:100%;padding:14px 20px;margin-top:16px;" disabled>Create Account</button>
     </form>
 
     <div class="auth-footer">
@@ -572,6 +585,19 @@ async function handleCreateAccount() {
     document.getElementById('togglePassword2').setAttribute('aria-label', type === 'password' ? 'Show password' : 'Hide password');
   });
 
+  // Escrow "Learn more" toggle
+  document.getElementById('escrowLearnMore').addEventListener('click', () => {
+    const details = document.getElementById('escrowDetails');
+    const btn = document.getElementById('escrowLearnMore');
+    if (details.style.display === 'none') {
+      details.style.display = 'block';
+      btn.textContent = 'Hide details';
+    } else {
+      details.style.display = 'none';
+      btn.textContent = 'Learn more';
+    }
+  });
+
   // Switch to sign-in
   document.getElementById('switchToSignIn').addEventListener('click', () => {
     closeHelperModal();
@@ -586,12 +612,13 @@ async function handleCreateAccount() {
     const email = normalizeUsername(emailInput.value);
     const displayName = displayNameInput.value.trim();
     const password = passwordInput.value;
+    const escrowEnabled = document.getElementById('escrowOptIn').checked;
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Creating...';
 
     try {
-      await runAccountCreationFlow(email, displayName, password);
+      await runAccountCreationFlow(email, displayName, password, escrowEnabled);
     } catch (error) {
       console.error('[Bookish:AccountUI] Account creation failed:', error);
       submitBtn.disabled = false;
@@ -616,8 +643,9 @@ async function handleCreateAccount() {
  * @param {string} email - Normalized email
  * @param {string} displayName - User display name
  * @param {string} password - User password
+ * @param {boolean} escrowEnabled - Whether to send escrow recovery record
  */
-async function runAccountCreationFlow(email, displayName, password) {
+async function runAccountCreationFlow(email, displayName, password, escrowEnabled = true) {
   // Frame A2: Setting up - Creating account
   showAccountModal(`
     <div class="modal-content-enter" style="text-align:center;padding:20px 0;">
@@ -793,14 +821,21 @@ async function runAccountCreationFlow(email, displayName, password) {
       });
       console.log('[Bookish:AccountUI] Account metadata uploaded:', metaTxId);
 
-      // Send escrow record (force-enabled for alpha)
-      try {
-        await sendEscrowRecord(account.seed, email, displayName);
+      // Send escrow record (if user opted in)
+      if (escrowEnabled) {
+        try {
+          await sendEscrowRecord(account.seed, email, displayName);
+          const credStore = JSON.parse(localStorage.getItem(CREDENTIAL_STORAGE_KEY) || '{}');
+          credStore.hasEscrow = true;
+          localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify(credStore));
+        } catch (escrowErr) {
+          console.warn('[Bookish:AccountUI] Escrow upload failed (non-fatal):', escrowErr);
+        }
+      } else {
+        console.log('[Bookish:AccountUI] Escrow skipped (user opted out for privacy)');
         const credStore = JSON.parse(localStorage.getItem(CREDENTIAL_STORAGE_KEY) || '{}');
-        credStore.hasEscrow = true;
+        credStore.hasEscrow = false;
         localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify(credStore));
-      } catch (escrowErr) {
-        console.warn('[Bookish:AccountUI] Escrow upload failed (non-fatal):', escrowErr);
       }
 
       // Update local state with Arweave tx IDs

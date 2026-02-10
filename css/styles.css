@@ -1019,11 +1019,18 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .password-field input {
   padding-right: 48px !important;
 }
+/* Hide native browser password reveal button (Edge, Chrome) */
+.password-field input::-ms-reveal,
+.password-field input::-ms-clear,
+.password-field input::-webkit-credentials-auto-fill-button {
+  display: none !important;
+}
 .password-toggle {
   position: absolute;
   right: 4px;
   top: 50%;
   transform: translateY(-50%);
+  z-index: 2;
   background: transparent;
   border: none;
   color: var(--color-text-muted);
