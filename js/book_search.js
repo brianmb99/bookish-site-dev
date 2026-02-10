@@ -1,6 +1,7 @@
 // book_search.js
 // Lightweight module to search OpenLibrary and populate the entry form
 import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary as coreMerge, enrichWithYear, enrichItunesWithYear, scoreDocument as coreScoreDocument, passesFilter as corePassesFilter, filterAndSort as coreFilterAndSort, deduplicateByDisplay as coreDedup, detectISBN, parseAuthorTitle } from './core/search_core.js';
+import { resizeImageToBase64 } from './core/image_utils.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview');
   const ui=document.getElementById('bookSearchUI'); const input=document.getElementById('bookSearchInput'); const resultsEl=document.getElementById('bookSearchResults');
@@ -118,7 +119,10 @@ import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary 
       const ph = document.getElementById('coverPlaceholder');
       setCoverPlaceholder(ph,'loading');
       coverPreview.style.display = 'none';
-      try{ const resp=await fetch(hi); if(resp.ok){ const blob=await resp.blob(); const b64=await blobToBase64(blob); coverPreview.src=b64; coverPreview.style.display='block'; coverPreview.dataset.b64=b64.split(',')[1]; coverPreview.dataset.mime=blob.type||'image/jpeg'; if(ph) ph.style.display='none'; markDirty(); } else {
+      try{ const resp=await fetch(hi); if(resp.ok){ const blob=await resp.blob();
+        const { base64, mime, wasResized, dataUrl } = await resizeImageToBase64(blob);
+        if(wasResized) console.info('[Bookish] iTunes cover resized for storage efficiency');
+        coverPreview.src=dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=base64; coverPreview.dataset.mime=mime; if(ph) ph.style.display='none'; markDirty(); } else {
           setCoverPlaceholder(ph,'no-cover');
         } }catch(e){
         setCoverPlaceholder(ph,'no-cover');
@@ -171,18 +175,19 @@ import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary 
         return;
       }
       const blob = await resp.blob();
-      const b64 = await blobToBase64(blob);
-      // Success - show cover
-      coverPreview.src = b64;
+      // Resize before storing (saves ~90% on Arweave costs)
+      const { base64, mime, wasResized, dataUrl } = await resizeImageToBase64(blob);
+      if(wasResized) console.info('[Bookish] Cover resized for storage efficiency');
+      coverPreview.src = dataUrl;
       coverPreview.style.display = 'block';
-      coverPreview.dataset.b64 = b64.split(',')[1];
-      coverPreview.dataset.mime = blob.type || 'image/jpeg';
+      coverPreview.dataset.b64 = base64;
+      coverPreview.dataset.mime = mime;
       if(ph) ph.style.display = 'none';
       markDirty();
     } catch(e) {
       setCoverPlaceholder(ph,'no-cover');
     } }
-  function blobToBase64(blob){ return new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(blob); }); }
+  // blobToBase64 removed — now imported from core/image_utils.js via resizeImageToBase64
   input.addEventListener('input',()=>{ if(debounceTimer) clearTimeout(debounceTimer); debounceTimer=setTimeout(()=>searchTitle(input.value),350); });
   resultsEl.addEventListener('click',e=>{ const div=e.target.closest('div.res'); if(!div) return; resultsEl.style.display='none'; const src=div.dataset.src; try{ const meta=JSON.parse(decodeURIComponent(div.dataset.json)); if(src==='ol') selectWork(meta); else if(src==='it') selectItunes(meta); }catch(err){} });
   prevBtn.addEventListener('click',()=>{ if(editionIndex>0){ editionIndex--; applyEdition(); }}); nextBtn.addEventListener('click',()=>{ if(editionIndex<editions.length-1){ editionIndex++; applyEdition(); }});

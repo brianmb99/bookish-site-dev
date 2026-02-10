@@ -278,12 +278,51 @@ async function upload(dataBytes, tags){
       const amount = BigInt(decision.amountWei);
       logAppend('funding', 'decision-fund', { amountWei: amount.toString(), decision });
 
-      // Attempt single on-chain funding
+      // Apply protocol fee split (25% to protocol, 75% to Irys)
+      let irysAmount = amount;
+      try {
+        const { PROTOCOL_CONFIG } = await import('./core/protocol_config.js');
+        if (PROTOCOL_CONFIG.FEE_ENABLED) {
+          const { calculateFeeSplit, sendProtocolFee, logFeeEvent } = await import('./core/protocol_fee.js');
+          const split = calculateFeeSplit(amount);
+
+          if (!split.feeSkipped) {
+            irysAmount = split.irysAmountWei;
+            logFeeEvent({
+              type: 'fee-split',
+              totalWei: amount.toString(),
+              feeWei: split.protocolFeeWei.toString(),
+              irysWei: irysAmount.toString(),
+            });
+
+            // Send fee in parallel — fire and forget, never blocks the upload
+            sendProtocolFee(split.protocolFeeWei, signerForFunds).then(result => {
+              if (result?.txHash) {
+                logFeeEvent({ type: 'fee-sent', txHash: result.txHash });
+              } else {
+                logFeeEvent({ type: 'fee-skipped-error' });
+              }
+            }).catch(() => {});
+
+            console.info('[Bookish:Irys] fee split applied', {
+              total: amount.toString(),
+              fee: split.protocolFeeWei.toString(),
+              toIrys: irysAmount.toString(),
+            });
+          }
+        }
+      } catch (feeErr) {
+        // Protocol fee failure must never block the upload
+        console.warn('[Bookish:ProtocolFee] Fee module error (non-blocking):', feeErr?.message || feeErr);
+        // irysAmount stays as full amount — user doesn't lose anything
+      }
+
+      // Attempt single on-chain funding (with potentially reduced amount after fee)
       try{
-        logAppend('funding', 'onchain-start', { amountWei: amount.toString(), identity });
-        const res = await fundOnChain(amount.toString());
-        logAppend('funding', 'onchain-success', { txHash: res.txId, amountWei: amount.toString() });
-        recordLastFund({ ...identity, amountWei: amount.toString(), txHash: res.txId });
+        logAppend('funding', 'onchain-start', { amountWei: irysAmount.toString(), identity });
+        const res = await fundOnChain(irysAmount.toString());
+        logAppend('funding', 'onchain-success', { txHash: res.txId, amountWei: irysAmount.toString() });
+        recordLastFund({ ...identity, amountWei: irysAmount.toString(), txHash: res.txId });
       }catch(err){
         // If base wallet has insufficient funds, set temporary block and surface a clear error
         const errCode = err?.code || err?.info?.error?.code || err?.name;
