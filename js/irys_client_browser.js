@@ -278,8 +278,11 @@ async function upload(dataBytes, tags){
       const amount = BigInt(decision.amountWei);
       logAppend('funding', 'decision-fund', { amountWei: amount.toString(), decision });
 
-      // Send protocol fee as a separate payment (does NOT reduce what Irys gets)
+      // Send protocol fee as a separate payment (does NOT reduce what Irys gets).
       // Irys always receives the full funding amount so uploads don't fail.
+      // IMPORTANT: Fee tx is awaited BEFORE Irys funding to avoid a nonce race.
+      // Both txs originate from the same wallet; sending concurrently caused both
+      // to query the same nonce, and the fee tx was silently rejected every time.
       try {
         const { PROTOCOL_CONFIG } = await import('./core/protocol_config.js');
         if (PROTOCOL_CONFIG.FEE_ENABLED) {
@@ -293,20 +296,28 @@ async function upload(dataBytes, tags){
               feeWei: split.protocolFeeWei.toString(),
             });
 
-            // Send fee in parallel — fire and forget, never blocks the upload
-            // Fee is an additional payment from user wallet, not deducted from Irys funding
-            sendProtocolFee(split.protocolFeeWei, signerForFunds).then(result => {
-              if (result?.txHash) {
-                logFeeEvent({ type: 'fee-sent', txHash: result.txHash });
-              } else {
-                logFeeEvent({ type: 'fee-skipped-error' });
-              }
-            }).catch(() => {});
-
-            console.info('[Bookish:Irys] protocol fee queued (separate tx)', {
+            console.info('[Bookish:Irys] sending protocol fee…', {
               toIrys: amount.toString(),
               fee: split.protocolFeeWei.toString(),
             });
+
+            // Await fee tx so it claims a nonce before the Irys funding tx.
+            // 15 s timeout ensures a stuck RPC never blocks the upload.
+            try {
+              const feeResult = await Promise.race([
+                sendProtocolFee(split.protocolFeeWei, signerForFunds),
+                new Promise(resolve => setTimeout(() => resolve(null), 15000)),
+              ]);
+              if (feeResult?.txHash) {
+                logFeeEvent({ type: 'fee-sent', txHash: feeResult.txHash });
+                console.info('[Bookish:Irys] protocol fee sent', { txHash: feeResult.txHash });
+              } else {
+                logFeeEvent({ type: 'fee-skipped-error' });
+                console.info('[Bookish:Irys] protocol fee skipped (send failed or timed out)');
+              }
+            } catch {
+              logFeeEvent({ type: 'fee-error' });
+            }
           }
         }
       } catch (feeErr) {
