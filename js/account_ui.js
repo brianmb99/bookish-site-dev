@@ -465,7 +465,7 @@ async function handleCreateAccount() {
           This means we store an encrypted backup that only we can access.
           <strong style="display:block;margin-top:6px;color:#f59e0b;">Turning this off means nobody can help if you forget your password.</strong>
         </div>
-        <button type="button" id="escrowLearnMore" class="link-btn" style="font-size:.7rem;margin-top:4px;color:var(--color-text-muted);">Learn more</button>
+        <button type="button" id="escrowLearnMore" class="link-btn" style="font-size:.7rem;margin-top:4px;color:rgba(255,255,255,.6);">Learn more</button>
       </div>
 
       <button type="submit" id="createAccountSubmitBtn" class="btn primary" style="width:100%;padding:14px 20px;margin-top:16px;" disabled>Create Account</button>
