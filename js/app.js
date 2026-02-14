@@ -104,7 +104,7 @@ function formatDisplayDate(iso){ if(!iso) return ''; const d=new Date(iso+'T00:0
 // --- Modal helpers ---
 function openModal(entry){
   modal.classList.add('active');
-  // Toggle add-mode class: new book (no entry) gets the tile layout, edit does not
+  // Toggle add-mode class: controls search UI visibility and edit-only elements
   const inner = modal.querySelector('.modal-inner');
   if(inner){ if(!entry) inner.classList.add('add-mode'); else inner.classList.remove('add-mode'); }
   // Ensure all inputs enabled (was previously gated by edit toggle)

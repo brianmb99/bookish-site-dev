@@ -581,7 +581,7 @@ form.inline label{
   border-radius:20px;
   padding:24px;
   width:100%;
-  max-width:420px;
+  max-width:640px;
   position:relative;
   box-shadow:0 0 0 1px rgba(255,255,255,.05) inset,0 24px 48px -12px rgba(0,0,0,.5);
   animation:modal-enter .3s ease-out;
@@ -772,15 +772,14 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   .title{font-size:1.05rem}
   .author{font-size:.85rem}
 }
-/* Enhanced NEW (add) mode styling to mimic a larger tile */
-.modal-inner.add-mode{max-width:640px;border:2px solid #2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15)}
-.add-mode #modalTitle{display:none} /* hide generic title when adding */
-.add-mode form.inline{margin-top:0}
-.add-mode form.inline .form-as-tile{display:flex;flex-direction:column;align-items:center;gap:16px}
-.add-mode .tile-cover{width:45%;max-width:220px;aspect-ratio:2/3;min-height:180px;background:#101418;border:1px solid #2b333b;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
-.add-mode .tile-cover:hover{border-color:#3a4652;box-shadow:0 4px 14px -4px rgba(0,0,0,.6)}
-.add-mode .tile-cover img{width:100%;height:100%;object-fit:cover;display:block}
-.add-mode .tile-cover .placeholder{font-size:.6rem;opacity:.4;text-align:center;padding:0 12px}
+/* Tile layout for book modal (shared by add & edit) */
+.modal-inner.add-mode{border:2px solid #2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15)}
+.modal-inner form.inline{margin-top:0}
+.modal-inner .form-as-tile{display:flex;flex-direction:column;align-items:center;gap:16px}
+.modal-inner .tile-cover{width:45%;max-width:220px;aspect-ratio:2/3;min-height:180px;background:#101418;border:1px solid #2b333b;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
+.modal-inner .tile-cover:hover{border-color:#3a4652;box-shadow:0 4px 14px -4px rgba(0,0,0,.6)}
+.modal-inner .tile-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.modal-inner .tile-cover .placeholder{font-size:.6rem;opacity:.4;text-align:center;padding:0 12px}
 /* Cover placeholder icon (SVG book + label) */
 .placeholder-icon{display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.3;color:var(--color-text-muted)}
 .placeholder-icon span{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em}
@@ -829,19 +828,19 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .cover-remove-btn:hover{background:rgba(239,68,68,.8)!important}
 .placeholder-loading{font-size:.6rem;opacity:.4;animation:pulse-opacity 1.5s ease-in-out infinite}
 @keyframes pulse-opacity{0%,100%{opacity:.3}50%{opacity:.7}}
-.add-mode .fields-cluster{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
-.add-mode .field-block{display:flex;flex-direction:column;gap:4px}
-.add-mode .field-block label{font-size:.55rem;letter-spacing:.08em;opacity:.55;margin:0;text-transform:uppercase;font-weight:600}
-.add-mode .field-block input,.add-mode .field-block select{background:transparent;border:1px dashed #2b333b;padding:6px 8px;font-size:.75rem;border-radius:8px;transition:border-color .2s,background .2s}
-.add-mode .field-block input:focus,.add-mode .field-block select:focus{outline:none;border-color:#2563eb;background:#192028}
-.add-mode .field-block.readonly input:not(:focus){border-color:transparent;background:transparent;cursor:text}
-.add-mode .primary-actions{margin-top:12px;display:flex;gap:10px;justify-content:center}
-.add-mode .primary-actions .btn{padding:10px 18px;font-size:.8rem}
+.modal-inner .fields-cluster{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
+.modal-inner .field-block{display:flex;flex-direction:column;gap:4px}
+.modal-inner .field-block label{font-size:.55rem;letter-spacing:.08em;opacity:.55;margin:0;text-transform:uppercase;font-weight:600}
+.modal-inner .field-block input,.modal-inner .field-block select{background:transparent;border:1px dashed #2b333b;padding:6px 8px;font-size:.75rem;border-radius:8px;transition:border-color .2s,background .2s}
+.modal-inner .field-block input:focus,.modal-inner .field-block select:focus{outline:none;border-color:#2563eb;background:#192028}
+.modal-inner .field-block.readonly input:not(:focus){border-color:transparent;background:transparent;cursor:text}
+.modal-inner .primary-actions{margin-top:12px;display:flex;gap:10px;justify-content:center}
+.modal-inner .primary-actions .btn{padding:10px 18px;font-size:.8rem}
 /* Distinguish edit (existing entry) vs add */
 .modal-inner:not(.add-mode) .add-only{display:none}
 .add-mode .edit-only{display:none}
 /* Smooth fade for form when switching */
-.modal-inner.add-mode form.inline{animation:fadeIn .35s ease}
+.modal-inner form.inline{animation:fadeIn .35s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
 /* Notes field in entry form */
@@ -856,7 +855,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .card-notes{font-size:.65rem;line-height:1.35;opacity:.55;margin:4px 0 0;font-style:italic;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
 
 /* Date picker enhancements */
-.add-mode .date-input-wrap, .date-input-wrap{display:flex;align-items:center;gap:6px;position:relative}
+.date-input-wrap{display:flex;align-items:center;gap:6px;position:relative}
 .date-input-wrap input[type=date]{flex:1;min-width:0}
 .cal-btn{background:#2b333b;border:1px solid #374151;color:#cbd5e1;font-size:.7rem;padding:6px 8px;border-radius:6px;cursor:pointer;line-height:1}
 .cal-btn:hover{background:#343e48;border-color:#46525e}
