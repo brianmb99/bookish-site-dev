@@ -21,3 +21,6 @@ export const CREDENTIAL_STORAGE_KEY = 'bookish.credential';
 
 // Pending credential mapping (survives page reload until uploaded to Arweave)
 export const PENDING_CREDENTIAL_MAPPING_KEY = 'bookish.credential.pending';
+
+// Pending escrow mapping (survives page reload until uploaded to Arweave)
+export const PENDING_ESCROW_MAPPING_KEY = 'bookish.escrow.pending';
