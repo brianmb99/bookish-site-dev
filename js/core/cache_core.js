@@ -36,6 +36,13 @@ export async function detectDuplicate(payload, existingEntries) {
 export async function applyRemote(remoteList, tombstones, localEntries) {
   const tombRefs = new Set((tombstones || []).map(t => t.ref).filter(Boolean));
   const localMapByTx = new Map(localEntries.filter(e => e.txid).map(e => [e.txid, e]));
+  // Index provisional/pending local entries by contentHash for create-race dedup
+  const localPendingByHash = new Map();
+  for (const e of localEntries) {
+    if (e.contentHash && e.status !== 'confirmed' && e.status !== 'tombstoned') {
+      localPendingByHash.set(e.contentHash, e);
+    }
+  }
 
   const toAdd = [];
   const toUpdate = [];
@@ -67,7 +74,7 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
         toUpdate.push({ ...existing, ...updates });
       }
     } else {
-      // New remote entry - check if it supersedes a local entry (edit race: sync saw new txid before replaceProvisional)
+      // New remote entry not in local by txid
       const prevTxid = r.prevTxid;
       const supersededLocal = prevTxid ? localMapByTx.get(prevTxid) : null;
 
@@ -97,9 +104,17 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
       };
 
       if (supersededLocal) {
-        toReplace.push({ prevTxid, entry: newEntry });
+        // Edit race: sync saw new txid before replaceProvisional ran
+        toReplace.push({ prevId: supersededLocal.id, entry: newEntry });
       } else {
-        toAdd.push(newEntry);
+        // Create race: sync saw confirmed txid while local still has provisional "local-xxx"
+        const provisionalMatch = localPendingByHash.get(contentHash);
+        if (provisionalMatch) {
+          toReplace.push({ prevId: provisionalMatch.id, entry: newEntry });
+          localPendingByHash.delete(contentHash); // consume so we don't match twice
+        } else {
+          toAdd.push(newEntry);
+        }
       }
     }
   }
