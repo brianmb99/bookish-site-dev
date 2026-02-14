@@ -65,7 +65,7 @@
   <span class="toast-icon">🎉</span>
   <span class="toast-message">First book added! You're on your way.</span>
 </div>
-<footer>Bookish • Alpha • v0.1.28</footer>
+<footer>Bookish • Alpha • v0.1.29</footer>
 </div>
 
 <div id="modal" class="modal">
@@ -100,7 +100,9 @@
       <div class="form-as-tile">
         <div class="tile-cover" id="tileCoverClick">
           <img class="preview" id="coverPreview" style="display:none"/>
-          <div class="placeholder" id="coverPlaceholder"><div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Click or search to add cover</span></div></div>
+          <div class="placeholder" id="coverPlaceholder"><div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Click to upload cover</span></div></div>
+          <div class="cover-hover-hint" id="coverHoverHint">Click to change cover</div>
+          <button type="button" class="cover-remove-btn" id="coverRemoveBtn" title="Remove cover" style="display:none">×</button>
           <input type="file" name="coverFile" accept="image/*" style="display:none" id="hiddenCoverInput"/>
         </div>
         <div class="fields-cluster">

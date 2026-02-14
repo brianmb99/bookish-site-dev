@@ -97,18 +97,12 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     it.forEach(item=>{ const title=(item.collectionName||item.trackName||''); const safe=highlight(title.replace(/</g,'&lt;')); const author=(item.artistName||'').replace(/</g,'&lt;'); const safeAuthor=highlight(author); const year=item._yearComputed||''; const payload={ title, author, year: year?String(year):'', artwork:item.artworkUrl100||'', narrator: author, rawNarrators: author }; rows.push(`<div class="res" data-src="it" data-json='${encodeURIComponent(JSON.stringify(payload))}'>${safe} <span style="opacity:.6">${safeAuthor}${year?(' • '+year):''}</span><span class="src src-it">IT</span></div>`); }); if(!rows.length){ resultsEl.innerHTML='<div style="opacity:.5">No results</div>'; return; } resultsEl.innerHTML=rows.slice(0,60).join(''); }
   function selectWork(meta){ currentAudio=null; currentWork=meta; editions=[]; editionIndex=0; editionNav.style.display='none';
     // Clear cover immediately when selecting new work
-    coverPreview.src = '';
-    coverPreview.style.display = 'none';
-    delete coverPreview.dataset.b64;
-    delete coverPreview.dataset.mime;
+    if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
     populateFromBasic(meta); fetchEditions(meta); }
   async function fetchEditions(meta){ try{ const url='https://openlibrary.org'+meta.work_key+'/editions.json?limit=50'; const r=await fetch(url); const j=await r.json(); editions=(j.entries||j.editions||[]).filter(e=>e); if(editions.length){ editionIndex=0; editionNav.style.display='flex'; applyEdition(); } }catch(e){} }
   async function selectItunes(payload){ currentWork=null; editions=[]; editionIndex=0; editionNav.style.display='none'; currentAudio=payload;
     // Clear previous cover
-    coverPreview.src = '';
-    coverPreview.style.display = 'none';
-    delete coverPreview.dataset.b64;
-    delete coverPreview.dataset.mime;
+    if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
     // Always set fields (not just when empty)
     form.title.value = payload.title || '';
     form.author.value = payload.author || '';
@@ -122,7 +116,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       try{ const resp=await fetch(hi); if(resp.ok){ const blob=await resp.blob();
         const { base64, mime, wasResized, dataUrl } = await resizeImageToBase64(blob);
         if(wasResized) console.info('[Bookish] iTunes cover resized for storage efficiency');
-        coverPreview.src=dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=base64; coverPreview.dataset.mime=mime; if(ph) ph.style.display='none'; markDirty(); } else {
+        coverPreview.src=dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=base64; coverPreview.dataset.mime=mime; if(ph) ph.style.display='none'; if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded(); markDirty(); } else {
           setCoverPlaceholder(ph,'no-cover');
         } }catch(e){
         setCoverPlaceholder(ph,'no-cover');
@@ -183,6 +177,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       coverPreview.dataset.b64 = base64;
       coverPreview.dataset.mime = mime;
       if(ph) ph.style.display = 'none';
+      if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded();
       markDirty();
     } catch(e) {
       setCoverPlaceholder(ph,'no-cover');

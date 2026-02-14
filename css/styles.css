@@ -219,7 +219,7 @@ button.secondary:hover, .btn.secondary:hover{
 .cover:not(:has(img)):not(:has(.generated-cover)){
   background-image:repeating-linear-gradient(90deg,transparent,transparent 2px,var(--color-border-subtle) 2px,var(--color-border-subtle) 3px),linear-gradient(145deg,var(--color-bg-elevated) 0%,var(--color-bg-deep) 100%);
 }
-.cover span{
+.cover > span{
   font-size:.65rem;
   font-weight:500;
   text-transform:uppercase;
@@ -744,11 +744,11 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   .cover{width:100%;flex:0 0 auto;height:0;padding-top:150%;position:relative;border-radius:12px}
   /* Separate img and placeholder so real covers are not faded */
   .cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
-  .cover span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:.7rem;opacity:.5}
+  .cover > span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:.7rem;opacity:.5}
   .cover .no-cover-icon{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-  .cover .generated-cover{position:absolute;inset:0;padding:12px 10px}
-  .cover .generated-title{font-size:.75rem;-webkit-line-clamp:5;line-clamp:5}
-  .cover .generated-author{font-size:.55rem}
+  .cover .generated-cover{position:absolute;inset:0;padding:14px 10px}
+  .cover .generated-title{font-size:.8rem;-webkit-line-clamp:5;line-clamp:5}
+  .cover .generated-author{font-size:.6rem}
   .meta{padding:4px 2px 0}
   .title{font-size:1rem}
   .author{font-size:.85rem}
@@ -758,7 +758,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   .card{flex-direction:column;gap:10px;padding:14px}
   .cover{width:100%;flex:0 0 auto;height:0;padding-top:150%;position:relative;border-radius:12px}
   .cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
-  .cover span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:.65rem;opacity:.5}
+  .cover > span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:.65rem;opacity:.5}
   .cover .no-cover-icon{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
   .cover .generated-cover{position:absolute;inset:0;padding:14px 12px}
   .cover .generated-title{font-size:.8rem;-webkit-line-clamp:5;line-clamp:5}
@@ -784,6 +784,49 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 /* Cover placeholder icon (SVG book + label) */
 .placeholder-icon{display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.3;color:var(--color-text-muted)}
 .placeholder-icon span{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em}
+/* Cover hover hint (shown over image on hover) */
+.cover-hover-hint{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.55);
+  color:rgba(255,255,255,.85);
+  font-size:.6rem;
+  font-weight:500;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  opacity:0;
+  transition:opacity .2s ease;
+  pointer-events:none;
+  z-index:2;
+  border-radius:14px;
+}
+.tile-cover:hover .cover-hover-hint{opacity:1}
+/* Hide hint when placeholder is showing (no image loaded) */
+.tile-cover:has(.placeholder[style*="block"]) .cover-hover-hint,
+.tile-cover:not(:has(img[style*="block"])) .cover-hover-hint{opacity:0!important}
+/* Cover remove button */
+.cover-remove-btn{
+  position:absolute;
+  top:6px;
+  right:6px;
+  width:26px;height:26px;
+  min-height:auto!important;
+  background:rgba(0,0,0,.6)!important;
+  border:1px solid rgba(255,255,255,.15)!important;
+  border-radius:50%!important;
+  color:#fff!important;
+  font-size:14px!important;
+  padding:0!important;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  z-index:3;
+  opacity:0;
+  transition:opacity .2s ease,background .2s ease;
+  box-shadow:0 2px 6px rgba(0,0,0,.3)!important;
+  line-height:1;
+}
+.tile-cover:hover .cover-remove-btn[style*="inline"]{opacity:1}
+.cover-remove-btn:hover{background:rgba(239,68,68,.8)!important}
 .placeholder-loading{font-size:.6rem;opacity:.4;animation:pulse-opacity 1.5s ease-in-out infinite}
 @keyframes pulse-opacity{0%,100%{opacity:.3}50%{opacity:.7}}
 .add-mode .fields-cluster{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}

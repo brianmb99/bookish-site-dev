@@ -38,6 +38,7 @@ const coverFileInput = document.getElementById('hiddenCoverInput');
 const coverPreview = document.getElementById('coverPreview');
 const tileCoverClick = document.getElementById('tileCoverClick');
 const coverPlaceholder = document.getElementById('coverPlaceholder');
+const coverRemoveBtn = document.getElementById('coverRemoveBtn');
 const notesInput = document.getElementById('notesInput');
 const saveBtn = document.getElementById('saveBtn');
 const deleteBtn = document.getElementById('deleteBtn');
@@ -49,10 +50,13 @@ const celebrationToast = document.getElementById('celebrationToast');
 const accountNudgeBanner = document.getElementById('accountNudgeBanner');
 const nudgeDismissBtn = document.getElementById('nudgeDismissBtn');
 const nudgeCreateAccountBtn = document.getElementById('nudgeCreateAccountBtn');
-if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',()=>coverFileInput.click()); }
+if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn')) return; coverFileInput.click(); }); }
+if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); updateDirty(); }); }
 
 // --- Helpers ---
 function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; }
+function showCoverLoaded(){ if(coverRemoveBtn) coverRemoveBtn.style.display='inline-flex'; }
 
 // --- State ---
 let entries=[]; let replaying=false;
@@ -118,7 +122,8 @@ function openModal(entry){
     coverPreview.src='data:'+(entry.mimeType||'image/*')+';base64,'+entry.coverImage;
     coverPreview.style.display='block'; coverPlaceholder.style.display='none';
     coverPreview.dataset.b64=entry.coverImage; if(entry.mimeType) coverPreview.dataset.mime=entry.mimeType;
-  } else { coverPreview.style.display='none'; coverPlaceholder.style.display='block'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; }
+    showCoverLoaded();
+  } else { clearCoverPreview(); }
   // Delete button only for existing entry
   if(deleteBtn) deleteBtn.style.display=entry?'inline-flex':'none';
   if(cancelBtn) cancelBtn.style.display='inline-flex';
@@ -127,9 +132,9 @@ function openModal(entry){
   updateDirty();
   if(window.bookSearch) window.bookSearch.handleModalOpen(!!entry);
 }
-function closeModal(){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); coverPreview.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; if(window.bookSearch) window.bookSearch.handleModalOpen(true); }
+function closeModal(){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; if(window.bookSearch) window.bookSearch.handleModalOpen(true); }
 function clearBooks(){ entries=[]; render(); }
-window.bookishApp={ openModal, clearBooks };
+window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview };
 // Dirty tracking helpers
 function currentFormState(){ return JSON.stringify({
   prior: form.priorTxid.value||'',
@@ -159,9 +164,10 @@ coverFileInput.addEventListener('change', async ()=>{ const f=coverFileInput.fil
     coverPlaceholder.style.display = 'none';
     coverPreview.dataset.b64 = base64;
     coverPreview.dataset.mime = mime;
+    showCoverLoaded();
   } catch(err) {
     // Fallback to original if resize fails
-    const r = new FileReader(); r.onload = e => { const b64full = e.target.result; const b64 = b64full.split(',')[1]; coverPreview.src = b64full; coverPreview.style.display = 'block'; coverPlaceholder.style.display = 'none'; coverPreview.dataset.b64 = b64; coverPreview.dataset.mime = f.type || 'image/jpeg'; }; r.readAsDataURL(f);
+    const r = new FileReader(); r.onload = e => { const b64full = e.target.result; const b64 = b64full.split(',')[1]; coverPreview.src = b64full; coverPreview.style.display = 'block'; coverPlaceholder.style.display = 'none'; coverPreview.dataset.b64 = b64; coverPreview.dataset.mime = f.type || 'image/jpeg'; showCoverLoaded(); }; r.readAsDataURL(f);
   }
 });
 
