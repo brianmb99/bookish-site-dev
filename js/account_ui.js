@@ -1492,8 +1492,24 @@ async function handleLogout() {
     return;
   }
 
-  // No unsynced data, log out immediately
-  performLogout();
+  // Account is synced — still confirm before logging out
+  showAccountModal(`
+    <div style="text-align:center;padding:20px 0;">
+      <h3 style="margin:0 0 16px 0;">Sign Out?</h3>
+      <p style="font-size:.875rem;line-height:1.6;color:var(--color-text-secondary);margin:0 0 20px 0;">
+        You can sign back in anytime with your email and password.
+      </p>
+      <button id="confirmLogoutBtn" class="btn primary" style="width:100%;padding:14px 20px;margin-bottom:12px;">Sign Out</button>
+      <button id="cancelLogoutBtn" class="btn secondary" style="width:100%;padding:12px 20px;">Cancel</button>
+    </div>
+  `);
+
+  document.getElementById('confirmLogoutBtn').onclick = () => {
+    closeHelperModal();
+    performLogout();
+  };
+
+  document.getElementById('cancelLogoutBtn').onclick = closeHelperModal;
 }
 
 /**
