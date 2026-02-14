@@ -116,6 +116,7 @@ export function passesFilter(item, activeFilter) {
   // OpenLibrary format guess
   const fmt = (item.physical_format || '').toLowerCase();
   if (activeFilter === 'audiobook') return fmt.includes('audio');
+  if (activeFilter === 'ebook') return fmt.includes('ebook') || fmt.includes('e-book') || fmt.includes('electronic') || fmt.includes('kindle');
   if (activeFilter === 'paperback') return fmt.includes('paper');
   if (activeFilter === 'hardcover') return fmt.includes('hard');
 

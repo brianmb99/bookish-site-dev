@@ -335,6 +335,24 @@ export function hideAccountNudge(){
   }
 }
 
+// --- Generated cover color palette ---
+const COVER_PALETTE=[
+  'linear-gradient(145deg,#6b2137 0%,#4a1528 100%)', // burgundy
+  'linear-gradient(145deg,#1e3a5f 0%,#152a45 100%)', // navy
+  'linear-gradient(145deg,#2d4a3e 0%,#1c332b 100%)', // forest
+  'linear-gradient(145deg,#5b4a3f 0%,#3d312a 100%)', // umber
+  'linear-gradient(145deg,#4a3b6b 0%,#332852 100%)', // plum
+  'linear-gradient(145deg,#3a5043 0%,#263830 100%)', // sage
+  'linear-gradient(145deg,#5a3e3e 0%,#3d2929 100%)', // clay
+  'linear-gradient(145deg,#2a4a5a 0%,#1c3340 100%)', // slate
+  'linear-gradient(145deg,#5a4a2a 0%,#3d3220 100%)', // olive
+  'linear-gradient(145deg,#4a2a4a 0%,#331e33 100%)', // aubergine
+];
+function generatedCoverColor(title){
+  let h=0; for(let i=0;i<title.length;i++) h=((h<<5)-h+title.charCodeAt(i))|0;
+  return COVER_PALETTE[Math.abs(h)%COVER_PALETTE.length];
+}
+
 // --- Render ---
 function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false; const key=entry.txid||entry.id||''; const el=key?document.querySelector('.card[data-txid="'+key+'"]'):null; if(el){ el.classList.add('deleting'); el.style.pointerEvents='none'; el.style.opacity='0.35'; } }
 function render(){
@@ -358,7 +376,7 @@ function render(){
     const notesSnippet = e.notes ? `<p class="card-notes">${escapeHtml(e.notes)}</p>` : '';
     div.innerHTML=`
       <div class="status-dot ${dotClass}" data-tip="${dotTitle}"></div>
-      <div class="cover">${e.coverImage?`<img src="data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}">`:'<span class="no-cover-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>'}</div>
+      <div class="cover">${e.coverImage?`<img src="data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
       <div class="meta">
         <p class="title">${e.title||'<i>Untitled</i>'}</p>
         <p class="author">${e.author||''}</p>
