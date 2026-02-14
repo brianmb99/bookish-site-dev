@@ -733,6 +733,10 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
     };
     localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(accountData));
 
+    // Hide the "Create an account" banner immediately — user is now logged in
+    const banner = document.getElementById('accountBanner');
+    if (banner) banner.style.display = 'none';
+
     // Store credential metadata
     localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify({
       lookupKey,
