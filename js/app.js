@@ -561,10 +561,12 @@ async function serverlessFetchEntries(){
   // Step 3: Decrypt entries that aren't fully synced in cache
   const hydrated = [];
   const decryptStart = Date.now();
+  const prevTag = (edge) => edge.node.tags?.find(t => t.name === 'Prev')?.value;
   for(const e of needsDecrypt){
     try{
       const dec = await browserClient.decryptTx(e.node.id);
-      hydrated.push({ txid:e.node.id, ...dec, block:e.node.block });
+      const prevTxid = prevTag(e);
+      hydrated.push({ txid:e.node.id, ...dec, block:e.node.block, ...(prevTxid && { prevTxid }) });
     }catch(err){
       console.warn('[Bookish] Failed to decrypt', e.node.id, err);
     }
@@ -574,9 +576,11 @@ async function serverlessFetchEntries(){
   for(const e of alreadySynced) {
     const cached = cachedEntries.find(c => c.txid === e.node.id);
     if (cached) {
+      const prevTxid = prevTag(e);
       hydrated.push({
         ...cached,
-        block: e.node.block // Update block info if changed
+        block: e.node.block, // Update block info if changed
+        ...(prevTxid && { prevTxid })
       });
     }
   }

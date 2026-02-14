@@ -31,7 +31,7 @@ export async function detectDuplicate(payload, existingEntries) {
  * @param {Array<Object>} remoteList - Remote entries from server
  * @param {Array<Object>} tombstones - Array of {txid, ref} indicating deleted entries
  * @param {Array<Object>} localEntries - Current local entries
- * @returns {Promise<Object>} - { toAdd: [], toUpdate: [], toTombstone: [] }
+ * @returns {Promise<Object>} - { toAdd: [], toUpdate: [], toTombstone: [], toReplace: [] }
  */
 export async function applyRemote(remoteList, tombstones, localEntries) {
   const tombRefs = new Set((tombstones || []).map(t => t.ref).filter(Boolean));
@@ -40,6 +40,7 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
   const toAdd = [];
   const toUpdate = [];
   const toTombstone = [];
+  const toReplace = [];
 
   // Process remote entries
   for (const r of remoteList) {
@@ -66,7 +67,10 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
         toUpdate.push({ ...existing, ...updates });
       }
     } else {
-      // New remote entry - compute content hash for it
+      // New remote entry - check if it supersedes a local entry (edit race: sync saw new txid before replaceProvisional)
+      const prevTxid = r.prevTxid;
+      const supersededLocal = prevTxid ? localMapByTx.get(prevTxid) : null;
+
       const contentHash = await computeContentHash({
         title: r.title,
         author: r.author,
@@ -75,7 +79,7 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
         dateRead: r.dateRead
       });
 
-      toAdd.push({
+      const newEntry = {
         id: r.txid,
         txid: r.txid,
         title: r.title,
@@ -90,7 +94,13 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
         status: 'confirmed',
         seenRemote: true,
         onArweave: false
-      });
+      };
+
+      if (supersededLocal) {
+        toReplace.push({ prevTxid, entry: newEntry });
+      } else {
+        toAdd.push(newEntry);
+      }
     }
   }
 
@@ -105,7 +115,7 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
     }
   }
 
-  return { toAdd, toUpdate, toTombstone };
+  return { toAdd, toUpdate, toTombstone, toReplace };
 }
 
 /**

@@ -70,6 +70,10 @@ import { computeContentHash as coreComputeContentHash, detectDuplicate as coreDe
     for(const entry of result.toTombstone){
       await putEntry(entry);
     }
+    for(const { prevTxid, entry } of (result.toReplace || [])){
+      await deleteById(prevTxid);
+      await putEntry(entry);
+    }
     if(result.toAdd.length) await bulkPut(result.toAdd);
 
     return getAllActive();
