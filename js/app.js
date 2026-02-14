@@ -362,7 +362,7 @@ function render(){
       <div class="meta">
         <p class="title">${e.title||'<i>Untitled</i>'}</p>
         <p class="author">${e.author||''}</p>
-        <div class="details"><span class="read-date">Read ${dateDisp||''}</span></div>
+        <div class="details">${dateDisp ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
         ${notesSnippet}
       </div>`;
     div.onclick=()=>{ if(!e._deleting) openModal(e); };
@@ -750,7 +750,7 @@ nudgeDismissBtn?.addEventListener('click', ()=>{
 });
 
 nudgeCreateAccountBtn?.addEventListener('click', ()=>{
-  openAccount();
+  if(openAccountModal) openAccountModal();
 });
 
 // --- Cache layer ---

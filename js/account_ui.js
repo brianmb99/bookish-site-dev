@@ -1354,7 +1354,7 @@ function handleManualSeedLogin() {
     </p>
     <textarea id="manualSeedInput" style="width:100%;min-height:100px;font-family:monospace;padding:12px;background:#0b1220;border:1px solid #334155;border-radius:6px;color:#fff;" placeholder="word1 word2 word3 ..."></textarea>
     <div style="text-align:center;margin:24px 0;">
-      <button id="confirmManualLoginBtn" class="btn">Log In with Recovery Phrase</button>
+      <button id="confirmManualLoginBtn" class="btn">Sign In with Recovery Phrase</button>
     </div>
     <div id="manualLoginStatus" style="margin-top:12px;font-size:.85rem;text-align:center;"></div>
   `);
@@ -1425,7 +1425,7 @@ function handleManualSeedLogin() {
       console.error('[Bookish:AccountUI] Manual login failed:', error);
       statusDiv.innerHTML = `<span style="color:#ef4444;">Error: ${error.message}</span>`;
       btn.disabled = false;
-      btn.textContent = 'Log In with Recovery Phrase';
+      btn.textContent = 'Sign In with Recovery Phrase';
     }
   };
 }
@@ -1469,7 +1469,7 @@ async function handleLogout() {
       <button id="haveRecoveryPhraseBtn" class="btn secondary" style="width:100%;padding:12px 20px;margin-bottom:16px;">I have my recovery phrase saved</button>
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <button id="cancelLogoutBtn" class="btn-link" style="background:none;border:none;color:#94a3b8;font-size:.875rem;cursor:pointer;">Cancel</button>
-        <button id="logoutWithoutSavingBtn" class="btn-link" style="background:none;border:none;color:#94a3b8;font-size:.875rem;cursor:pointer;">Log out without saving</button>
+        <button id="logoutWithoutSavingBtn" class="btn-link" style="background:none;border:none;color:#94a3b8;font-size:.875rem;cursor:pointer;">Sign out without saving</button>
       </div>
     `);
 
@@ -1744,8 +1744,9 @@ function showFundingValueModal(address, isFunded = false) {
     }
   };
 
-  // Maybe Later
+  // Maybe Later — close the helper modal (funding dialog) and the account modal behind it
   document.getElementById('maybeLaterBtn').onclick = () => {
+    closeHelperModal();
     closeAccountModal();
   };
 }
