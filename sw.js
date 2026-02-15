@@ -1,5 +1,5 @@
 // sw.js - basic PWA service worker (v10 serverless)
-const VERSION='v39';
+const VERSION='v40';
 const CACHE_NAME='bookish-precache-'+VERSION;
 const CORE_ASSETS=[
   '/',

@@ -1,17 +1,15 @@
 // balance_display.js - User-friendly balance formatting
 
 /**
- * Estimated cost per book upload in wei
- * Based on: ~500KB average book with cover @ current Arweave/Irys pricing
+ * Estimated cost per book upload in wei.
+ * This is dominated by the flat protocol fee (0.0000025 ETH per upload)
+ * plus a small gas allowance for the fee transaction on Base L2.
+ * Irys storage may be free (subsidised) or charged via 402 auto-funding;
+ * when Irys charges, the actual cost per book will be slightly higher.
  *
- * This is a rough estimate. Actual costs vary by:
- * - Book size (title length, cover image size)
- * - Network conditions
- * - Irys pricing changes
- *
- * We hardcode for simplicity. Can refine later with actual usage data.
+ * Must stay in sync with PROTOCOL_CONFIG.FLAT_FEE_WEI in protocol_config.js
  */
-const ESTIMATED_COST_PER_BOOK_WEI = BigInt('2000000000000'); // 0.000002 ETH
+const ESTIMATED_COST_PER_BOOK_WEI = BigInt('2500000000000'); // 0.0000025 ETH (matches flat fee)
 
 /**
  * Minimum useful balance (below this, can't do much)
