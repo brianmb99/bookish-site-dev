@@ -328,9 +328,9 @@ button.secondary:hover, .btn.secondary:hover{
 }
 
 /* Sign-in link on empty state */
-.empty-signin{margin-top:16px;font-size:.85rem;color:var(--color-text-secondary)}
-.empty-signin .link-btn{color:var(--color-primary);font-weight:600;text-decoration:none;transition:color .2s}
-.empty-signin .link-btn:hover{color:var(--color-primary-hover);text-decoration:underline}
+.empty-signin{margin-top:20px;font-size:.85rem;color:var(--color-text-muted)}
+.empty-signin .link-btn{background:none;border:none;color:var(--color-text-secondary);font-size:inherit;font-family:inherit;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px;transition:color .2s}
+.empty-signin .link-btn:hover{color:var(--color-text-primary)}
 
 /* Celebration toast */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e3a5f;border:1px solid #2563eb;border-radius:12px;padding:12px 20px;display:flex;align-items:center;gap:10px;font-size:.9rem;color:#e2e8f0;box-shadow:0 4px 20px rgba(0,0,0,.3);z-index:9000;animation:slideUp .3s ease-out}
