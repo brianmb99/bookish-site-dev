@@ -844,13 +844,26 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
 /* Notes field in entry form */
-.notes-block{width:100%;margin-top:8px}
+.notes-block{width:100%;margin-top:8px;position:relative}
 .notes-toggle{display:flex;align-items:center;gap:4px;font-size:.55rem;letter-spacing:.08em;opacity:.55;margin:0 0 4px 0;text-transform:uppercase;font-weight:600;cursor:pointer}
 .notes-toggle-icon{font-size:.7rem;opacity:.7}
 .notes-hint{font-weight:400;opacity:.6;text-transform:none;letter-spacing:0}
-.notes-block textarea{width:100%;box-sizing:border-box;background:transparent;border:1px dashed #2b333b;padding:8px 10px;font-size:.75rem;font-family:inherit;border-radius:8px;color:inherit;resize:vertical;min-height:60px;max-height:200px;line-height:1.4;transition:border-color .2s,background .2s}
+.notes-block textarea{width:100%;box-sizing:border-box;background:transparent;border:1px dashed #2b333b;padding:8px 10px;padding-right:32px;font-size:.75rem;font-family:inherit;border-radius:8px;color:inherit;resize:none;min-height:60px;max-height:none;line-height:1.4;overflow:hidden;transition:border-color .2s,background .2s}
 .notes-block textarea:focus{outline:none;border-color:#2563eb;background:#192028}
 .notes-block textarea::placeholder{opacity:.35;font-style:italic}
+.notes-expand-btn{position:absolute;bottom:8px;right:8px;background:#2b333b;border:1px solid #374151;color:#9da6af;font-size:.75rem;width:26px;height:26px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;transition:background .2s,color .2s}
+.notes-expand-btn:hover{background:#3a4652;color:#e2e8f0}
+/* Notes overlay (expanded editor) */
+.notes-overlay{position:fixed;inset:0;z-index:6000;display:flex;align-items:center;justify-content:center}
+.notes-overlay-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px)}
+.notes-overlay-inner{position:relative;background:var(--color-bg-elevated);border:1px solid var(--color-border-default);border-radius:16px;width:92%;max-width:640px;max-height:80vh;display:flex;flex-direction:column;padding:20px;box-shadow:0 24px 48px -12px rgba(0,0,0,.5);animation:modal-enter .3s ease-out}
+.notes-overlay-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.notes-overlay-header h3{margin:0;font-size:1rem;font-family:var(--font-display)}
+.notes-overlay-done{padding:8px 16px;font-size:.8rem}
+#notesOverlayInput{flex:1;min-height:200px;background:transparent;border:1px dashed #2b333b;padding:12px 14px;font-size:.85rem;font-family:inherit;border-radius:8px;color:inherit;resize:none;line-height:1.5;transition:border-color .2s,background .2s}
+#notesOverlayInput:focus{outline:none;border-color:#2563eb;background:#192028}
+#notesOverlayInput::placeholder{opacity:.35;font-style:italic}
+.notes-overlay-count{font-size:.6rem;opacity:.4;text-align:right;margin-top:6px}
 /* Notes on book cards */
 .card-notes{font-size:.65rem;line-height:1.35;opacity:.55;margin:4px 0 0;font-style:italic;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
 

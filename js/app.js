@@ -112,7 +112,7 @@ function getBalanceStatus() {
 
 // --- Utility / ordering ---
 function setStatus(m){ statusEl.textContent=m; statusEl.classList.remove('warning'); if(window.BOOKISH_DEBUG) console.debug('[Bookish] status:', m); }
-function orderEntries(){ entries.sort((a,b)=>{ const da=a.dateRead||''; const db=b.dateRead||''; if(da!==db) return db.localeCompare(da); if(a._committed!==b._committed) return a._committed?-1:1; return 0; }); }
+function orderEntries(){ entries.sort((a,b)=>{ const da=a.dateRead||''; const db=b.dateRead||''; if(da!==db) return db.localeCompare(da); const ca=a.createdAt||0; const cb=b.createdAt||0; if(ca!==cb) return cb-ca; return 0; }); }
 function formatDisplayDate(iso){ if(!iso) return ''; const d=new Date(iso+'T00:00:00Z'); if(isNaN(d)) return iso; return d.toLocaleDateString(undefined,{month:'short',year:'numeric'}); }
 
 // --- Modal helpers ---
@@ -146,6 +146,8 @@ function openModal(entry){
   snapshotOriginal();
   updateDirty();
   if(window.bookSearch) window.bookSearch.handleModalOpen(!!entry);
+  // Auto-grow notes textarea to fit content
+  setTimeout(()=>{ if(notesInput){ notesInput.style.height='auto'; notesInput.style.height=Math.max(60,notesInput.scrollHeight)+'px'; }}, 0);
 }
 function closeModal(){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; if(window.bookSearch) window.bookSearch.handleModalOpen(true); }
 function clearBooks(){ entries=[]; render(); }
@@ -376,26 +378,14 @@ function generatedCoverColor(title){
 
 // --- Render ---
 function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false; const key=entry.txid||entry.id||''; const el=key?document.querySelector('.card[data-txid="'+key+'"]'):null; if(el){ el.classList.add('deleting'); el.style.pointerEvents='none'; el.style.opacity='0.35'; } }
-function render(){
-  cardsEl.innerHTML='';
-  if(!entries.length){ emptyEl.style.display='block'; hideAccountNudge(); return; } else emptyEl.style.display='none';
 
-  // Check if should show account nudge (only if not logged in)
-  if(storageManager.isLoggedIn()){
-    hideAccountNudge();
-  } else {
-    showAccountNudge();
-  }
-  for(const e of entries){
-    if(e.status==='tombstoned') continue;
-    const div=document.createElement('div');
-    const rawFmt=(e.format||'').toLowerCase(); let fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
-    div.className='card'+(e._deleting?' deleting':''); div.dataset.txid=e.txid||e.id||''; div.dataset.fmt=fmtVariant; div.dataset.format=rawFmt;
-    const dotClass = (!e.txid) ? 'local' : (e.onArweave ? 'arweave' : 'irys');
-    const dotTitle = (!e.txid) ? 'Local only' : (e.onArweave ? 'Saved to Arweave' : 'Saved to Irys \u2014 settling to Arweave\u2026');
-    const dateDisp=formatDisplayDate(e.dateRead);
-    const notesSnippet = e.notes ? `<p class="card-notes">${escapeHtml(e.notes)}</p>` : '';
-    div.innerHTML=`
+/** Build inner HTML for a single book card */
+function buildCardHTML(e){
+  const dotClass = (!e.txid) ? 'local' : (e.onArweave ? 'arweave' : 'irys');
+  const dotTitle = (!e.txid) ? 'Local only' : (e.onArweave ? 'Saved to Arweave' : 'Saved to Irys \u2014 settling to Arweave\u2026');
+  const dateDisp=formatDisplayDate(e.dateRead);
+  const notesSnippet = e.notes ? `<p class="card-notes">${escapeHtml(e.notes)}</p>` : '';
+  return `
       <div class="status-dot ${dotClass}" data-tip="${dotTitle}"></div>
       <div class="cover">${e.coverImage?`<img src="data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
       <div class="meta">
@@ -404,9 +394,111 @@ function render(){
         <div class="details">${dateDisp ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
         ${notesSnippet}
       </div>`;
-    div.onclick=()=>{ if(!e._deleting) openModal(e); };
-    cardsEl.appendChild(div);
+}
+
+/** Quick fingerprint for change detection — avoids unnecessary innerHTML rewrites */
+function entryFingerprint(e){
+  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.notes||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e.onArweave?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.status||'');
+}
+
+function render(){
+  const visible = entries.filter(e => e.status !== 'tombstoned');
+
+  if(!visible.length){
+    // Check: is this "no books yet" or "still loading from cloud"?
+    const syncStatus = getSyncStatusForUI();
+    const isLoading = storageManager.isLoggedIn() && !syncStatus.initialSynced;
+
+    const headline = emptyEl.querySelector('.empty-headline');
+    const subtext = emptyEl.querySelector('.empty-subtext');
+    const addBtn = emptyEl.querySelector('.empty-cta');
+    const illustration = emptyEl.querySelector('.empty-illustration');
+
+    if(isLoading){
+      if(headline) headline.textContent = 'Syncing your books\u2026';
+      if(subtext) subtext.textContent = 'Fetching your library from the cloud.';
+      if(addBtn) addBtn.style.display = 'none';
+      if(illustration) illustration.textContent = '\u23F3'; // hourglass
+    } else {
+      if(headline) headline.textContent = 'Your reading journey starts here';
+      if(subtext) subtext.textContent = 'Track what you read. Keep it forever. Access it anywhere.';
+      if(addBtn) addBtn.style.display = '';
+      if(illustration) illustration.textContent = '\uD83D\uDCDA'; // 📚
+    }
+
+    if(cardsEl.children.length > 0) cardsEl.replaceChildren();
+    emptyEl.style.display='block';
+    hideAccountNudge();
+    return;
   }
+  emptyEl.style.display='none';
+
+  // Check if should show account nudge (only if not logged in)
+  if(storageManager.isLoggedIn()){
+    hideAccountNudge();
+  } else {
+    showAccountNudge();
+  }
+
+  // --- Keyed DOM reconciliation (avoids full clear → rebuild flicker) ---
+
+  // Map existing DOM cards by their key
+  const existingMap = new Map();
+  for(const el of [...cardsEl.children]){
+    if(el.dataset && el.dataset.txid) existingMap.set(el.dataset.txid, el);
+  }
+
+  const desiredKeys = new Set();
+  const orderedCards = [];
+
+  for(const e of visible){
+    const key = e.txid || e.id || '';
+    desiredKeys.add(key);
+    const fp = entryFingerprint(e);
+
+    let card = existingMap.get(key);
+    if(card){
+      // Reuse existing card — only update innerHTML if data changed
+      if(card.dataset._fp !== fp){
+        const rawFmt=(e.format||'').toLowerCase();
+        const fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
+        card.className='card'+(e._deleting?' deleting':'');
+        card.dataset.fmt=fmtVariant;
+        card.dataset.format=rawFmt;
+        card.innerHTML=buildCardHTML(e);
+        card.dataset._fp=fp;
+        if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
+        else { card.style.pointerEvents=''; card.style.opacity=''; }
+      }
+    } else {
+      // Create new card element
+      card=document.createElement('div');
+      const rawFmt=(e.format||'').toLowerCase();
+      const fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
+      card.className='card'+(e._deleting?' deleting':'');
+      card.dataset.txid=key;
+      card.dataset.fmt=fmtVariant;
+      card.dataset.format=rawFmt;
+      card.innerHTML=buildCardHTML(e);
+      card.dataset._fp=fp;
+      if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
+    }
+    card.onclick=()=>{ if(!e._deleting) openModal(e); };
+    orderedCards.push(card);
+  }
+
+  // Remove stale cards (entries that are gone)
+  for(const [key, el] of existingMap){
+    if(!desiredKeys.has(key)) el.remove();
+  }
+
+  // Reorder cards to match desired order (minimal DOM moves)
+  for(let i=0; i<orderedCards.length; i++){
+    if(cardsEl.children[i] !== orderedCards[i]){
+      cardsEl.insertBefore(orderedCards[i], cardsEl.children[i] || null);
+    }
+  }
+
   // Update book status dots
   setTimeout(updateBookDots, 0);
 }
@@ -979,6 +1071,50 @@ if (syncNowBtn) {
   });
 }
 
+// --- Notes expand overlay ---
+const notesExpandBtn = document.getElementById('notesExpandBtn');
+const notesOverlay = document.getElementById('notesOverlay');
+const notesOverlayInput = document.getElementById('notesOverlayInput');
+const notesOverlayClose = document.getElementById('notesOverlayClose');
+const notesOverlayBackdrop = notesOverlay?.querySelector('.notes-overlay-backdrop');
+const notesOverlayCount = document.getElementById('notesOverlayCount');
+
+function openNotesOverlay(){
+  if(!notesOverlay) return;
+  notesOverlayInput.value = notesInput?.value || '';
+  notesOverlay.style.display = 'flex';
+  if(notesOverlayCount) notesOverlayCount.textContent = notesOverlayInput.value.length;
+  setTimeout(()=> notesOverlayInput.focus(), 50);
+}
+function closeNotesOverlay(){
+  if(!notesOverlay) return;
+  if(notesInput) notesInput.value = notesOverlayInput.value;
+  notesOverlay.style.display = 'none';
+  autoGrowNotes();
+  updateDirty();
+}
+notesExpandBtn?.addEventListener('click', openNotesOverlay);
+notesOverlayClose?.addEventListener('click', closeNotesOverlay);
+notesOverlayBackdrop?.addEventListener('click', closeNotesOverlay);
+notesOverlayInput?.addEventListener('input', ()=>{
+  if(notesOverlayCount) notesOverlayCount.textContent = notesOverlayInput.value.length;
+});
+// ESC closes notes overlay
+document.addEventListener('keydown', (e)=>{
+  if(e.key==='Escape' && notesOverlay && notesOverlay.style.display==='flex'){
+    e.stopPropagation();
+    closeNotesOverlay();
+  }
+}, true);
+
+// --- Notes auto-grow ---
+function autoGrowNotes(){
+  if(!notesInput) return;
+  notesInput.style.height = 'auto';
+  notesInput.style.height = Math.max(60, notesInput.scrollHeight) + 'px';
+}
+notesInput?.addEventListener('input', autoGrowNotes);
+// Also auto-grow on modal open (when value is set programmatically)
 // --- Pinch / wheel zoom (restore) ---
 (function enableMobilePinch(){
   let cols=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--mobile-columns')||'2',10);

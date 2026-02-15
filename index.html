@@ -65,7 +65,20 @@
   <span class="toast-icon">🎉</span>
   <span class="toast-message">First book added! You're on your way.</span>
 </div>
-<footer>Bookish • Alpha • v0.1.37</footer>
+<footer>Bookish • Alpha • v0.1.38</footer>
+</div>
+
+<!-- Notes expand overlay -->
+<div id="notesOverlay" class="notes-overlay" style="display:none;">
+  <div class="notes-overlay-backdrop"></div>
+  <div class="notes-overlay-inner">
+    <div class="notes-overlay-header">
+      <h3>Notes</h3>
+      <button type="button" id="notesOverlayClose" class="btn notes-overlay-done">Done</button>
+    </div>
+    <textarea id="notesOverlayInput" placeholder="Write your thoughts about this book..." maxlength="10000"></textarea>
+    <div class="notes-overlay-count"><span id="notesOverlayCount">0</span> / 10,000</div>
+  </div>
 </div>
 
 <div id="modal" class="modal">
@@ -117,7 +130,8 @@
         <label class="notes-toggle" for="notesInput">
           <span class="notes-toggle-icon">✎</span> Notes <span class="notes-hint">(optional)</span>
         </label>
-        <textarea id="notesInput" name="notes" placeholder="Any thoughts about this book?" maxlength="1000" rows="3"></textarea>
+        <textarea id="notesInput" name="notes" placeholder="Any thoughts about this book?" maxlength="10000" rows="3"></textarea>
+        <button type="button" class="notes-expand-btn" id="notesExpandBtn" title="Expand notes editor">⤢</button>
       </div>
       <input type="hidden" name="priorTxid"/>
       <div class="row-actions primary-actions">

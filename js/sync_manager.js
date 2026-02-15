@@ -366,6 +366,7 @@ export function getSyncStatus() {
 export function getSyncStatusForUI() {
   return {
     isSyncing,
+    initialSynced,
     pendingBooks: transientSyncState.pendingBooks,
     isRefreshing: transientSyncState.isRefreshing,
     justCompleted: transientSyncState.justCompleted,
