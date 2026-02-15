@@ -4,9 +4,17 @@
 
 import { hexToBytes, base64ToBytes, bytesToBase64, importAesKey, encryptJsonToBytes, decryptBytesToJson } from './core/crypto_core.js';
 
-export async function deriveBookId({ isbn, title, author, edition }) {
-  if (isbn && isbn.trim()) return `isbn:${isbn.trim()}`;
-  const s = `${title ?? ''}|${author ?? ''}|${edition ?? ''}`.toLowerCase();
+/**
+ * Derive a stable bookId for a reading event.
+ * Includes createdAt so re-reads of the same book get distinct IDs.
+ * The result is stored in the entry and carried forward on edits
+ * (payload.bookId = old.bookId), so it never changes for a given entry.
+ */
+export async function deriveBookId({ isbn, title, author, edition, createdAt }) {
+  // createdAt anchors the ID to a specific reading event
+  const ts = createdAt ? String(createdAt) : String(Date.now());
+  if (isbn && isbn.trim()) return `isbn:${isbn.trim()}:${ts}`;
+  const s = `${title ?? ''}|${author ?? ''}|${edition ?? ''}|${ts}`.toLowerCase();
   const enc = new TextEncoder().encode(s);
   const digest = await crypto.subtle.digest('SHA-256', enc);
   const hex = [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');

@@ -681,7 +681,14 @@ async function syncBooksFromArweave(){
 // --- Create / edit / delete ---
 async function createServerless(payload){ if(window.bookishCache){ const dup=await window.bookishCache.detectDuplicate(payload); if(dup){ uiStatusManager.refresh(); const el=cardsEl.querySelector('[data-txid="'+(dup.txid||dup.id)+'"]'); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.classList.add('pulse'); setTimeout(()=>el.classList.remove('pulse'),1500);} return; } }
   const localId='local-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  const rec={id:localId, txid:null, ...payload, createdAt:Date.now(), status:'pending', pending:true, seenRemote:false, onArweave:false, _committed:false};
+  const createdAt=Date.now();
+  // Compute bookId up-front so the cache entry has it from the start.
+  // This enables bookId-based dedup in applyRemote even before the first upload.
+  // createdAt is included in the hash so re-reads of the same book get distinct IDs.
+  if(!payload.bookId && window.bookishBrowserClient?.deriveBookId){
+    try { payload.bookId = await window.bookishBrowserClient.deriveBookId({...payload, createdAt}); } catch{}
+  }
+  const rec={id:localId, txid:null, ...payload, createdAt, status:'pending', pending:true, seenRemote:false, onArweave:false, _committed:false};
   entries.push(rec);
   if(window.bookishCache) await window.bookishCache.putEntry(rec);
   markDirty(); // Signal sync manager that local data changed

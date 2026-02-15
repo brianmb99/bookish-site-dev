@@ -1,9 +1,10 @@
 // Core ID & size helpers extracted from browser_client.js (pure logic)
 // No DOM or global side-effects.
 
-export async function deriveBookId({ isbn, title, author, edition }) {
-  if (isbn && isbn.trim()) return `isbn:${isbn.trim()}`;
-  const s = `${title ?? ''}|${author ?? ''}|${edition ?? ''}`.toLowerCase();
+export async function deriveBookId({ isbn, title, author, edition, createdAt }) {
+  const ts = createdAt ? String(createdAt) : String(Date.now());
+  if (isbn && isbn.trim()) return `isbn:${isbn.trim()}:${ts}`;
+  const s = `${title ?? ''}|${author ?? ''}|${edition ?? ''}|${ts}`.toLowerCase();
   const enc = new TextEncoder().encode(s);
   const digest = await crypto.subtle.digest('SHA-256', enc);
   const hex = [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
