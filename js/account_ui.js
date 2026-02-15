@@ -958,6 +958,7 @@ function showCreationFullSuccess(displayName, email) {
     const banner = document.getElementById('accountBanner');
     if (banner) banner.style.display = 'none';
     uiStatusManager.refresh();
+    if(window.bookishApp?.render) window.bookishApp.render();
     startSync();
   };
 }
@@ -996,6 +997,7 @@ function showCreationFallbackSuccess(displayName, email) {
     const banner = document.getElementById('accountBanner');
     if (banner) banner.style.display = 'none';
     uiStatusManager.refresh();
+    if(window.bookishApp?.render) window.bookishApp.render();
     startSync();
   };
 }
@@ -1310,6 +1312,8 @@ async function runSignInFlow(email, password) {
   setTimeout(() => { transientState.justSignedIn = false; uiStatusManager.refresh(); }, 3000);
 
   uiStatusManager.refresh();
+  // Trigger render immediately so "Syncing your books…" loading state shows
+  if(window.bookishApp?.render) window.bookishApp.render();
   startSync();
 }
 
@@ -1412,6 +1416,8 @@ function handleManualSeedLogin() {
 
       // Start sync loop now that user is logged in
       console.log('[Bookish:AccountUI] Manual seed login successful, starting sync loop');
+      // Trigger render immediately so "Syncing your books…" loading state shows
+      if(window.bookishApp?.render) window.bookishApp.render();
       startSync();
 
       setTimeout(() => {
@@ -2376,7 +2382,8 @@ window.accountUI = {
   closeAccountModal,
   closeHelperModal,
   handlePersistAccountToArweave,
-  updateBalanceDisplay
+  updateBalanceDisplay,
+  handleSignIn
 };
 
 // Note: initAccountUI() is called from app.js — no auto-init here to avoid double initialization

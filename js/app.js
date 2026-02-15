@@ -151,7 +151,7 @@ function openModal(entry){
 }
 function closeModal(){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; if(window.bookSearch) window.bookSearch.handleModalOpen(true); }
 function clearBooks(){ entries=[]; render(); }
-window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview };
+window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render };
 // Dirty tracking helpers
 function currentFormState(){ return JSON.stringify({
   prior: form.priorTxid.value||'',
@@ -412,17 +412,20 @@ function render(){
     const headline = emptyEl.querySelector('.empty-headline');
     const subtext = emptyEl.querySelector('.empty-subtext');
     const addBtn = emptyEl.querySelector('.empty-cta');
+    const signInDiv = document.getElementById('emptySignIn');
     const illustration = emptyEl.querySelector('.empty-illustration');
 
     if(isLoading){
       if(headline) headline.textContent = 'Syncing your books\u2026';
       if(subtext) subtext.textContent = 'Fetching your library from the cloud.';
       if(addBtn) addBtn.style.display = 'none';
+      if(signInDiv) signInDiv.style.display = 'none';
       if(illustration) illustration.textContent = '\u23F3'; // hourglass
     } else {
       if(headline) headline.textContent = 'Your reading journey starts here';
       if(subtext) subtext.textContent = 'Track what you read. Keep it forever. Access it anywhere.';
       if(addBtn) addBtn.style.display = '';
+      if(signInDiv) signInDiv.style.display = storageManager.isLoggedIn() ? 'none' : '';
       if(illustration) illustration.textContent = '\uD83D\uDCDA'; // 📚
     }
 
@@ -882,6 +885,13 @@ newBtn?.addEventListener('click', ()=>openModal(null));
 
 // Phase 2: First-run experience event handlers
 emptyAddBookBtn?.addEventListener('click', ()=>openModal(null));
+
+// Empty state sign-in link
+const emptySignInBtn = document.getElementById('emptySignInBtn');
+emptySignInBtn?.addEventListener('click', ()=>{
+  if(window.accountUI?.handleSignIn) window.accountUI.handleSignIn();
+  else if(openAccountModal) openAccountModal();
+});
 
 nudgeDismissBtn?.addEventListener('click', ()=>{
   hideAccountNudge();
