@@ -1,5 +1,5 @@
 // sw.js - basic PWA service worker (v10 serverless)
-const VERSION='v38';
+const VERSION='v39';
 const CACHE_NAME='bookish-precache-'+VERSION;
 const CORE_ASSETS=[
   '/',
@@ -27,7 +27,10 @@ self.addEventListener('activate',e=>{
     await self.clients.claim();
   })());
 });
-self.addEventListener('message',e=>{ if(e.data==='SKIP_WAITING'){ self.skipWaiting(); } });
+self.addEventListener('message',e=>{
+  if(e.data==='SKIP_WAITING'){ self.skipWaiting(); }
+  if(e.data==='GET_VERSION' && e.ports?.[0]){ e.ports[0].postMessage(VERSION); }
+});
 async function cachePut(req,res){ try{ const c=await caches.open(CACHE_NAME); await c.put(req,res); }catch(_){} }
 async function networkFirst(req){ try{ const net=await fetch(req); const copy=net.clone(); cachePut(req,copy); return net; } catch{ const cached=await caches.match(req); if(cached) return cached; throw new Response('Offline',{status:503}); } }
 async function staleWhileRevalidate(req){ const cached=await caches.match(req); const fetchPromise=fetch(req).then(r=>{ cachePut(req,r.clone()); return r; }).catch(()=>cached); return cached||fetchPromise; }

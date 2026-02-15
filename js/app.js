@@ -6,6 +6,20 @@ import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 
+// --- Version logging (always visible in console) ---
+{
+  const footer = document.querySelector('footer');
+  const appVer = footer ? footer.textContent.trim() : 'unknown';
+  // Query SW version via MessageChannel
+  if (navigator.serviceWorker?.controller) {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = (e) => console.info(`[Bookish] ${appVer} | SW ${e.data}`);
+    navigator.serviceWorker.controller.postMessage('GET_VERSION', [ch.port2]);
+  } else {
+    console.info(`[Bookish] ${appVer} | SW not yet active`);
+  }
+}
+
 // --- DOM refs ---
 const statusEl = document.getElementById('status');
 // status banner removed; we now write a single status line into the geek panel
