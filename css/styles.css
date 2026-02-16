@@ -729,16 +729,33 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
     min-height:48px;
     padding:12px 16px;
   }
+  /* Exempt small UI controls from oversized mobile button sizing */
+  .search-controls button{min-height:auto;padding:4px 7px;font-size:.6rem}
+  #editionNav button{min-height:auto;padding:4px 8px;font-size:.6rem}
+  .cover-remove-btn{min-height:auto!important;padding:0!important}
+  .notes-expand-btn{min-height:auto;padding:0;width:26px;height:26px}
+  .close{min-height:auto;padding:0}
   .modal-inner{
-    padding:20px 16px;
+    padding:16px 14px;
     border-radius:16px 16px 0 0;
     margin-top:auto;
-    max-height:90vh;
+    max-height:92vh;
     overflow-y:auto;
   }
   .modal-inner .btn{
     width:100%;
   }
+  /* Compact modal form on mobile */
+  .modal-inner .form-as-tile{gap:10px}
+  .modal-inner .tile-cover{width:35%;max-width:140px;min-height:120px}
+  .modal-inner .fields-cluster{gap:10px}
+  .modal-inner .field-block input,.modal-inner .field-block select{padding:5px 7px;font-size:.7rem}
+  .modal-inner .primary-actions{margin-top:8px}
+  .modal-inner .primary-actions .btn{padding:8px 14px;font-size:.75rem;min-height:42px}
+  #bookSearchUI{padding:8px 10px 10px;margin:4px 0 8px}
+  #bookSearchResults{max-height:140px}
+  .notes-block{margin-top:4px}
+  .notes-block textarea{min-height:48px;font-size:.7rem}
   .cards{display:grid;grid-template-columns:repeat(var(--mobile-columns), minmax(0,1fr));gap:18px;margin-top:8px;transition:grid-template-columns .25s}
   .card{
     flex-direction:column;

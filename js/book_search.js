@@ -41,7 +41,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     resultsEl.style.display='block'; showSkeletonCards();
     const termFull=encodeURIComponent(q); const base=coreBaseTitle(q);
     // Use fields parameter for 10x smaller payloads (OpenLibrary optimization)
-    const fields='key,title,author_key,author_name,cover_i,first_publish_year,publish_year,subtitle,physical_format';
+    const fields='key,title,author_key,author_name,cover_i,first_publish_year,publish_year,subtitle,physical_format,language';
     // Build URLs — may be overridden by ISBN or author parsing
     let titleUrl='https://openlibrary.org/search.json?title='+encodeURIComponent(base)+'&limit=50&fields='+fields;
     let broadUrl='https://openlibrary.org/search.json?q='+encodeURIComponent(q)+'&limit=50&fields='+fields;
