@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>About Bookish — A Private, Permanent Reading List</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="description" content="Bookish is a reading list app that saves your books permanently and privately. Pay once, keep it forever."/>
+  <meta name="theme-color" content="#2563eb"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-192.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
+  <style>
+    /* Reset & base */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-body: 'DM Sans', system-ui, sans-serif;
+      --color-bg-deep: #0f1114;
+      --color-bg-base: #151920;
+      --color-bg-surface: #1c222a;
+      --color-bg-elevated: #242b35;
+      --color-text-primary: #f7f5f2;
+      --color-text-secondary: #c9c5be;
+      --color-text-muted: #7a7670;
+      --color-border-subtle: #2a2f38;
+      --color-border-default: #363d48;
+      --color-primary: #3b82f6;
+      --color-primary-hover: #60a5fa;
+      --color-primary-muted: rgba(59, 130, 246, 0.15);
+      --color-accent: #f59e0b;
+      --color-success: #10b981;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: linear-gradient(180deg, var(--color-bg-deep) 0%, var(--color-bg-base) 100%);
+      color: var(--color-text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.025;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    /* Layout */
+    .page {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 24px 64px;
+    }
+
+    /* Navigation */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 64px;
+    }
+
+    .nav-brand {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .nav-link {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--color-primary);
+      text-decoration: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--color-primary);
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      background: var(--color-primary);
+      color: #fff;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      margin-bottom: 80px;
+    }
+
+    .hero-icon {
+      font-size: 3.5rem;
+      margin-bottom: 24px;
+      display: block;
+    }
+
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: 2.5rem;
+      font-weight: 500;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      color: var(--color-text-primary);
+    }
+
+    .hero p {
+      font-size: 1.125rem;
+      color: var(--color-text-secondary);
+      max-width: 480px;
+      margin: 0 auto 36px;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-body);
+      font-size: 1.05rem;
+      font-weight: 600;
+      padding: 16px 36px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, var(--color-primary) 0%, #2563eb 100%);
+      color: #fff;
+      text-decoration: none;
+      box-shadow: 0 4px 16px -4px rgba(59, 130, 246, 0.5);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .hero-cta:hover {
+      background: linear-gradient(135deg, var(--color-primary-hover) 0%, #3b82f6 100%);
+      box-shadow: 0 6px 20px -4px rgba(59, 130, 246, 0.6);
+      transform: translateY(-2px);
+    }
+
+    /* Value propositions */
+    .values {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      margin-bottom: 80px;
+    }
+
+    .value-card {
+      background: var(--color-bg-surface);
+      border: 1px solid var(--color-border-subtle);
+      border-radius: 14px;
+      padding: 28px 24px;
+      transition: border-color 0.2s ease;
+    }
+
+    .value-card:hover {
+      border-color: var(--color-border-default);
+    }
+
+    .value-icon {
+      font-size: 1.75rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .value-card h3 {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--color-text-primary);
+    }
+
+    .value-card p {
+      font-size: 0.95rem;
+      color: var(--color-text-secondary);
+      line-height: 1.5;
+    }
+
+    /* How it works */
+    .how-it-works {
+      margin-bottom: 80px;
+    }
+
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 1.75rem;
+      font-weight: 500;
+      text-align: center;
+      margin-bottom: 40px;
+      letter-spacing: -0.01em;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      counter-reset: step;
+    }
+
+    .step {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--color-primary-muted);
+      color: var(--color-primary);
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .step-content h3 {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: var(--color-text-primary);
+    }
+
+    .step-content p {
+      font-size: 0.95rem;
+      color: var(--color-text-secondary);
+    }
+
+    /* FAQ */
+    .faq {
+      margin-bottom: 80px;
+    }
+
+    .faq-item {
+      border-bottom: 1px solid var(--color-border-subtle);
+    }
+
+    .faq-item:first-child {
+      border-top: 1px solid var(--color-border-subtle);
+    }
+
+    .faq-question {
+      width: 100%;
+      background: none;
+      border: none;
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: 1rem;
+      font-weight: 600;
+      text-align: left;
+      padding: 20px 0;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      transition: color 0.2s ease;
+    }
+
+    .faq-question:hover {
+      color: var(--color-primary-hover);
+    }
+
+    .faq-chevron {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      color: var(--color-text-muted);
+      transition: transform 0.2s ease;
+    }
+
+    .faq-item.open .faq-chevron {
+      transform: rotate(180deg);
+    }
+
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease, padding 0.3s ease;
+    }
+
+    .faq-item.open .faq-answer {
+      max-height: 200px;
+      padding-bottom: 20px;
+    }
+
+    .faq-answer p {
+      font-size: 0.95rem;
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+    }
+
+    /* Alpha badge */
+    .alpha-note {
+      text-align: center;
+      margin-bottom: 48px;
+      padding: 20px;
+      background: var(--color-bg-surface);
+      border: 1px solid var(--color-border-subtle);
+      border-radius: 12px;
+    }
+
+    .alpha-note p {
+      font-size: 0.9rem;
+      color: var(--color-text-secondary);
+      line-height: 1.5;
+    }
+
+    .alpha-note strong {
+      color: var(--color-accent);
+    }
+
+    /* Footer */
+    .about-footer {
+      text-align: center;
+      padding-top: 40px;
+      border-top: 1px solid var(--color-border-subtle);
+    }
+
+    .about-footer p {
+      font-size: 0.8rem;
+      color: var(--color-text-muted);
+    }
+
+    .about-footer a {
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .about-footer a:hover {
+      color: var(--color-primary);
+    }
+
+    /* Responsive */
+    @media (min-width: 600px) {
+      .page {
+        padding: 64px 32px 80px;
+      }
+
+      .hero h1 {
+        font-size: 3rem;
+      }
+
+      .values {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .steps {
+        gap: 32px;
+      }
+    }
+
+    @media (max-width: 599px) {
+      .hero h1 {
+        font-size: 2rem;
+      }
+
+      .hero p {
+        font-size: 1rem;
+      }
+
+      .hero-cta {
+        width: 100%;
+        justify-content: center;
+        padding: 16px 24px;
+      }
+
+      .nav {
+        margin-bottom: 48px;
+      }
+
+      .section-title {
+        font-size: 1.5rem;
+      }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Nav -->
+  <nav class="nav">
+    <a href="/" class="nav-brand">Bookish</a>
+    <a href="/" class="nav-link">Open App</a>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <span class="hero-icon" aria-hidden="true">📚</span>
+    <h1>A private, permanent reading list</h1>
+    <p>Track what you read. Keep it forever. Your data is encrypted and yours alone — no subscriptions, no ads, no snooping.</p>
+    <a href="/" class="hero-cta">Try Bookish</a>
+  </section>
+
+  <!-- Value Props -->
+  <section class="values">
+    <div class="value-card">
+      <span class="value-icon" aria-hidden="true">🔒</span>
+      <h3>Private</h3>
+      <p>Your reading list is encrypted before it ever leaves your device. We can't see it, and neither can anyone else.</p>
+    </div>
+    <div class="value-card">
+      <span class="value-icon" aria-hidden="true">♾️</span>
+      <h3>Permanent</h3>
+      <p>Stored forever on a decentralized network — not on servers that can shut down, get acquired, or lose your data.</p>
+    </div>
+    <div class="value-card">
+      <span class="value-icon" aria-hidden="true">💰</span>
+      <h3>No subscription</h3>
+      <p>Pay once, keep it forever. No monthly fees. No surprise price increases. Your reading list is yours for life.</p>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="how-it-works">
+    <h2 class="section-title">How it works</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Add your books</h3>
+          <p>Search by title or type them in. Add cover art, reading dates, notes — whatever matters to you.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Create an account</h3>
+          <p>Sign up with your email and a password. Free storage included to get you started — no credit card needed.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Access it anywhere</h3>
+          <p>Sign in on any device and your books are there. Encrypted, synced, and permanently saved.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Alpha note -->
+  <section class="alpha-note">
+    <p><strong>Early access</strong> — Bookish is currently in friends-and-family alpha. You're getting an early look. Things may be a little rough around the edges, and your feedback is incredibly helpful.</p>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq">
+    <h2 class="section-title">Questions</h2>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">
+        <span>Is it really free to start?</span>
+        <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+      </button>
+      <div class="faq-answer">
+        <p>Yes. Start adding books right away with no account at all — everything saves to your device. When you're ready to sync across devices and save permanently, create an account. Free storage is included to get you started.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">
+        <span>What does "permanent" mean?</span>
+        <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+      </button>
+      <div class="faq-answer">
+        <p>Your data is stored on a decentralized network designed to last forever. It's not sitting on one company's server. Even if Bookish the app disappears someday, your data survives and can be retrieved.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">
+        <span>How much does it cost?</span>
+        <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+      </button>
+      <div class="faq-answer">
+        <p>Free to use locally on your device. When you want permanent cloud storage and cross-device sync, it's roughly a $5 one-time payment. No subscription — you pay once and it's yours.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">
+        <span>Is my data really private?</span>
+        <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+      </button>
+      <div class="faq-answer">
+        <p>Yes. Everything is encrypted on your device before it's stored. We never see your book list, your notes, or anything else. Only you hold the keys to your data.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">
+        <span>Who built this?</span>
+        <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+      </button>
+      <div class="faq-answer">
+        <p>Bookish is an indie project built by Brian — a software engineer who wanted a reading tracker that respects privacy and actually lasts. No venture capital, no ads, no data harvesting. Just a tool built for book lovers.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom CTA -->
+  <section class="hero" style="margin-bottom: 48px;">
+    <a href="/" class="hero-cta">Try Bookish</a>
+  </section>
+
+  <!-- Footer -->
+  <footer class="about-footer">
+    <p>Bookish &bull; <a href="/">Open App</a></p>
+  </footer>
+
+</div>
+
+<script>
+  document.querySelectorAll('.faq-question').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var item = this.parentElement;
+      var isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(function(el) {
+        el.classList.remove('open');
+        el.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+      });
+      if (!isOpen) {
+        item.classList.add('open');
+        this.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
