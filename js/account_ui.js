@@ -2363,7 +2363,7 @@ function showAccountModal(content, showClose = true) {
 
   helperModal.innerHTML = `
     <div class="modal-content">
-      ${showClose ? '<button class="modal-close" onclick="window.accountUI.closeHelperModal()">×</button>' : ''}
+      ${showClose ? '<button class="modal-close-btn" onclick="window.accountUI.closeHelperModal()" aria-label="Close">×</button>' : ''}
       ${content}
     </div>
   `;

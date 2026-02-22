@@ -451,27 +451,7 @@ button.secondary:hover, .btn.secondary:hover{
     border-radius:16px;
   }
 }
-.account-modal .modal-close{
-  position:absolute;
-  top:16px;
-  right:16px;
-  background:none;
-  border:none;
-  color:#64748b;
-  font-size:1.5rem;
-  cursor:pointer;
-  width:40px;
-  height:40px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:8px;
-  transition:color 0.2s, background 0.2s;
-}
-.account-modal .modal-close:hover{
-  color:#e2e8f0;
-  background:#1e293b;
-}
+/* Account modal close button uses unified .modal-close-btn */
 .account-modal h2{
   margin:0 0 24px 0;
   font-size:1.25rem;
@@ -601,25 +581,28 @@ form.inline label{
     transform:scale(1) translateY(0);
   }
 }
-.close{
+.modal-close-btn{
   position:absolute;
-  top:10px;
-  right:10px;
+  top:12px;
+  right:12px;
   background:var(--color-bg-surface);
   border:1px solid var(--color-border-subtle);
   color:var(--color-text-muted);
   border-radius:50%;
-  width:32px;
-  height:32px;
-  font-size:16px;
+  width:36px;
+  height:36px;
+  font-size:18px;
   cursor:pointer;
   transition:all .2s ease;
   display:flex;
   align-items:center;
   justify-content:center;
   line-height:1;
+  padding:0;
+  min-height:auto;
+  z-index:1;
 }
-.close:hover{
+.modal-close-btn:hover{
   background:var(--color-border-subtle);
   color:var(--color-text-primary);
   border-color:var(--color-border-default);
@@ -712,6 +695,25 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .search-controls button{background:#2b333b;border:1px solid #374151;color:#9da6af;font-size:.65rem;padding:5px 8px;border-radius:5px;cursor:pointer;letter-spacing:.04em}
 .search-controls button.active{background:#2563eb;border-color:#2563eb;color:#fff}
 .search-controls button:hover:not(.active){background:#323b44}
+.filters-toggle{
+  display:none;
+  background:var(--color-bg-surface);
+  border:1px solid var(--color-border-subtle);
+  color:var(--color-text-muted);
+  font-size:.6rem;
+  padding:4px 10px;
+  border-radius:12px;
+  cursor:pointer;
+  margin-top:6px;
+  align-items:center;
+  gap:4px;
+  min-height:auto;
+  letter-spacing:.04em;
+}
+.filters-toggle:hover{color:var(--color-text-secondary)}
+.filters-toggle .filters-toggle-icon{transition:transform .2s}
+.filters-toggle.open .filters-toggle-icon{transform:rotate(180deg)}
+.filters-active-dot{width:6px;height:6px;border-radius:50%;background:var(--color-primary);display:inline-block;margin-left:2px}
 .cards .title{transition:font-size .2s}
 .cards .author{transition:font-size .2s}
 .cards .details{transition:font-size .2s}
@@ -734,7 +736,10 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   #editionNav button{min-height:auto;padding:4px 8px;font-size:.6rem}
   .cover-remove-btn{min-height:auto!important;padding:0!important}
   .notes-expand-btn{min-height:auto;padding:0;width:26px;height:26px}
-  .close{min-height:auto;padding:0}
+  .modal-close-btn{width:44px;height:44px;font-size:20px;min-height:auto;padding:0}
+  /* Filters collapsed on mobile */
+  .filters-toggle{display:inline-flex}
+  .search-controls:not(.expanded){display:none}
   .modal-inner{
     padding:16px 14px;
     border-radius:16px 16px 0 0;
@@ -938,8 +943,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 
 /* Account modal styles */
 .modal-content{background:#1e242b;border:1px solid #2b333b;border-radius:16px;padding:20px;width:100%;max-width:420px;position:relative}
-.modal-close{position:absolute;top:10px;right:10px;background:#2b333b;color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
-.modal-close:hover{background:#3b4654}
+/* Helper modal close button uses unified .modal-close-btn */
 
 /* Progress dots for multi-step modals */
 .modal-progress{display:flex;justify-content:center;gap:8px;margin-top:16px}

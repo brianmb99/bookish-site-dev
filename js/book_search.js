@@ -7,6 +7,25 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   const ui=document.getElementById('bookSearchUI'); const input=document.getElementById('bookSearchInput'); const resultsEl=document.getElementById('bookSearchResults');
   const editionNav=document.getElementById('editionNav'); const prevBtn=document.getElementById('prevEdition'); const nextBtn=document.getElementById('nextEdition'); const editionInfo=document.getElementById('editionInfo');
   const controls=document.getElementById('searchControls');
+  const filtersToggle=document.getElementById('filtersToggle');
+  const filtersActiveDot=document.getElementById('filtersActiveIndicator');
+  const isMobile=()=>window.matchMedia('(max-width:599px)').matches;
+  function syncFiltersVisibility(hasResults){
+    if(!controls) return;
+    if(!hasResults){ controls.style.display='none'; if(filtersToggle) filtersToggle.style.display='none'; return; }
+    if(isMobile()){ if(filtersToggle) filtersToggle.style.display='inline-flex'; if(!controls.classList.contains('expanded')) controls.style.display='none'; else controls.style.display='flex'; }
+    else{ controls.style.display='flex'; if(filtersToggle) filtersToggle.style.display='none'; }
+  }
+  function updateFilterIndicator(){
+    if(!filtersActiveDot) return;
+    filtersActiveDot.style.display=(activeFilter!=='all'||sortMode!=='relevance')?'inline-block':'none';
+  }
+  if(filtersToggle) filtersToggle.addEventListener('click',()=>{
+    const isExpanded=controls.classList.toggle('expanded');
+    filtersToggle.classList.toggle('open',isExpanded);
+    filtersToggle.setAttribute('aria-expanded',isExpanded);
+    controls.style.display=isExpanded?'flex':'none';
+  });
   // SVG book icon for cover placeholders (matches library card placeholder)
   const BOOK_SVG='<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
   function setCoverPlaceholder(ph,state){
@@ -25,7 +44,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   let searchCounter=0; // stale request detection for progressive loading
   function markDirty(){ try{ form.dispatchEvent(new Event('input',{bubbles:true})); }catch{} }
   function showUI(isEdit){ ui.style.display=isEdit?'none':'block'; if(isEdit) clearSearchState(); }
-  function clearSearchState(){ currentWork=null; currentAudio=null; editions=[]; editionIndex=0; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; editionNav.style.display='none'; if(controls) controls.style.display='none'; lastQuery=''; queryTokens=[]; strictActive=false; }
+  function clearSearchState(){ currentWork=null; currentAudio=null; editions=[]; editionIndex=0; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; editionNav.style.display='none'; syncFiltersVisibility(false); if(controls) controls.classList.remove('expanded'); if(filtersToggle) filtersToggle.classList.remove('open'); lastQuery=''; queryTokens=[]; strictActive=false; }
   function prepareQuery(q){ lastQuery=q.trim(); queryTokens=coreTokenize(lastQuery); }
   // Skeleton loading cards shown while APIs are in flight
   function showSkeletonCards(){
@@ -62,7 +81,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     // Progressive state tracked per-search
     let titleDocs=[]; let broadDocs=[]; let failTitle=false; let failBroad=false;
     let titleDone=false; let broadDone=skipBroad; let itunesDone=false;
-    function mergeAndRender(){ if(isStale()) return; olDocs=coreMerge(titleDocs,broadDocs); if(controls) controls.style.display=(olDocs.length+itunesItems.length)?'flex':'none'; computeScoring(); renderCombined({failTitle,failBroad,partial:!titleDone||!broadDone||!itunesDone}); }
+    function mergeAndRender(){ if(isStale()) return; olDocs=coreMerge(titleDocs,broadDocs); syncFiltersVisibility(olDocs.length+itunesItems.length>0); computeScoring(); renderCombined({failTitle,failBroad,partial:!titleDone||!broadDone||!itunesDone}); }
     // Fire title search (or ISBN search)
     fetch(titleUrl).then(r=>r.json().then(j=>({ok:r.ok,...j})).catch(()=>({ok:false,docs:[]}))).catch(()=>({ok:false,docs:[]}))
       .then(r=>{if(isStale())return;failTitle=!r.ok;titleDocs=r.docs||[];titleDone=true;mergeAndRender();});
@@ -73,7 +92,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     fetch(itunesUrl).then(r=>r.json()).catch(()=>({results:[]}))
       .then(r=>{if(isStale())return;itunesItems=r.results||[];itunesDone=true;mergeAndRender();});
   }
-  function clearResults(){ resultsEl.innerHTML=''; resultsEl.style.display='none'; if(controls) controls.style.display='none'; }
+  function clearResults(){ resultsEl.innerHTML=''; resultsEl.style.display='none'; syncFiltersVisibility(false); }
   function enrich(){ enrichWithYear(olDocs); enrichItunesWithYear(itunesItems); }
   // scoring & strict filtering
   function computeScoring(){ if(!queryTokens.length){ strictActive=false; return; } let anyStrict=false;
@@ -186,8 +205,8 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   input.addEventListener('input',()=>{ if(debounceTimer) clearTimeout(debounceTimer); debounceTimer=setTimeout(()=>searchTitle(input.value),350); });
   resultsEl.addEventListener('click',e=>{ const div=e.target.closest('div.res'); if(!div) return; resultsEl.style.display='none'; const src=div.dataset.src; try{ const meta=JSON.parse(decodeURIComponent(div.dataset.json)); if(src==='ol') selectWork(meta); else if(src==='it') selectItunes(meta); }catch(err){} });
   prevBtn.addEventListener('click',()=>{ if(editionIndex>0){ editionIndex--; applyEdition(); }}); nextBtn.addEventListener('click',()=>{ if(editionIndex<editions.length-1){ editionIndex++; applyEdition(); }});
-  if(controls){ controls.addEventListener('click',e=>{ const f=e.target.closest('.filter-btn'); const s=e.target.closest('.sort-btn'); if(f){ const val=f.dataset.filter; if(val && val!==activeFilter){ activeFilter=val; controls.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active', b.dataset.filter===activeFilter)); renderCombined(); } }
-    if(s){ const mode=s.dataset.mode; if(mode && mode!==sortMode){ sortMode=mode; controls.querySelectorAll('.sort-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===sortMode)); renderCombined(); } }
+  if(controls){ controls.addEventListener('click',e=>{ const f=e.target.closest('.filter-btn'); const s=e.target.closest('.sort-btn'); if(f){ const val=f.dataset.filter; if(val && val!==activeFilter){ activeFilter=val; controls.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active', b.dataset.filter===activeFilter)); updateFilterIndicator(); renderCombined(); } }
+    if(s){ const mode=s.dataset.mode; if(mode && mode!==sortMode){ sortMode=mode; controls.querySelectorAll('.sort-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===sortMode)); updateFilterIndicator(); renderCombined(); } }
   }); }
   window.bookSearch={ handleModalOpen(isEdit){ showUI(isEdit); } };
 })();
