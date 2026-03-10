@@ -230,7 +230,7 @@ async function renderAccountModalContent(container) {
 
       <div class="account-actions" style="margin-top: 24px;">
         ${(() => {
-          const buttonText = !isFunded ? 'Enable Cloud Backup' : 'Add Credit';
+          const buttonText = !isFunded ? 'Add Cloud Credit' : 'Add Credit';
           return `<button id="enableBackupBtn" class="btn primary" style="width: 100%; margin-bottom: 12px;">${buttonText}</button>`;
         })()}
         <div style="display: flex; justify-content: center; gap: 16px; margin-top: 16px; font-size: 0.8rem;">
@@ -1471,7 +1471,7 @@ async function handleLogout() {
       <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:16px 0;">
         Add funds now to back up your account before logging out.
       </p>
-      <button id="addFundsStayLoggedInBtn" class="btn" style="width:100%;padding:14px 20px;background:#2563eb;margin-bottom:12px;">Enable Cloud Backup & Stay</button>
+      <button id="addFundsStayLoggedInBtn" class="btn" style="width:100%;padding:14px 20px;background:#2563eb;margin-bottom:12px;">Add Cloud Credit & Stay</button>
       <button id="haveRecoveryPhraseBtn" class="btn secondary" style="width:100%;padding:12px 20px;margin-bottom:16px;">I have my recovery phrase saved</button>
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <button id="cancelLogoutBtn" class="btn-link" style="background:none;border:none;color:#94a3b8;font-size:.875rem;cursor:pointer;">Cancel</button>
@@ -1675,7 +1675,7 @@ function showFundingValueModal(address, isFunded = false) {
       ${!isFunded ? `
       <div style="font-size:2.5rem;margin:16px 0;opacity:.9;">☁️ + 🔒 = ♾️</div>
       <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:0 0 24px 0;text-align:left;">
-        Right now, your books only exist on this device. Enable cloud backup to:
+        Right now, your books only exist on this device. Add cloud credit to:
       </p>
       <div style="text-align:left;margin:0 0 24px 0;">
         <div style="font-size:.875rem;line-height:2;margin:8px 0;">✓ Access from any device</div>
