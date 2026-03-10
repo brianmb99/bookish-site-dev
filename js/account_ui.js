@@ -1605,7 +1605,7 @@ function showSeedPhraseModal(seed) {
     </div>
 
     <div style="background:#0b1220;border:1px solid #334155;border-radius:6px;padding:16px;margin:0 0 16px 0;">
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;font-family:monospace;font-size:.875rem;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:12px;font-family:monospace;font-size:.875rem;">
         ${words.map((word, i) => `
           <div style="display:flex;gap:8px;">
             <span style="opacity:.5;">${i + 1}.</span>

@@ -333,7 +333,7 @@ button.secondary:hover, .btn.secondary:hover{
 .empty-signin .link-btn:hover{color:var(--color-text-primary)}
 
 /* Celebration toast */
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e3a5f;border:1px solid #2563eb;border-radius:12px;padding:12px 20px;display:flex;align-items:center;gap:10px;font-size:.9rem;color:#e2e8f0;box-shadow:0 4px 20px rgba(0,0,0,.3);z-index:9000;animation:slideUp .3s ease-out}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e3a5f;border:1px solid #2563eb;border-radius:12px;padding:12px 20px;display:flex;align-items:center;gap:10px;font-size:.9rem;color:#e2e8f0;box-shadow:0 4px 20px rgba(0,0,0,.3);z-index:9000;animation:slideUp .3s ease-out;max-width:calc(100vw - 48px)}
 @keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .toast.hiding{animation:slideDown .3s ease-in forwards}
 @keyframes slideDown{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(20px)}}
@@ -899,7 +899,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .date-input-wrap input[type=date]{flex:1;min-width:0}
 .cal-btn{background:#2b333b;border:1px solid #374151;color:#cbd5e1;font-size:.7rem;padding:6px 8px;border-radius:6px;cursor:pointer;line-height:1}
 .cal-btn:hover{background:#343e48;border-color:#46525e}
-.date-picker{position:absolute;z-index:1000;background:#1e242b;border:1px solid #2b333b;border-radius:10px;padding:10px;width:220px;box-shadow:0 6px 18px -4px rgba(0,0,0,.55);font-size:.65rem;display:none}
+.date-picker{position:absolute;z-index:1000;background:#1e242b;border:1px solid #2b333b;border-radius:10px;padding:10px;width:220px;max-width:calc(100vw - 20px);box-shadow:0 6px 18px -4px rgba(0,0,0,.55);font-size:.65rem;display:none}
 .date-picker header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .date-picker header button{background:#2b333b;border:1px solid #374151;color:#cbd5e1;padding:2px 6px;font-size:.6rem;border-radius:4px;cursor:pointer}
 .date-picker header button:hover{background:#343e48}
@@ -1421,6 +1421,16 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
     min-width: 44px;
     min-height: 44px;
   }
+}
+
+/* ============================================================================
+   Narrow screens (iPhone SE 1st gen, older small phones)
+   ============================================================================ */
+@media (max-width: 374px) {
+  .account-actions .btn{min-width:0}
+  .strength-label{min-width:0;white-space:normal}
+  .empty-state{min-height:200px;padding:40px 16px}
+  .modal-inner .fields-cluster{grid-template-columns:1fr}
 }
 
 /* ============================================================================

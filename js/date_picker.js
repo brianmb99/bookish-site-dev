@@ -26,7 +26,10 @@
     html+='</tr></tbody></table>';
     picker.innerHTML = html;
     const rect = input.getBoundingClientRect();
-    picker.style.left = (rect.left + window.scrollX)+'px';
+    const pickerW = 220;
+    const idealLeft = rect.left + window.scrollX;
+    const maxLeft = window.innerWidth - pickerW - 10;
+    picker.style.left = Math.max(10, Math.min(idealLeft, maxLeft))+'px';
     picker.style.top = (rect.bottom + window.scrollY + 4)+'px';
     picker.querySelector('#dpPrev').onclick = ()=>{ current.setMonth(current.getMonth()-1); build(); };
     picker.querySelector('#dpNext').onclick = ()=>{ current.setMonth(current.getMonth()+1); build(); };
