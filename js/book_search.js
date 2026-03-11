@@ -66,7 +66,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     // Use fields parameter for 10x smaller payloads (OpenLibrary optimization)
     const fields='key,title,author_key,author_name,cover_i,first_publish_year,publish_year,subtitle,physical_format,language';
     // Build URLs — may be overridden by ISBN or author parsing
-    let titleUrl='https://openlibrary.org/search.json?title='+encodeURIComponent(base)+'&limit=50&fields='+fields;
+    let titleUrl='https://openlibrary.org/search.json?q='+encodeURIComponent(base)+'&limit=50&fields='+fields;
     let broadUrl='https://openlibrary.org/search.json?q='+encodeURIComponent(q)+'&limit=50&fields='+fields;
     const itunesUrl='https://itunes.apple.com/search?media=audiobook&term='+termFull+'&limit=25';
     let skipBroad=false;
