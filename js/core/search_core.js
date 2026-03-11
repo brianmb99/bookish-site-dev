@@ -112,21 +112,10 @@ export function isEnglish(doc) {
   return doc.language.some(l => l === 'eng' || l === 'en' || l === 'English');
 }
 
-// Filter documents by format
+// Filter documents by source: 'all' (books + audiobooks) or 'audiobook' (iTunes only)
 export function passesFilter(item, activeFilter) {
   if (activeFilter === 'all') return true;
-
-  if (item._isItunes) {
-    return activeFilter === 'audiobook';
-  }
-
-  // OpenLibrary format guess
-  const fmt = (item.physical_format || '').toLowerCase();
-  if (activeFilter === 'audiobook') return fmt.includes('audio');
-  if (activeFilter === 'ebook') return fmt.includes('ebook') || fmt.includes('e-book') || fmt.includes('electronic') || fmt.includes('kindle');
-  if (activeFilter === 'paperback') return fmt.includes('paper');
-  if (activeFilter === 'hardcover') return fmt.includes('hard');
-
+  if (activeFilter === 'audiobook') return !!item._isItunes;
   return true;
 }
 
@@ -193,14 +182,9 @@ export function filterAndSort({
   // Filter non-English results
   ol = ol.filter(d => isEnglish(d));
 
-  // Apply format filter
-  ol = ol.filter(d => passesFilter(d, activeFilter));
-
-  // iTunes: only show if audiobook or all
-  if (activeFilter !== 'audiobook' && activeFilter !== 'all') {
-    it = [];
-  } else {
-    it = it.filter(() => activeFilter === 'all' || activeFilter === 'audiobook');
+  // Apply source filter: 'audiobook' hides OL results, 'all' keeps both
+  if (activeFilter === 'audiobook') {
+    ol = [];
   }
 
   // Sort
