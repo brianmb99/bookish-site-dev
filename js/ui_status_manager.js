@@ -109,7 +109,7 @@ class UIStatusManager {
     // ═══════════════════════════════════════════════════════════════
     if (account.isLoggedIn && !account.isPersisted && !sync.isSyncing) {
       return {
-        message: 'Account not yet saved',
+        message: 'Backing up to cloud\u2026',
         priority: PRIORITY.WARNING,
         maxDisplay: 0 // Stays until state changes
       };

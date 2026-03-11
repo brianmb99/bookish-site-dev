@@ -95,8 +95,8 @@ export function scoreDocument({ title, subtitle, author, queryTokens, queryStrin
     score += (year || 0) * 0.02;
   }
 
-  // Strict: all tokens present in title/subtitle
-  const titleBlob = ((title || '') + ' ' + (subtitle || '')).toLowerCase();
+  // Strict: all tokens present in title/subtitle/author
+  const titleBlob = ((title || '') + ' ' + (subtitle || '') + ' ' + (author || '')).toLowerCase();
   let strict = queryTokens.length > 0;
   queryTokens.forEach(t => {
     if (!titleBlob.includes(t)) strict = false;

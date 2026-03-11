@@ -42,9 +42,10 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   let olDocs=[]; let itunesItems=[]; // raw combined after merge
   let debounceTimer=null; let currentWork=null; let currentAudio=null; let editions=[]; let editionIndex=0;
   let searchCounter=0; // stale request detection for progressive loading
+  let abortController=null; // cancels in-flight fetches on modal close or new search
   function markDirty(){ try{ form.dispatchEvent(new Event('input',{bubbles:true})); }catch{} }
   function showUI(isEdit){ ui.style.display=isEdit?'none':'block'; if(isEdit) clearSearchState(); }
-  function clearSearchState(){ currentWork=null; currentAudio=null; editions=[]; editionIndex=0; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; editionNav.style.display='none'; syncFiltersVisibility(false); if(controls) controls.classList.remove('expanded'); if(filtersToggle) filtersToggle.classList.remove('open'); lastQuery=''; queryTokens=[]; strictActive=false; }
+  function clearSearchState(){ if(abortController){ abortController.abort(); abortController=null; } if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; } currentWork=null; currentAudio=null; editions=[]; editionIndex=0; olDocs=[]; itunesItems=[]; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; editionNav.style.display='none'; syncFiltersVisibility(false); if(controls) controls.classList.remove('expanded'); if(filtersToggle) filtersToggle.classList.remove('open'); lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all'; }
   function prepareQuery(q){ lastQuery=q.trim(); queryTokens=coreTokenize(lastQuery); }
   // Skeleton loading cards shown while APIs are in flight
   function showSkeletonCards(){
@@ -54,8 +55,11 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   // Progressive search: fires 3 APIs in parallel, renders results as each returns
   // Supports ISBN detection and "Title by Author" parsing for smarter queries
   async function searchTitle(q){ q=q.trim(); if(!q){ clearResults(); return; } prepareQuery(q);
+    if(abortController) abortController.abort();
+    abortController=new AbortController();
+    const signal=abortController.signal;
     const mySearch=++searchCounter;
-    const isStale=()=>mySearch!==searchCounter;
+    const isStale=()=>mySearch!==searchCounter||signal.aborted;
     // Show skeleton immediately
     resultsEl.style.display='block'; showSkeletonCards();
     const termFull=encodeURIComponent(q); const base=coreBaseTitle(q);
@@ -83,14 +87,14 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     let titleDone=false; let broadDone=skipBroad; let itunesDone=false;
     function mergeAndRender(){ if(isStale()) return; olDocs=coreMerge(titleDocs,broadDocs); syncFiltersVisibility(olDocs.length+itunesItems.length>0); computeScoring(); renderCombined({failTitle,failBroad,partial:!titleDone||!broadDone||!itunesDone}); }
     // Fire title search (or ISBN search)
-    fetch(titleUrl).then(r=>r.json().then(j=>({ok:r.ok,...j})).catch(()=>({ok:false,docs:[]}))).catch(()=>({ok:false,docs:[]}))
-      .then(r=>{if(isStale())return;failTitle=!r.ok;titleDocs=r.docs||[];titleDone=true;mergeAndRender();});
+    fetch(titleUrl,{signal}).then(r=>r.json().then(j=>({ok:r.ok,...j})).catch(()=>({ok:false,docs:[]}))).catch(e=>{if(e.name==='AbortError')return null;return{ok:false,docs:[]};})
+      .then(r=>{if(!r||isStale())return;failTitle=!r.ok;titleDocs=r.docs||[];titleDone=true;mergeAndRender();});
     // Fire broad search (skipped for ISBN queries)
-    if(!skipBroad){ fetch(broadUrl).then(r=>r.json().then(j=>({ok:r.ok,...j})).catch(()=>({ok:false,docs:[]}))).catch(()=>({ok:false,docs:[]}))
-      .then(r=>{if(isStale())return;failBroad=!r.ok;broadDocs=r.docs||[];broadDone=true;mergeAndRender();}); }
+    if(!skipBroad){ fetch(broadUrl,{signal}).then(r=>r.json().then(j=>({ok:r.ok,...j})).catch(()=>({ok:false,docs:[]}))).catch(e=>{if(e.name==='AbortError')return null;return{ok:false,docs:[]};})
+      .then(r=>{if(!r||isStale())return;failBroad=!r.ok;broadDocs=r.docs||[];broadDone=true;mergeAndRender();}); }
     // Fire iTunes audiobook search
-    fetch(itunesUrl).then(r=>r.json()).catch(()=>({results:[]}))
-      .then(r=>{if(isStale())return;itunesItems=r.results||[];itunesDone=true;mergeAndRender();});
+    fetch(itunesUrl,{signal}).then(r=>r.json()).catch(e=>{if(e.name==='AbortError')return null;return{results:[]};})
+      .then(r=>{if(!r||isStale())return;itunesItems=r.results||[];itunesDone=true;mergeAndRender();});
   }
   function clearResults(){ resultsEl.innerHTML=''; resultsEl.style.display='none'; syncFiltersVisibility(false); }
   function enrich(){ enrichWithYear(olDocs); enrichItunesWithYear(itunesItems); }
@@ -118,7 +122,17 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     // Clear cover immediately when selecting new work
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
     populateFromBasic(meta); fetchEditions(meta); }
-  async function fetchEditions(meta){ try{ const url='https://openlibrary.org'+meta.work_key+'/editions.json?limit=50'; const r=await fetch(url); const j=await r.json(); editions=(j.entries||j.editions||[]).filter(e=>e); if(editions.length){ editionIndex=0; editionNav.style.display='flex'; applyEdition(); } }catch(e){} }
+  function isEditionEnglishOrUnknown(ed){
+    const langs=ed.languages||[];
+    if(!langs.length) return true;
+    return langs.some(l=>(l.key||'').includes('/eng'));
+  }
+  function editionCoverSort(a,b){
+    const aCover=a.covers&&a.covers.length>0?0:1;
+    const bCover=b.covers&&b.covers.length>0?0:1;
+    return aCover-bCover;
+  }
+  async function fetchEditions(meta){ try{ const url='https://openlibrary.org'+meta.work_key+'/editions.json?limit=50'; const r=await fetch(url); const j=await r.json(); const all=(j.entries||j.editions||[]).filter(e=>e); const engOnly=all.filter(isEditionEnglishOrUnknown); editions=engOnly.length?engOnly:all; editions.sort(editionCoverSort); if(editions.length){ editionIndex=0; editionNav.style.display='flex'; applyEdition(); } }catch(e){} }
   async function selectItunes(payload){ currentWork=null; editions=[]; editionIndex=0; editionNav.style.display='none'; currentAudio=payload;
     // Clear previous cover
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
@@ -169,7 +183,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       delete coverPreview.dataset.b64;
       delete coverPreview.dataset.mime;
     }
-    editionInfo.textContent=`Edition ${editionIndex+1} / ${editions.length}`; prevBtn.disabled=editionIndex===0; nextBtn.disabled=editionIndex===editions.length-1; }
+    editionInfo.textContent=editions.length>1?`Edition ${editionIndex+1} of ${editions.length} — use arrows to browse`:`1 edition`; prevBtn.disabled=editionIndex===0; nextBtn.disabled=editionIndex===editions.length-1; }
   form && form.addEventListener('booksearch:applied', markDirty);
   async function loadCoverById(id){ const ph = document.getElementById('coverPlaceholder');
     if(!id) {

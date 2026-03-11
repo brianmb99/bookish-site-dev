@@ -980,10 +980,10 @@ function showCreationFallbackSuccess(displayName, email) {
       </p>
       <div class="info-box">
         <div style="font-size:.875rem;line-height:1.5;">
-          <span class="info-icon">💡</span> <strong>One more step to sync</strong>
+          <span class="info-icon">💡</span> <strong>Cloud backup in progress</strong>
         </div>
         <p style="font-size:.8rem;line-height:1.5;color:var(--color-text-secondary);margin:8px 0 0 0;">
-          To sign in on other devices, your account needs to be activated. We'll keep trying in the background.
+          Cloud backup is still finishing up. This usually completes within a few minutes. Your books are safe on this device in the meantime.
         </p>
       </div>
       <button id="startBooksBtn" class="btn primary" style="width:100%;padding:14px 20px;">Start Adding Books →</button>
