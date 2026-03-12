@@ -66,7 +66,7 @@
   <span class="toast-icon">🎉</span>
   <span class="toast-message">First book added! You're on your way.</span>
 </div>
-<footer>Bookish • Alpha • v0.1.48</footer>
+<footer>Bookish • Alpha • v0.1.49</footer>
 </div>
 
 <!-- Notes expand overlay -->
@@ -120,17 +120,40 @@
         <div class="fields-cluster">
           <div class="field-block"><label>Title</label><input name="title" required placeholder="Title"></div>
           <div class="field-block"><label>Author</label><input name="author" required placeholder="Author"></div>
-            <div class="field-block"><label>Edition</label><input name="edition" placeholder="Edition / Year"></div>
-          <div class="field-block"><label>Format</label><select name="format"><option>paperback</option><option>hardcover</option><option>ebook</option><option>audiobook</option><option>other</option></select></div>
+          <div class="field-block"><label>Format</label><select name="format"><option value="print">Print</option><option value="ebook">Ebook</option><option value="audio">Audio</option></select></div>
           <div class="field-block"><label>Date Read</label><div class="date-input-wrap"><input name="dateRead" type="date"><button type="button" class="cal-btn" id="openCalendarBtn" title="Pick date">📅</button></div></div>
         </div>
       </div>
-      <div class="notes-block">
-        <label class="notes-toggle" for="notesInput">
-          <span class="notes-toggle-icon">✎</span> Notes <span class="notes-hint">(optional)</span>
-        </label>
-        <textarea id="notesInput" name="notes" placeholder="Any thoughts about this book?" maxlength="10000" rows="3"></textarea>
-        <button type="button" class="notes-expand-btn" id="notesExpandBtn" title="Expand notes editor">⤢</button>
+      <div class="optional-fields-zone" id="optionalFieldsZone">
+        <div class="field-chips" id="fieldChips">
+          <button type="button" class="field-chip" data-field="notes">+ Notes</button>
+          <button type="button" class="field-chip" data-field="rating">+ Rating</button>
+          <button type="button" class="field-chip" data-field="owned">+ Owned</button>
+          <button type="button" class="field-chip" data-field="tags">+ Tags</button>
+        </div>
+        <div class="optional-field" data-field="rating" style="display:none">
+          <div class="optional-field-header"><label>Rating</label><button type="button" class="field-deactivate" data-field="rating" title="Remove rating field" aria-label="Remove rating field">&times;</button></div>
+          <div class="star-rating" id="starRating" role="radiogroup" aria-label="Book rating">
+            <button type="button" class="star" data-value="1" role="radio" aria-label="1 star">☆</button><button type="button" class="star" data-value="2" role="radio" aria-label="2 stars">☆</button><button type="button" class="star" data-value="3" role="radio" aria-label="3 stars">☆</button><button type="button" class="star" data-value="4" role="radio" aria-label="4 stars">☆</button><button type="button" class="star" data-value="5" role="radio" aria-label="5 stars">☆</button>
+          </div>
+          <input type="hidden" name="rating" id="ratingInput" value=""/>
+        </div>
+        <div class="optional-field" data-field="owned" style="display:none">
+          <div class="optional-field-header"><label>Owned</label><button type="button" class="field-deactivate" data-field="owned" title="Remove owned field" aria-label="Remove owned field">&times;</button></div>
+          <label class="toggle-switch"><input type="checkbox" name="owned" id="ownedToggle"><span class="toggle-track"></span><span class="toggle-label" id="ownedLabel">No</span></label>
+        </div>
+        <div class="optional-field" data-field="tags" style="display:none">
+          <div class="optional-field-header"><label>Tags</label><button type="button" class="field-deactivate" data-field="tags" title="Remove tags field" aria-label="Remove tags field">&times;</button></div>
+          <input name="tags" placeholder="e.g. fiction, favorites" class="tags-input" id="tagsInput">
+          <div class="tags-pills" id="tagsPills"></div>
+        </div>
+        <div class="optional-field" data-field="notes" style="display:none">
+          <div class="optional-field-header"><label>Notes</label><button type="button" class="field-deactivate" data-field="notes" title="Remove notes field" aria-label="Remove notes field">&times;</button></div>
+          <div class="notes-block">
+            <textarea id="notesInput" name="notes" placeholder="Any thoughts about this book?" maxlength="10000" rows="3"></textarea>
+            <button type="button" class="notes-expand-btn" id="notesExpandBtn" title="Expand notes editor">⤢</button>
+          </div>
+        </div>
       </div>
       <input type="hidden" name="priorTxid"/>
       <div class="row-actions primary-actions">

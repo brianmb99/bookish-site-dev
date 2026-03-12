@@ -139,8 +139,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     // Always set fields (not just when empty)
     form.title.value = payload.title || '';
     form.author.value = payload.author || '';
-    if(payload.year) form.edition.value = payload.year;
-    const fmtSel=Array.from(form.format.options).find(o=>o.value==='audiobook'); if(fmtSel) form.format.value='audiobook';
+    form.format.value='audio';
     markDirty();
     if(payload.artwork){ const hi=payload.artwork.replace(/100x100/,'600x600');
       const ph = document.getElementById('coverPlaceholder');
@@ -171,7 +170,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       coverPreview.style.display = 'none';
     } }
 
-  function applyEdition(){ if(!editions.length) return; const ed=editions[editionIndex]; let changed=false; if(ed.title){ form.title.value=ed.title; changed=true; } if(ed.authors&&ed.authors.length){ const names=ed.authors.map(a=> a.name || a.author && a.author.key || '').filter(Boolean); if(names.length){ form.author.value=names.join(', '); changed=true; } } if(ed.publish_date){ form.edition.value=ed.publish_date; changed=true; } else if(ed.edition_name){ form.edition.value=ed.edition_name; changed=true; } if(ed.physical_format){ const fmt=(ed.physical_format||'').toLowerCase(); const opts=Array.from(form.format.options).map(o=>o.value); const match=opts.find(o=>fmt.includes(o)); if(match){ form.format.value=match; changed=true; } } if(changed) markDirty();
+  function applyEdition(){ if(!editions.length) return; const ed=editions[editionIndex]; let changed=false; if(ed.title){ form.title.value=ed.title; changed=true; } if(ed.authors&&ed.authors.length){ const names=ed.authors.map(a=> a.name || a.author && a.author.key || '').filter(Boolean); if(names.length){ form.author.value=names.join(', '); changed=true; } } if(ed.physical_format){ const fmt=(ed.physical_format||'').toLowerCase(); let mapped='print'; if(fmt.includes('ebook')||fmt.includes('e-book')||fmt.includes('kindle')) mapped='ebook'; else if(fmt.includes('audio')) mapped='audio'; form.format.value=mapped; changed=true; } if(changed) markDirty();
     if(ed.covers && ed.covers.length) {
       loadCoverById(ed.covers[0]);
     } else {
