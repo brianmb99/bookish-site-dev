@@ -1037,12 +1037,12 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 
 /* Mobile adjustments for optional fields */
 @media(max-width:599px){
-  .field-chip{min-height:44px;padding:8px 16px;font-size:.65rem}
-  .star-rating .star{font-size:1.5rem;padding:6px 5px}
-  .toggle-switch{min-height:44px}
-  .toggle-track{width:44px;height:24px}
-  .toggle-track::after{width:20px;height:20px;top:2px;left:2px}
-  .toggle-switch input:checked+.toggle-track::after{transform:translateX(20px)}
+  .field-chip{min-height:36px;padding:8px 14px;font-size:.65rem}
+  .star-rating .star{font-size:1.15rem;padding:8px 6px}
+  .toggle-switch{min-height:36px}
+  .toggle-track{width:38px;height:22px}
+  .toggle-track::after{width:18px;height:18px;top:2px;left:2px}
+  .toggle-switch input:checked+.toggle-track::after{transform:translateX(16px)}
 }
 
 /* Date picker enhancements */
