@@ -179,9 +179,11 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
       const irysQ = `{transactions(tags:[${irysTagsStr}],first:${limit}){edges{node{id tags{name value}}}}}`;
       irysNode1Promise = fetch('https://node1.irys.xyz/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:irysQ})})
         .then(r=>r.json())
+        .then(j=>{ if(j?.errors) console.warn('[Bookish] Irys node1 errors:', j.errors); return j; })
         .catch(err=>{ console.warn('[Bookish] Irys node1 query failed:', err.message); return null; });
       irysNode2Promise = fetch('https://node2.irys.xyz/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:irysQ})})
         .then(r=>r.json())
+        .then(j=>{ if(j?.errors) console.warn('[Bookish] Irys node2 errors:', j.errors); return j; })
         .catch(err=>{ console.warn('[Bookish] Irys node2 query failed:', err.message); return null; });
     }
 
@@ -229,10 +231,19 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
       }
     }
     // Diagnostic logging
-    if(irysOnlyCount>0) {
-      console.log(`[Bookish] Found ${irysOnlyCount} entries on Irys not yet indexed on Arweave (node1:${node1Count}, node2:${node2Count})`);
-    } else if(node1Count>0 || node2Count>0) {
-      console.log(`[Bookish] Irys returned ${node1Count}+${node2Count} entries, all already on Arweave`);
+    const arweaveCount = merged.length - irysOnlyCount;
+    console.log(`[Bookish] Merged edges: ${merged.length} total (Arweave:${arweaveCount}, Irys-only:${irysOnlyCount}, node1:${node1Count}, node2:${node2Count})`);
+    
+    // Log Prev tags from Irys entries to diagnose version chain issues
+    const irysEdgesWithPrev = [];
+    for(const e of merged) {
+      const prevTag = e.node.tags?.find(t=>t.name==='Prev');
+      if(prevTag && !e.node.block) { // Irys entries have block:null
+        irysEdgesWithPrev.push({ txid: e.node.id.slice(0,8), prev: prevTag.value.slice(0,8) });
+      }
+    }
+    if(irysEdgesWithPrev.length > 0) {
+      console.log('[Bookish] Irys entries with Prev tags:', irysEdgesWithPrev);
     }
 
     // If all gateways failed, throw
@@ -246,9 +257,28 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
 
   function computeLiveSets(allEdges){
     const tombstones = allEdges.filter(isTomb).map(e=>({ txid:e.node.id, ref: refOf(e) }));
-    const superseded = new Set(allEdges.filter(e=>e.node.tags?.some(t=>t.name==='Prev')).map(e=> e.node.tags.find(t=>t.name==='Prev')?.value).filter(Boolean));
+    
+    // Build superseded set from Prev tags
+    const edgesWithPrev = allEdges.filter(e=>e.node.tags?.some(t=>t.name==='Prev'));
+    const superseded = new Set(edgesWithPrev.map(e=> e.node.tags.find(t=>t.name==='Prev')?.value).filter(Boolean));
+    
+    // Diagnostic: log version chains
+    if(edgesWithPrev.length > 0) {
+      console.log('[Bookish] Version chains found:', edgesWithPrev.map(e => ({
+        txid: e.node.id.slice(0,8),
+        prev: e.node.tags.find(t=>t.name==='Prev')?.value?.slice(0,8)
+      })));
+      console.log('[Bookish] Superseded txids:', [...superseded].map(s=>s.slice(0,8)));
+    }
+    
     const tombRefs = new Set(tombstones.map(t=>t.ref).filter(Boolean));
     const liveEdges = allEdges.filter(e=>{ if(isTomb(e)) return false; if(tombRefs.has(e.node.id)) return false; if(superseded.has(e.node.id)) return false; return true; });
+    
+    // Diagnostic: if more live edges than expected, show what survived
+    if(liveEdges.length > 5) {
+      console.warn('[Bookish] More live entries than expected:', liveEdges.map(e => e.node.id.slice(0,8)));
+    }
+    
     return { liveEdges, tombstones };
   }
 
