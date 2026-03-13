@@ -1262,6 +1262,8 @@ function updateGeekPanel(){
   const errs = net.reads.errors || 0;
   geekBody.textContent = `Fetched: ${fetched}  Cached: ${cached}  Err: ${errs}`;
 }
+window.updateGeekPanel = updateGeekPanel;
+
 function openSuperuser(){
   setSuperuser(true);
   if(geekPanel) geekPanel.style.display='block';
