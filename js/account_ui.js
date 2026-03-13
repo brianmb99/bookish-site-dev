@@ -179,25 +179,32 @@ async function renderAccountModalContent(container) {
       const shortAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '';
       const fullAddress = address || '';
 
-      // Get balance
+      // Get balance - use cached value from sync_manager for instant display
       let balanceText = 'Loading...';
       let balanceStatus = 'ok';
       let isFunded = false;
-      try {
-        if (address) {
-          const balanceResult = await getWalletBalance(address);
-          const balanceETH = balanceResult.balanceETH || '0';
-          const balance = parseFloat(balanceETH);
-          isFunded = balance >= 0.00002; // MIN_FUNDING_ETH
-
-          // Format as "~X books remaining"
-          balanceText = formatBalanceAsBooks(balanceETH, { showExact: false });
-          balanceStatus = getBalanceStatus(balanceETH);
-        }
-      } catch (e) {
-        console.error('[Bookish:AccountUI] Error getting balance:', e);
-        balanceText = 'Error loading balance';
-        balanceStatus = 'empty';
+      const cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH;
+      if (cachedBalance !== null && cachedBalance !== undefined) {
+        // Use cached balance immediately (no RPC call)
+        const balance = parseFloat(cachedBalance);
+        isFunded = balance >= 0.00002; // MIN_FUNDING_ETH
+        balanceText = formatBalanceAsBooks(cachedBalance, { showExact: false });
+        balanceStatus = getBalanceStatus(cachedBalance);
+      } else if (address) {
+        // No cached balance - fetch in background, show Loading for now
+        // Don't await - let modal open immediately
+        getWalletBalance(address).then(result => {
+          const el = document.getElementById('accountBalanceDisplay');
+          if (el) {
+            const balanceETH = result.balanceETH || '0';
+            el.textContent = formatBalanceAsBooks(balanceETH, { showExact: false });
+            el.className = `balance-display balance-${getBalanceStatus(balanceETH)}`;
+          }
+        }).catch(e => {
+          console.error('[Bookish:AccountUI] Error getting balance:', e);
+          const el = document.getElementById('accountBalanceDisplay');
+          if (el) el.textContent = 'Error';
+        });
       }
 
       const accountObj = JSON.parse(accountData);
