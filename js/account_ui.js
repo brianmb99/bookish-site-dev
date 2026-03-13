@@ -1978,6 +1978,71 @@ function openCoinbaseOnrampWithInstructions(address) {
     window.__updateFundingProgress('waiting');
   }
 
+  // Start fast balance polling (every 5 seconds) while Coinbase widget is open
+  const initialBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH || '0';
+  const startTime = Date.now();
+  const FAST_POLL_INTERVAL = 5000; // 5 seconds
+  const MAX_POLL_DURATION = 5 * 60 * 1000; // 5 minutes
+  let fundsDetected = false;
+
+  console.log('[Bookish:AccountUI] Starting fast balance polling, initial balance:', initialBalance);
+
+  const fastPollInterval = setInterval(async () => {
+    // Stop if max duration exceeded
+    if (Date.now() - startTime > MAX_POLL_DURATION) {
+      console.log('[Bookish:AccountUI] Fast polling timeout (5 min), stopping');
+      clearInterval(fastPollInterval);
+      window.__fastPollInterval = null;
+      return;
+    }
+
+    // Stop if funds already detected
+    if (fundsDetected) {
+      clearInterval(fastPollInterval);
+      window.__fastPollInterval = null;
+      return;
+    }
+
+    try {
+      const { balanceETH } = await getWalletBalance(address);
+      console.log('[Bookish:AccountUI] Fast poll balance check:', balanceETH);
+      
+      if (parseFloat(balanceETH) > parseFloat(initialBalance)) {
+        fundsDetected = true;
+        console.log('[Bookish:AccountUI] Funds detected! Balance increased from', initialBalance, 'to', balanceETH);
+        clearInterval(fastPollInterval);
+        window.__fastPollInterval = null;
+        
+        // Close progress modal and show simple confirmation
+        closeAccountModal();
+        setTimeout(() => {
+          showAccountModal(`
+            <div style="text-align:center;padding:20px 0;">
+              <div style="font-size:2.5rem;margin:16px 0;">✓</div>
+              <h3 style="margin:0 0 16px 0;">Funds Added</h3>
+              <p style="font-size:.875rem;opacity:.9;margin:0 0 24px 0;">
+                Your balance has been updated.
+              </p>
+              <button id="fundingDoneBtn" class="btn" style="min-width:120px;">Done</button>
+            </div>
+          `);
+          document.getElementById('fundingDoneBtn').onclick = closeAccountModal;
+        }, 300);
+        
+        // Trigger a sync to update the cached balance
+        if (window.bookishSyncManager?.triggerPersistenceCheck) {
+          window.bookishSyncManager.triggerPersistenceCheck();
+        }
+      }
+    } catch (err) {
+      console.warn('[Bookish:AccountUI] Fast poll balance check failed:', err.message);
+    }
+  }, FAST_POLL_INTERVAL);
+
+  // Store interval ID for cleanup
+  window.__fastPollInterval = fastPollInterval;
+  window.__fastPollFundsDetected = () => fundsDetected;
+
   // Open widget directly
   openOnrampWidget(address, {
     onSuccess: () => {
@@ -2043,19 +2108,80 @@ function openCoinbaseOnrampWithInstructions(address) {
         };
       }
     },
-    onClose: () => {
+    onClose: async () => {
       // Widget was closed (user may have cancelled or completed purchase)
       console.log('[Bookish:AccountUI] Coinbase Onramp widget closed');
       if (buyBtn) {
         buyBtn.textContent = '☁️ Enable Cloud Backup';
         buyBtn.disabled = false;
       }
-      // If progress modal is showing and user closed without completing, return to value modal
-      // Otherwise, balance polling will detect funds if purchase was successful
+      
+      // Stop fast polling
+      if (window.__fastPollInterval) {
+        clearInterval(window.__fastPollInterval);
+        window.__fastPollInterval = null;
+      }
+      
+      // If funds were already detected by fast polling, we're done
+      if (window.__fastPollFundsDetected?.()) {
+        console.log('[Bookish:AccountUI] Funds already detected, nothing more to do');
+        return;
+      }
+      
+      // Do one final balance check
       const progressModal = document.getElementById('accountPanel');
       if (progressModal && progressModal.style.display !== 'none') {
-        // User may have cancelled - close progress modal
-        // They can try again later
+        console.log('[Bookish:AccountUI] Doing final balance check...');
+        try {
+          const { balanceETH } = await getWalletBalance(address);
+          const currentCached = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH || '0';
+          
+          if (parseFloat(balanceETH) > parseFloat(initialBalance)) {
+            // Funds arrived! Show simple confirmation
+            closeAccountModal();
+            setTimeout(() => {
+              showAccountModal(`
+                <div style="text-align:center;padding:20px 0;">
+                  <div style="font-size:2.5rem;margin:16px 0;">✓</div>
+                  <h3 style="margin:0 0 16px 0;">Funds Added</h3>
+                  <p style="font-size:.875rem;opacity:.9;margin:0 0 24px 0;">
+                    Your balance has been updated.
+                  </p>
+                  <button id="fundingDoneBtn" class="btn" style="min-width:120px;">Done</button>
+                </div>
+              `);
+              document.getElementById('fundingDoneBtn').onclick = closeAccountModal;
+            }, 300);
+            
+            // Trigger sync to update cached balance
+            if (window.bookishSyncManager?.triggerPersistenceCheck) {
+              window.bookishSyncManager.triggerPersistenceCheck();
+            }
+          } else {
+            // Funds not detected yet - show helpful message
+            closeAccountModal();
+            setTimeout(() => {
+              showAccountModal(`
+                <div style="text-align:center;padding:20px 0;">
+                  <div style="font-size:2rem;margin:16px 0;">⏳</div>
+                  <h3 style="margin:0 0 16px 0;">Processing</h3>
+                  <p style="font-size:.875rem;opacity:.9;margin:0 0 16px 0;line-height:1.6;">
+                    Your purchase is being processed. This usually takes a minute or two.
+                  </p>
+                  <p style="font-size:.8rem;opacity:.7;margin:0 0 24px 0;">
+                    Your balance will update automatically when funds arrive.
+                  </p>
+                  <button id="processingCloseBtn" class="btn" style="min-width:120px;">OK</button>
+                </div>
+              `);
+              document.getElementById('processingCloseBtn').onclick = closeAccountModal;
+            }, 300);
+          }
+        } catch (err) {
+          console.error('[Bookish:AccountUI] Final balance check failed:', err);
+          // Just close the modal, sync will pick it up later
+          closeAccountModal();
+        }
       }
     }
   });
