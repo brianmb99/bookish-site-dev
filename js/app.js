@@ -835,6 +835,9 @@ async function serverlessFetchEntries(){
   const alreadySynced = liveEdges.filter(e => confirmedTxids.has(e.node.id));
 
   console.log('[Bookish] Cache check:', alreadySynced.length, 'already synced,', needsDecrypt.length, 'need decrypt');
+  // Track cache hits for geek panel
+  window.bookishNet = window.bookishNet || { reads:{ irys:0, arweave:0, errors:0 }, cacheHits:0 };
+  window.bookishNet.cacheHits = (window.bookishNet.cacheHits || 0) + alreadySynced.length;
 
   // Step 3: Decrypt entries that aren't fully synced in cache
   const hydrated = [];
@@ -1222,8 +1225,11 @@ function updateGeekPanel(){
     geekBody.textContent = 'Sign in to view sync status';
     return;
   }
-  const net = window.bookishNet || { reads:{ irys:0, arweave:0, errors:0 } };
-  geekBody.textContent = `Irys: ${net.reads.irys||0}  Arweave: ${net.reads.arweave||0}  Err: ${net.reads.errors||0}`;
+  const net = window.bookishNet || { reads:{ irys:0, arweave:0, errors:0 }, cacheHits:0 };
+  const fetched = (net.reads.irys||0) + (net.reads.arweave||0);
+  const cached = net.cacheHits || 0;
+  const errs = net.reads.errors || 0;
+  geekBody.textContent = `Fetched: ${fetched}  Cached: ${cached}  Err: ${errs}`;
 }
 function openSuperuser(){
   setSuperuser(true);
