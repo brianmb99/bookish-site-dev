@@ -892,6 +892,22 @@ async function replayOps(){
           diagMaybeSet(['Awaiting Irys credit...','Will retry automatically']);
           break;
         }
+      } else if(op.type==='edit'){
+        const local=entries.find(e=>e.txid===op.priorTxid) || entries.find(e=>e.id===op.priorTxid);
+        if(!local){ await window.bookishCache.removeOp(op.id); continue; }
+        try {
+          op.payload.bookId=local.bookId;
+          const res=await browserClient.uploadEntry(op.payload,{ extraTags:[{name:'Prev',value:op.priorTxid}] });
+          const oldTxid=op.priorTxid; local.txid=res.txid; local.id=res.txid; local.pending=false; local.status='confirmed'; local.seenRemote=true;
+          await window.bookishCache.replaceProvisional(oldTxid,local);
+          await window.bookishCache.removeOp(op.id);
+          setStatus('Re-saved '+(local.title||''));
+          orderEntries(); render();
+        } catch{
+          setStatus('Replay pending...');
+          diagMaybeSet(['Awaiting Irys credit...','Will retry automatically']);
+          break;
+        }
       }
     }
   } finally {
@@ -1015,22 +1031,25 @@ async function createServerless(payload){ if(window.bookishCache){ const dup=awa
 async function editServerless(priorTxid,payload){ const old=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid); if(!old) throw new Error('Entry not found'); const snapshot={...old}; Object.assign(old,payload); old.pending=true; old.status='pending'; old.seenRemote=false; old._committed=false; await window.bookishCache.putEntry(old); markDirty(); orderEntries(); render(); if(!old.txid){ /* local-only entry — saved to cache, no upload needed */ return; } try { const haveKeys = await ensureKeys(); if (!haveKeys) throw new Error('Cannot upload: encryption keys not available'); payload.bookId=old.bookId; diagMaybeSet(['Saving via Irys\u2026']); const res=await browserClient.uploadEntry({ ...payload },{ extraTags:[{name:'Prev',value:priorTxid}] }); const oldTxid=priorTxid; old.txid=res.txid; old.id=res.txid; old.pending=false; old.status='confirmed'; old.seenRemote=true; await window.bookishCache.replaceProvisional(oldTxid,old); walletError=null; orderEntries(); render(); uiStatusManager.refresh(); diagMaybeClear(); } catch(e){ if(e && e.code==='irys-required'){ // revert UI and prompt refresh
     Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render();
     const pending = { type:'edit', priorTxid, payload };
+    if(window.bookishCache) await window.bookishCache.queueOp(pending);
     lastPendingOp = pending;
     walletError='Irys client missing. Refresh page and retry.'; uiStatusManager.refresh();
   diagMaybeSet(['Irys client missing','Refresh page and retry']);
   } else if(e && e.code==='post-fund-timeout'){
     Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render();
     const pending = { type:'edit', priorTxid, payload };
+    if(window.bookishCache) await window.bookishCache.queueOp(pending);
     lastPendingOp = pending;
     walletError='Funding sent. Credit pending on Irys (few minutes). Retry from Account shortly.'; uiStatusManager.refresh();
   diagMaybeSet(['Funding sent – awaiting credit','Retry from Account shortly']);
   } else if(e && (e.code==='base-insufficient-funds' || e.code==='base-insufficient-funds-recent')){
     Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render();
     const pending = { type:'edit', priorTxid, payload };
+    if(window.bookishCache) await window.bookishCache.queueOp(pending);
     lastPendingOp = pending;
     walletError='Auto-fund blocked: Base wallet low on ETH. Top up and retry from Account.'; uiStatusManager.refresh();
   diagMaybeSet(['Base wallet low on ETH','Add a small amount, then retry']);
-  } else { Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render(); walletError='Save failed'; uiStatusManager.refresh(); diagMaybeSet(['Save failed']); } } }
+  } else { Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render(); if(window.bookishCache) await window.bookishCache.queueOp({ type:'edit', priorTxid, payload }); walletError='Save failed'; uiStatusManager.refresh(); diagMaybeSet(['Save failed']); } } }
 async function deleteServerless(priorTxid){ const entry=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid); if(!entry) return; markDeletingVisual(entry); uiStatusManager.refresh(); if(!entry.txid){ /* local-only entry — just remove from cache and entries */ if(window.bookishCache) await window.bookishCache.deleteById(entry.id); entries=entries.filter(e=>e!==entry); orderEntries(); render(); uiStatusManager.refresh(); return; } try { const haveKeys = await ensureKeys(); if (!haveKeys) throw new Error('Cannot delete: encryption keys not available'); await browserClient.tombstone(priorTxid,{ note:'user delete' }); entry.status='tombstoned'; entry.tombstonedAt=Date.now(); await window.bookishCache.putEntry(entry); entries=entries.filter(e=>e.status!=='tombstoned'); walletError=null; markDirty(); orderEntries(); render(); uiStatusManager.refresh(); } catch{ entry._deleting=false; render(); walletError='Delete failed'; uiStatusManager.refresh(); } }
 
 // --- Form handlers ---

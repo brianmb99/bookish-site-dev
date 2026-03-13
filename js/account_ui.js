@@ -1457,10 +1457,23 @@ async function handleLogout() {
 
   // Show warning if there's unsynced data
   if (hasUnsyncedAccount || unsyncedBooks > 0) {
+    // Contextual messaging based on actual state
+    const headerMessage = hasUnsyncedAccount 
+      ? "Your account hasn't been backed up yet."
+      : `${unsyncedBooks} book${unsyncedBooks > 1 ? 's are' : ' is'} still syncing.`;
+    
+    const bodyText = hasUnsyncedAccount
+      ? "Add funds now to back up your account before logging out."
+      : "Wait a moment for your books to finish syncing, then try again.";
+    
+    const primaryButtonText = hasUnsyncedAccount 
+      ? "Add Cloud Credit & Stay"
+      : "Stay Logged In";
+
     showAccountModal(`
       <h3>⚠️ You May Lose Access</h3>
       <p style="font-size:.875rem;line-height:1.6;margin:16px 0;">
-        Your account hasn't been backed up yet. If you log out now:
+        ${headerMessage} If you log out now:
       </p>
       <div style="background:#2d1f1f;border:1px solid #7f1d1d;border-radius:8px;padding:12px 16px;margin:16px 0;">
         <div style="font-size:.85rem;line-height:1.7;">
@@ -1469,9 +1482,9 @@ async function handleLogout() {
         </div>
       </div>
       <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:16px 0;">
-        Add funds now to back up your account before logging out.
+        ${bodyText}
       </p>
-      <button id="addFundsStayLoggedInBtn" class="btn" style="width:100%;padding:14px 20px;background:#2563eb;margin-bottom:12px;">Add Cloud Credit & Stay</button>
+      <button id="addFundsStayLoggedInBtn" class="btn" style="width:100%;padding:14px 20px;background:#2563eb;margin-bottom:12px;">${primaryButtonText}</button>
       <button id="haveRecoveryPhraseBtn" class="btn secondary" style="width:100%;padding:12px 20px;margin-bottom:16px;">I have my recovery phrase saved</button>
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <button id="cancelLogoutBtn" class="btn-link" style="background:none;border:none;color:#94a3b8;font-size:.875rem;cursor:pointer;">Cancel</button>
@@ -1479,10 +1492,16 @@ async function handleLogout() {
       </div>
     `);
 
-    // Add Funds & Stay Logged In - opens funding, stays logged in
+    // Primary action - depends on state
     document.getElementById('addFundsStayLoggedInBtn').onclick = () => {
-      closeAccountModal();
-      handleBuyStorage();
+      if (hasUnsyncedAccount) {
+        // Account not persisted - open funding flow
+        closeAccountModal();
+        handleBuyStorage();
+      } else {
+        // Account persisted, just books syncing - close and stay logged in
+        closeHelperModal();
+      }
     };
 
     // I have my recovery phrase saved - proceed with logout
