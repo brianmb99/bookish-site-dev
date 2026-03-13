@@ -867,8 +867,39 @@ async function serverlessFetchEntries(){
   }
 
   console.log('[Bookish] Decrypted', needsDecrypt.length, 'entries in', Date.now() - decryptStart, 'ms');
-  hydrated.sort((a,b)=>{ const da=a.dateRead||'0000-00-00'; const db=b.dateRead||'0000-00-00'; if(da!==db) return db.localeCompare(da); const ha=(a.block&&a.block.height)||0; const hb=(b.block&&b.block.height)||0; return hb-ha; });
-  return { entries:hydrated, tombstones };
+  
+  // Step 5: Deduplicate by bookId (safety net if Prev chain is broken)
+  // Keep newest version of each book (no block = Irys-only = most recent)
+  const byBookId = new Map();
+  const entryScore = (e) => {
+    // Higher score = keep this one
+    // Irys-only (no block) is newest, give highest score
+    // Otherwise, higher block height = more recent
+    if (!e.block || !e.block.height) return Infinity;
+    return e.block.height;
+  };
+  for (const entry of hydrated) {
+    if (!entry.bookId) continue;
+    const existing = byBookId.get(entry.bookId);
+    if (!existing) {
+      byBookId.set(entry.bookId, entry);
+    } else {
+      // Keep the one with higher score (more recent)
+      if (entryScore(entry) > entryScore(existing)) {
+        console.log('[Bookish] Dedup by bookId: keeping', entry.txid?.slice(0,8), 'over', existing.txid?.slice(0,8), 'for book', entry.bookId?.slice(0,8));
+        byBookId.set(entry.bookId, entry);
+      }
+    }
+  }
+  // Include entries without bookId (shouldn't happen but be safe)
+  const dedupedHydrated = [...byBookId.values(), ...hydrated.filter(e => !e.bookId)];
+  
+  if (dedupedHydrated.length < hydrated.length) {
+    console.warn('[Bookish] Removed', hydrated.length - dedupedHydrated.length, 'duplicate entries by bookId');
+  }
+  
+  dedupedHydrated.sort((a,b)=>{ const da=a.dateRead||'0000-00-00'; const db=b.dateRead||'0000-00-00'; if(da!==db) return db.localeCompare(da); const ha=(a.block&&a.block.height)||0; const hb=(b.block&&b.block.height)||0; return hb-ha; });
+  return { entries:dedupedHydrated, tombstones };
 }
 
 // --- Ops replay ---
