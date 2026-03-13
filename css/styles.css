@@ -787,8 +787,6 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
     max-height:92vh;
     overflow-y:auto;
   }
-  /* Match blue add-mode border to bottom sheet shape */
-  .modal-inner.add-mode{border-radius:16px 16px 0 0}
   .modal-inner .btn{
     width:100%;
   }
@@ -842,7 +840,8 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   .author{font-size:.85rem}
 }
 /* Tile layout for book modal (shared by add & edit) */
-.modal-inner.add-mode{border:2px solid #2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15)}
+.modal-inner.add-mode{border:2px solid #2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15);border-radius:16px}
+@media (max-width:599px){.modal-inner.add-mode{border-radius:16px 16px 0 0}}
 .modal-inner form.inline{margin-top:0}
 .modal-inner .form-as-tile{display:flex;flex-direction:column;align-items:center;gap:16px}
 .modal-inner .tile-cover{width:45%;max-width:220px;aspect-ratio:2/3;min-height:180px;background:#101418;border:1px solid #2b333b;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
