@@ -211,7 +211,7 @@ button.secondary:hover, .btn.secondary:hover{
   left:0;
   top:0;
   bottom:0;
-  width:1px;
+  width:3px;
   border-radius:12px 0 0 12px;
   opacity:.65;
   transition:opacity .3s ease;
