@@ -105,6 +105,7 @@ button, .btn{
   overflow:hidden;
   display:inline-flex;
   align-items:center;
+  justify-content:center;
   gap:6px;
   background:linear-gradient(135deg,var(--color-primary) 0%,#2563eb 100%);
   color:#fff;
@@ -583,15 +584,15 @@ form.inline label{
 }
 .modal-close-btn{
   position:absolute;
-  top:12px;
-  right:12px;
+  top:10px;
+  right:10px;
   background:var(--color-bg-surface);
   border:1px solid var(--color-border-subtle);
   color:var(--color-text-muted);
   border-radius:50%;
-  width:36px;
-  height:36px;
-  font-size:18px;
+  width:28px;
+  height:28px;
+  font-size:14px;
   cursor:pointer;
   transition:all .2s ease;
   display:flex;
@@ -736,7 +737,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   #editionNav button{min-height:auto;padding:4px 8px;font-size:.6rem}
   .cover-remove-btn{min-height:auto!important;padding:0!important}
   .notes-expand-btn{min-height:auto;padding:0;width:26px;height:26px}
-  .modal-close-btn{width:44px;height:44px;font-size:20px;min-height:auto;padding:0}
+  .modal-close-btn{width:32px;height:32px;font-size:16px;min-height:auto;padding:0}
   /* Filters collapsed on mobile */
   .filters-toggle{display:inline-flex}
   .search-controls:not(.expanded){display:none}
