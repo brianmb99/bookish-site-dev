@@ -97,18 +97,13 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
         dateRead: r.dateRead
       });
 
+      // Spread all remote fields to preserve optional fields (rating, owned, tags, notes, etc.)
+      // Then apply local-only state fields
       const newEntry = {
+        ...r,
         id: r.txid,
         txid: r.txid,
         bookId: r.bookId || null,
-        title: r.title,
-        author: r.author,
-        edition: r.edition,
-        format: r.format,
-        dateRead: r.dateRead,
-        coverImage: r.coverImage,
-        mimeType: r.mimeType,
-        notes: r.notes || null,
         contentHash,
         createdAt: Date.now(),
         status: 'confirmed',
