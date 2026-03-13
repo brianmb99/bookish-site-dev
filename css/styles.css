@@ -137,8 +137,28 @@ button.secondary:hover, .btn.secondary:hover{
 #newBtn{background:var(--color-success)}
 .new-compact{background:var(--color-bg-surface)!important;color:var(--color-text-primary)!important;font-size:.75rem!important;padding:8px 14px!important;border:1px solid var(--color-border-default)!important;border-radius:8px!important;font-weight:600!important;letter-spacing:.03em}
 .new-compact:hover{background:var(--color-bg-elevated)!important;border-color:var(--color-border-strong)!important}
-.refresh-link{background:transparent!important;color:#748090!important;padding:2px 4px!important;font-size:.6rem!important;border:none!important;cursor:pointer;text-decoration:underline transparent}
-.refresh-link:hover{color:#9aa5b1!important;text-decoration:underline}
+.refresh-link{
+  position:relative;
+  background:transparent!important;
+  color:var(--color-text-muted)!important;
+  padding:6px 12px!important;
+  font-size:.7rem!important;
+  font-weight:500!important;
+  border:none!important;
+  border-radius:6px!important;
+  cursor:pointer;
+  transition:color .2s ease,background .2s ease;
+}
+.refresh-link::before{
+  content:'';
+  position:absolute;
+  inset:-6px -4px;
+  border-radius:10px;
+}
+.refresh-link:hover{
+  color:var(--color-text-secondary)!important;
+  background:var(--color-bg-surface)!important;
+}
 .account-link{
   color:var(--color-text-secondary)!important;
   font-weight:500!important;
@@ -590,8 +610,8 @@ form.inline label{
   border:1px solid var(--color-border-subtle);
   color:var(--color-text-muted);
   border-radius:50%;
-  width:28px;
-  height:28px;
+  width:32px;
+  height:32px;
   font-size:14px;
   cursor:pointer;
   transition:all .2s ease;
@@ -603,6 +623,7 @@ form.inline label{
   min-height:auto;
   z-index:1;
 }
+.modal-close-btn::before{content:'';position:absolute;inset:-6px;border-radius:50%}
 .modal-close-btn:hover{
   background:var(--color-border-subtle);
   color:var(--color-text-primary);
@@ -688,12 +709,14 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 #bookSearchResults>div:last-child{border-bottom:none}
 #bookSearchResults>div:hover{background:#1a2026}
 #editionNav{display:none;align-items:center;gap:6px;margin-top:8px;font-size:.65rem}
-#editionNav button{background:#374151;padding:4px 8px;font-size:.6rem}
+#editionNav button{position:relative;background:#374151;padding:6px 10px;font-size:.6rem;border-radius:6px}
+#editionNav button::before{content:'';position:absolute;inset:-6px -4px;border-radius:10px}
 #editionInfo{opacity:.6}
 .search-controls{display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:8px;font-size:.65rem}
 .search-controls .filters,.search-controls .sorters{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .search-controls .tiny-label{opacity:.6;font-weight:600;letter-spacing:.05em}
-.search-controls button{background:#2b333b;border:1px solid #374151;color:#9da6af;font-size:.65rem;padding:5px 8px;border-radius:5px;cursor:pointer;letter-spacing:.04em}
+.search-controls button{position:relative;background:#2b333b;border:1px solid #374151;color:#9da6af;font-size:.65rem;padding:6px 10px;border-radius:5px;cursor:pointer;letter-spacing:.04em}
+.search-controls button::before{content:'';position:absolute;inset:-6px -4px;border-radius:8px}
 .search-controls button.active{background:#2563eb;border-color:#2563eb;color:#fff}
 .search-controls button:hover:not(.active){background:#323b44}
 .filters-toggle{
@@ -733,11 +756,13 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
     padding:12px 16px;
   }
   /* Exempt small UI controls from oversized mobile button sizing */
-  .search-controls button{min-height:auto;padding:4px 7px;font-size:.6rem}
-  #editionNav button{min-height:auto;padding:4px 8px;font-size:.6rem}
+  /* These use pseudo-element touch targets instead of bloated min-height */
+  .refresh-link{min-height:auto!important;padding:6px 12px!important}
+  .search-controls button{min-height:auto;padding:6px 10px;font-size:.6rem}
+  #editionNav button{min-height:auto;padding:6px 10px;font-size:.6rem}
   .cover-remove-btn{min-height:auto!important;padding:0!important}
-  .notes-expand-btn{min-height:auto;padding:0;width:26px;height:26px}
-  .modal-close-btn{width:32px;height:32px;font-size:16px;min-height:auto;padding:0}
+  .notes-expand-btn{min-height:auto;padding:0;width:32px;height:32px}
+  .modal-close-btn{width:36px;height:36px;font-size:16px;min-height:auto;padding:0}
   /* Filters collapsed on mobile */
   .filters-toggle{display:inline-flex}
   .search-controls:not(.expanded){display:none}
@@ -877,10 +902,11 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .notes-toggle{display:flex;align-items:center;gap:4px;font-size:.55rem;letter-spacing:.08em;opacity:.7;margin:0 0 4px 0;text-transform:uppercase;font-weight:600;cursor:pointer}
 .notes-toggle-icon{font-size:.7rem;opacity:.7}
 .notes-hint{font-weight:400;opacity:.6;text-transform:none;letter-spacing:0}
-.notes-block textarea{width:100%;box-sizing:border-box;background:transparent;border:1px dashed #2b333b;padding:8px 10px;padding-right:32px;font-size:.75rem;font-family:inherit;border-radius:8px;color:inherit;resize:none;min-height:60px;max-height:none;line-height:1.4;overflow:hidden;transition:border-color .2s,background .2s}
+.notes-block textarea{width:100%;box-sizing:border-box;background:transparent;border:1px dashed #2b333b;padding:8px 10px;padding-right:40px;font-size:.75rem;font-family:inherit;border-radius:8px;color:inherit;resize:none;min-height:60px;max-height:none;line-height:1.4;overflow:hidden;transition:border-color .2s,background .2s}
 .notes-block textarea:focus{outline:none;border-color:#2563eb;background:#192028}
 .notes-block textarea::placeholder{opacity:.35;font-style:italic}
-.notes-expand-btn{position:absolute;bottom:8px;right:8px;background:#2b333b;border:1px solid #374151;color:#9da6af;font-size:.75rem;width:26px;height:26px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;transition:background .2s,color .2s}
+.notes-expand-btn{position:absolute;bottom:6px;right:6px;background:#2b333b;border:1px solid #374151;color:#9da6af;font-size:.75rem;width:28px;height:28px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;transition:background .2s,color .2s}
+.notes-expand-btn::before{content:'';position:absolute;inset:-8px;border-radius:10px}
 .notes-expand-btn:hover{background:#3a4652;color:#e2e8f0}
 /* Notes overlay (expanded editor) */
 .notes-overlay{position:fixed;inset:0;z-index:6000;display:flex;align-items:center;justify-content:center}
@@ -920,17 +946,19 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .optional-field-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .optional-field-header label{font-size:.55rem;letter-spacing:.08em;opacity:.7;margin:0;text-transform:uppercase;font-weight:600}
 .field-deactivate{
+  position:relative;
   background:transparent;
   border:none;
   color:var(--color-text-muted);
   font-size:.85rem;
   cursor:pointer;
   opacity:.4;
-  padding:2px 6px;
+  padding:8px 10px;
   min-height:auto;
   line-height:1;
   transition:opacity .2s,color .2s;
 }
+.field-deactivate::before{content:'';position:absolute;inset:-4px;border-radius:8px}
 .field-deactivate:hover{opacity:1;color:var(--color-error)}
 
 /* Star rating */
