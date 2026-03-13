@@ -132,6 +132,9 @@ export function stopSync() {
     syncInterval = null;
     console.log('[Bookish:SyncManager] Sync stopped');
   }
+  // Reset state so next login shows "Syncing..." properly
+  initialSynced = false;
+  currentBalanceETH = null;
 }
 
 /**
