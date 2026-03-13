@@ -175,7 +175,7 @@ button.secondary:hover, .btn.secondary:hover{
   position:relative;
   background:var(--color-bg-surface);
   border:1px solid var(--color-border-subtle);
-  border-radius:14px;
+  border-radius:12px;
   display:flex;
   gap:12px;
   padding:12px;
@@ -202,7 +202,8 @@ button.secondary:hover, .btn.secondary:hover{
   }
 }
 .card:hover{
-  box-shadow:0 8px 24px -6px rgba(0,0,0,.4),0 0 0 1px var(--color-border-default);
+  transform:translateY(-2px);
+  box-shadow:0 6px 16px -6px rgba(0,0,0,.35),0 0 0 1px var(--color-border-default);
   border-color:var(--color-border-default);
   background:var(--color-bg-elevated);
 }
@@ -213,9 +214,9 @@ button.secondary:hover, .btn.secondary:hover{
   left:0;
   top:0;
   bottom:0;
-  width:2px;
-  border-radius:14px 0 0 14px;
-  opacity:.85;
+  width:1px;
+  border-radius:12px 0 0 12px;
+  opacity:.75;
   transition:opacity .3s ease;
   z-index:1;
 }
@@ -295,6 +296,9 @@ button.secondary:hover, .btn.secondary:hover{
   overflow:hidden;
 }
 .cover img{width:100%;height:100%;object-fit:cover;display:block}
+/* Dim text below card when generated cover shows title/author */
+.card:has(.generated-cover) .meta .title,
+.card:has(.generated-cover) .meta .author{opacity:.5}
 .meta{flex:1;min-width:0}
 .title{
   font-family:var(--font-body);
@@ -316,7 +320,7 @@ button.secondary:hover, .btn.secondary:hover{
 .details .read-date{display:block;opacity:.7;}
 /* Empty state - Phase 2 redesign */
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;min-height:300px}
-.empty-illustration{font-size:4rem;margin-bottom:24px;opacity:.9;animation:gentleBounce 2s ease-in-out infinite}
+.empty-illustration{font-size:4rem;margin-bottom:24px;opacity:.9;animation:gentleBounce 1s ease-in-out 1}
 @keyframes gentleBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 .empty-headline{
   font-family:var(--font-display);
@@ -350,8 +354,8 @@ button.secondary:hover, .btn.secondary:hover{
 
 /* Sign-in link on empty state */
 .empty-signin{margin-top:20px;font-size:.85rem;color:var(--color-text-muted)}
-.empty-signin .link-btn{background:none;border:none;color:var(--color-text-secondary);font-size:inherit;font-family:inherit;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px;transition:color .2s}
-.empty-signin .link-btn:hover{color:var(--color-text-primary)}
+.empty-signin .link-btn{background:none;border:none;color:var(--color-text-secondary);font-size:inherit;font-family:inherit;cursor:pointer;padding:0;text-decoration:none;transition:color .2s}
+.empty-signin .link-btn:hover{color:var(--color-text-primary);text-decoration:underline;text-underline-offset:2px}
 
 /* Celebration toast */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e3a5f;border:1px solid #2563eb;border-radius:12px;padding:12px 20px;display:flex;align-items:center;gap:10px;font-size:.9rem;color:#e2e8f0;box-shadow:0 4px 20px rgba(0,0,0,.3);z-index:9000;animation:slideUp .3s ease-out;max-width:calc(100vw - 48px)}
@@ -403,7 +407,7 @@ button.secondary:hover, .btn.secondary:hover{
   color:#e2e8f0;
   background:#334155;
 }
-.nudge-banner{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px 16px;margin:16px 0;display:flex;align-items:center;justify-content:space-between;animation:fadeIn .3s ease-out}
+.nudge-banner{background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);border-radius:10px;padding:14px 16px;margin:16px 0;display:flex;align-items:center;justify-content:space-between;animation:fadeIn .3s ease-out}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 .nudge-content{display:flex;align-items:center;gap:12px}
 .nudge-icon{font-size:1.5rem}
@@ -442,6 +446,7 @@ button.secondary:hover, .btn.secondary:hover{
   border:1px solid #334155;
   border-radius:12px;
   padding:32px;
+  padding-top:40px;
   width:min(440px,calc(100vw - 32px));
   max-height:calc(100vh - 64px);
   overflow-y:auto;
@@ -454,6 +459,10 @@ button.secondary:hover, .btn.secondary:hover{
   visibility:visible;
   /* Ensure it's centered by flex parent */
   margin:auto;
+}
+.account-modal .modal-close-btn{
+  top:12px;
+  right:12px;
 }
 .modal-overlay:not([style*="display: none"]) .account-modal{
   opacity:1;
@@ -529,12 +538,12 @@ button.secondary:hover, .btn.secondary:hover{
   background:rgba(251,191,36,0.1);
 }
 .balance-ok{
-  color:#a3e635;
-  background:rgba(163,230,53,0.1);
+  color:var(--color-text-secondary);
+  background:var(--color-bg-elevated);
 }
 .balance-good{
-  color:#4ade80;
-  background:rgba(74,222,128,0.1);
+  color:var(--color-text-secondary);
+  background:var(--color-bg-elevated);
 }
 footer{margin-top:40px;font-size:.55rem;opacity:.4;text-align:center}
 form.inline label{display:block;font-size:.65rem;margin-top:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
@@ -571,7 +580,7 @@ form.inline label{
   align-items:center;
   justify-content:center;
   background:rgba(0,0,0,.7);
-  backdrop-filter:blur(8px);
+  backdrop-filter:blur(4px);
   padding:32px 12px 48px;
   overflow:auto;
   z-index:5000;
@@ -584,7 +593,7 @@ form.inline label{
 .modal-inner{
   background:var(--color-bg-elevated);
   border:1px solid var(--color-border-default);
-  border-radius:20px;
+  border-radius:16px;
   padding:24px;
   width:100%;
   max-width:640px;
@@ -604,15 +613,15 @@ form.inline label{
 }
 .modal-close-btn{
   position:absolute;
-  top:10px;
-  right:10px;
-  background:var(--color-bg-surface);
-  border:1px solid var(--color-border-subtle);
+  top:12px;
+  right:12px;
+  background:transparent;
+  border:none;
   color:var(--color-text-muted);
   border-radius:50%;
-  width:32px;
-  height:32px;
-  font-size:14px;
+  width:28px;
+  height:28px;
+  font-size:16px;
   cursor:pointer;
   transition:all .2s ease;
   display:flex;
@@ -622,11 +631,13 @@ form.inline label{
   padding:0;
   min-height:auto;
   z-index:1;
+  opacity:.6;
 }
 .modal-close-btn::before{content:'';position:absolute;inset:-6px;border-radius:50%}
 .modal-close-btn:hover{
-  background:var(--color-border-subtle);
+  background:var(--color-bg-surface);
   color:var(--color-text-primary);
+  opacity:1;
   border-color:var(--color-border-default);
 }
 .row-actions{display:flex;gap:8px;margin-top:16px}
@@ -758,6 +769,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   /* Exempt small UI controls from oversized mobile button sizing */
   /* These use pseudo-element touch targets instead of bloated min-height */
   .refresh-link{min-height:auto!important;padding:6px 12px!important}
+  #newBtn{min-height:42px;padding:10px 16px;font-size:.85rem}
   .search-controls button{min-height:auto;padding:6px 10px;font-size:.6rem}
   #editionNav button{min-height:auto;padding:6px 10px;font-size:.6rem}
   .cover-remove-btn{min-height:auto!important;padding:0!important}
@@ -766,6 +778,8 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   /* Filters collapsed on mobile */
   .filters-toggle{display:inline-flex}
   .search-controls:not(.expanded){display:none}
+  /* Bottom sheet pattern for modals on mobile */
+  .modal{align-items:flex-end}
   .modal-inner{
     padding:16px 14px;
     border-radius:16px 16px 0 0;
@@ -773,6 +787,8 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
     max-height:92vh;
     overflow-y:auto;
   }
+  /* Match blue add-mode border to bottom sheet shape */
+  .modal-inner.add-mode{border-radius:16px 16px 0 0}
   .modal-inner .btn{
     width:100%;
   }
@@ -829,14 +845,14 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .modal-inner.add-mode{border:2px solid #2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15)}
 .modal-inner form.inline{margin-top:0}
 .modal-inner .form-as-tile{display:flex;flex-direction:column;align-items:center;gap:16px}
-.modal-inner .tile-cover{width:45%;max-width:220px;aspect-ratio:2/3;min-height:180px;background:#101418;border:1px solid #2b333b;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
+.modal-inner .tile-cover{width:45%;max-width:220px;aspect-ratio:2/3;min-height:180px;background:#101418;border:1px solid #2b333b;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
 .modal-inner .tile-cover:has(.placeholder[style*="block"]){border:2px dashed var(--color-border-default)}
 .modal-inner .tile-cover:hover{border-color:#3a4652;box-shadow:0 4px 14px -4px rgba(0,0,0,.6)}
 .modal-inner .tile-cover img{width:100%;height:100%;object-fit:cover;display:block}
 .modal-inner .tile-cover .placeholder{font-size:.6rem;opacity:.6;text-align:center;padding:0 12px}
 /* Cover placeholder icon (SVG book + label) */
-.placeholder-icon{display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.5;color:var(--color-text-muted)}
-.placeholder-icon span{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em}
+.placeholder-icon{display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.7;color:var(--color-text-secondary)}
+.placeholder-icon span{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;font-weight:500}
 /* Cover hover hint (shown over image on hover) */
 .cover-hover-hint{
   position:absolute;inset:0;
@@ -851,7 +867,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   transition:opacity .2s ease;
   pointer-events:none;
   z-index:2;
-  border-radius:14px;
+  border-radius:12px;
 }
 .tile-cover:hover .cover-hover-hint{opacity:1}
 /* Hide hint when placeholder is showing (no image loaded) */
@@ -884,8 +900,8 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 @keyframes pulse-opacity{0%,100%{opacity:.3}50%{opacity:.7}}
 .modal-inner .fields-cluster{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
 .modal-inner .field-block{display:flex;flex-direction:column;gap:4px}
-.modal-inner .field-block label{font-size:.55rem;letter-spacing:.08em;opacity:.7;margin:0;text-transform:uppercase;font-weight:600}
-.modal-inner .field-block input,.modal-inner .field-block select{background:transparent;border:1px dashed #2b333b;padding:6px 8px;font-size:.75rem;border-radius:8px;transition:border-color .2s,background .2s}
+.modal-inner .field-block label{font-size:.65rem;letter-spacing:.08em;opacity:.85;margin:0;text-transform:uppercase;font-weight:600}
+.modal-inner .field-block input,.modal-inner .field-block select{background:transparent;border:1px solid var(--color-border-subtle);padding:6px 8px;font-size:.75rem;border-radius:8px;transition:border-color .2s,background .2s}
 .modal-inner .field-block input:focus,.modal-inner .field-block select:focus{outline:none;border-color:#2563eb;background:#192028}
 .modal-inner .field-block.readonly input:not(:focus){border-color:transparent;background:transparent;cursor:text}
 .modal-inner .primary-actions{margin-top:12px;display:flex;gap:10px;justify-content:center}
@@ -899,10 +915,10 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 
 /* Notes field in entry form */
 .notes-block{width:100%;margin-top:0;position:relative}
-.notes-toggle{display:flex;align-items:center;gap:4px;font-size:.55rem;letter-spacing:.08em;opacity:.7;margin:0 0 4px 0;text-transform:uppercase;font-weight:600;cursor:pointer}
+.notes-toggle{display:flex;align-items:center;gap:4px;font-size:.65rem;letter-spacing:.08em;opacity:.85;margin:0 0 4px 0;text-transform:uppercase;font-weight:600;cursor:pointer}
 .notes-toggle-icon{font-size:.7rem;opacity:.7}
 .notes-hint{font-weight:400;opacity:.6;text-transform:none;letter-spacing:0}
-.notes-block textarea{width:100%;box-sizing:border-box;background:transparent;border:1px dashed #2b333b;padding:8px 10px;padding-right:40px;font-size:.75rem;font-family:inherit;border-radius:8px;color:inherit;resize:none;min-height:60px;max-height:none;line-height:1.4;overflow:hidden;transition:border-color .2s,background .2s}
+.notes-block textarea{width:100%;box-sizing:border-box;background:transparent;border:1px solid var(--color-border-subtle);padding:8px 10px;padding-right:40px;font-size:.75rem;font-family:inherit;border-radius:8px;color:inherit;resize:none;min-height:60px;max-height:none;line-height:1.4;overflow:hidden;transition:border-color .2s,background .2s}
 .notes-block textarea:focus{outline:none;border-color:#2563eb;background:#192028}
 .notes-block textarea::placeholder{opacity:.35;font-style:italic}
 .notes-expand-btn{position:absolute;bottom:6px;right:6px;background:#2b333b;border:1px solid #374151;color:#9da6af;font-size:.75rem;width:28px;height:28px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;transition:background .2s,color .2s}
@@ -915,7 +931,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .notes-overlay-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 .notes-overlay-header h3{margin:0;font-size:1rem;font-family:var(--font-display)}
 .notes-overlay-done{padding:8px 16px;font-size:.8rem}
-#notesOverlayInput{flex:1;min-height:200px;background:transparent;border:1px dashed #2b333b;padding:12px 14px;font-size:.85rem;font-family:inherit;border-radius:8px;color:inherit;resize:none;line-height:1.5;transition:border-color .2s,background .2s}
+#notesOverlayInput{flex:1;min-height:200px;background:transparent;border:1px solid var(--color-border-subtle);padding:12px 14px;font-size:.85rem;font-family:inherit;border-radius:8px;color:inherit;resize:none;line-height:1.5;transition:border-color .2s,background .2s}
 #notesOverlayInput:focus{outline:none;border-color:#2563eb;background:#192028}
 #notesOverlayInput::placeholder{opacity:.35;font-style:italic}
 .notes-overlay-count{font-size:.6rem;opacity:.4;text-align:right;margin-top:6px}
@@ -944,7 +960,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .field-chip:hover{border-color:var(--color-border-default);color:var(--color-text-secondary);background:var(--color-bg-elevated)}
 .optional-field{margin-top:10px;animation:fadeIn .25s ease}
 .optional-field-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.optional-field-header label{font-size:.55rem;letter-spacing:.08em;opacity:.7;margin:0;text-transform:uppercase;font-weight:600}
+.optional-field-header label{font-size:.65rem;letter-spacing:.08em;opacity:.85;margin:0;text-transform:uppercase;font-weight:600}
 .field-deactivate{
   position:relative;
   background:transparent;
@@ -1009,7 +1025,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   width:100%;
   box-sizing:border-box;
   background:transparent;
-  border:1px dashed #2b333b;
+  border:1px solid var(--color-border-subtle);
   padding:6px 8px;
   font-size:.75rem;
   font-family:inherit;
@@ -1078,6 +1094,9 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 /* Date picker enhancements */
 .date-input-wrap{display:flex;align-items:center;gap:6px;position:relative}
 .date-input-wrap input[type=date]{flex:1;min-width:0}
+/* Hide native date picker icon - we use custom .cal-btn */
+.date-input-wrap input[type=date]::-webkit-calendar-picker-indicator{display:none}
+.date-input-wrap input[type=date]::-webkit-inner-spin-button{display:none}
 .cal-btn{background:#2b333b;border:1px solid #374151;color:#cbd5e1;font-size:.7rem;padding:6px 8px;border-radius:6px;cursor:pointer;line-height:1}
 .cal-btn:hover{background:#343e48;border-color:#46525e}
 .date-picker{position:absolute;z-index:1000;background:#1e242b;border:1px solid #2b333b;border-radius:10px;padding:10px;width:220px;max-width:calc(100vw - 20px);box-shadow:0 6px 18px -4px rgba(0,0,0,.55);font-size:.65rem;display:none}
