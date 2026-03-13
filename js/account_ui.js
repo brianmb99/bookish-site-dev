@@ -1940,20 +1940,11 @@ async function handleBuyStorage() {
       return;
     }
 
-    // Get current balance to determine if funded
-    let isFunded = false;
-    try {
-      const balanceResult = await getWalletBalance(walletInfo.address);
-      const balanceETH = balanceResult.balanceETH || '0';
-      const balance = parseFloat(balanceETH);
-      isFunded = balance >= 0.00002; // MIN_FUNDING_ETH
-    } catch (e) {
-      console.error('[Bookish:AccountUI] Error checking balance for dialog:', e);
-      // Default to unfunded if check fails
-      isFunded = false;
-    }
+    // Use cached balance for instant display (non-blocking)
+    const cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH;
+    const isFunded = cachedBalance !== null && cachedBalance !== undefined && parseFloat(cachedBalance) >= 0.00002;
 
-    // Phase 3: Show value explanation modal before payment
+    // Show modal immediately with cached state
     showFundingValueModal(walletInfo.address, isFunded);
 
   } catch (error) {
