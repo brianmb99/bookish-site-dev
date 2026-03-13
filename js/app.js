@@ -216,6 +216,7 @@ function showCoverLoaded(){ if(coverRemoveBtn) coverRemoveBtn.style.display='inl
 let entries=[]; let replaying=false;
 const SERVERLESS=true;
 let browserClient; let keyState={ loaded:false };
+const editingEntries = new Set(); // Prevent concurrent edits on same entry
 
 // Export reset function for logout
 export function resetKeyState() {
@@ -983,6 +984,17 @@ async function syncBooksFromArweave(){
 
   const remote = remoteEntries.map(e => ({ ...e, status: 'confirmed', id: e.txid }));
   entries = await window.bookishCache.applyRemote(remote, tombstones);
+  
+  // Compact duplicates (handles race conditions from quick edits)
+  const { toKeep, toDelete } = window.bookishCache.compactDuplicates(entries);
+  if (toDelete.length > 0) {
+    console.warn('[Bookish] Compacting', toDelete.length, 'duplicate entries from cache');
+    for (const id of toDelete) {
+      await window.bookishCache.deleteById(id);
+    }
+    entries = toKeep;
+  }
+  
   entries.forEach(e => e._committed = true);
   orderEntries();
   render();
@@ -1066,7 +1078,44 @@ async function createServerless(payload){ if(window.bookishCache){ const dup=awa
     }
   }
 }
-async function editServerless(priorTxid,payload){ const old=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid); if(!old) throw new Error('Entry not found'); const snapshot={...old}; Object.assign(old,payload); old.pending=true; old.status='pending'; old.seenRemote=false; old._committed=false; await window.bookishCache.putEntry(old); markDirty(); orderEntries(); render(); if(!old.txid){ /* local-only entry — saved to cache, no upload needed */ return; } try { const haveKeys = await ensureKeys(); if (!haveKeys) throw new Error('Cannot upload: encryption keys not available'); payload.bookId=old.bookId; diagMaybeSet(['Saving via Irys\u2026']); const res=await browserClient.uploadEntry({ ...payload },{ extraTags:[{name:'Prev',value:priorTxid}] }); const oldTxid=priorTxid; old.txid=res.txid; old.id=res.txid; old.pending=false; old.status='confirmed'; old.seenRemote=true; await window.bookishCache.replaceProvisional(oldTxid,old); walletError=null; orderEntries(); render(); uiStatusManager.refresh(); diagMaybeClear(); } catch(e){ if(e && e.code==='irys-required'){ // revert UI and prompt refresh
+async function editServerless(priorTxid,payload){
+  const old=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid);
+  if(!old) throw new Error('Entry not found');
+  
+  // Prevent concurrent edits on the same entry (race condition fix)
+  const entryKey = old.bookId || old.id;
+  if(editingEntries.has(entryKey)){
+    console.warn('[Bookish] Edit already in progress for', entryKey);
+    return;
+  }
+  editingEntries.add(entryKey);
+  
+  const snapshot={...old};
+  Object.assign(old,payload);
+  old.pending=true; old.status='pending'; old.seenRemote=false; old._committed=false;
+  await window.bookishCache.putEntry(old);
+  markDirty(); orderEntries(); render();
+  
+  if(!old.txid){
+    editingEntries.delete(entryKey);
+    return; // local-only entry — saved to cache, no upload needed
+  }
+  
+  try {
+    const haveKeys = await ensureKeys();
+    if (!haveKeys) throw new Error('Cannot upload: encryption keys not available');
+    payload.bookId=old.bookId;
+    diagMaybeSet(['Saving via Irys\u2026']);
+    const res=await browserClient.uploadEntry({ ...payload },{ extraTags:[{name:'Prev',value:priorTxid}] });
+    const oldTxid=priorTxid;
+    old.txid=res.txid; old.id=res.txid; old.pending=false; old.status='confirmed'; old.seenRemote=true;
+    await window.bookishCache.replaceProvisional(oldTxid,old);
+    walletError=null;
+    editingEntries.delete(entryKey);
+    orderEntries(); render(); uiStatusManager.refresh(); diagMaybeClear();
+  } catch(e){
+    editingEntries.delete(entryKey);
+    if(e && e.code==='irys-required'){ // revert UI and prompt refresh
     Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render();
     const pending = { type:'edit', priorTxid, payload };
     if(window.bookishCache) await window.bookishCache.queueOp(pending);

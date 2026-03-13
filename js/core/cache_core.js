@@ -204,6 +204,31 @@ export function compactDuplicates(entries) {
     }
   }
 
+  // Handle same-bookId duplicates (race condition from quick edits)
+  // Keep the one with highest block height, or if no block, prefer seenRemote
+  const byBookId = new Map();
+  for (const e of entries) {
+    if (!e.bookId || e.status === 'tombstoned' || toDelete.includes(e.id)) continue;
+    const existing = byBookId.get(e.bookId);
+    if (!existing) {
+      byBookId.set(e.bookId, e);
+    } else {
+      // Determine which to keep: prefer confirmed, then higher block, then seenRemote
+      let keep = existing, drop = e;
+      const eScore = (e.status === 'confirmed' ? 1000 : 0) + (e.block?.height || 0) + (e.seenRemote ? 1 : 0);
+      const existScore = (existing.status === 'confirmed' ? 1000 : 0) + (existing.block?.height || 0) + (existing.seenRemote ? 1 : 0);
+      if (eScore > existScore) {
+        keep = e;
+        drop = existing;
+      }
+      byBookId.set(e.bookId, keep);
+      if (!toDelete.includes(drop.id)) {
+        toDelete.push(drop.id);
+        console.log('[Bookish:Cache] Compacting duplicate bookId:', drop.bookId?.slice(0,8), 'dropping', drop.txid?.slice(0,8), 'keeping', keep.txid?.slice(0,8));
+      }
+    }
+  }
+
   const toKeep = entries.filter(e => !toDelete.includes(e.id));
 
   return { toKeep, toDelete };
