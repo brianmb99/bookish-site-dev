@@ -214,9 +214,9 @@ button.secondary:hover, .btn.secondary:hover{
   left:0;
   top:0;
   bottom:0;
-  width:0.5px;
+  width:1px;
   border-radius:12px 0 0 12px;
-  opacity:.6;
+  opacity:.65;
   transition:opacity .3s ease;
   z-index:1;
 }
@@ -778,12 +778,10 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   /* Filters collapsed on mobile */
   .filters-toggle{display:inline-flex}
   .search-controls:not(.expanded){display:none}
-  /* Bottom sheet pattern for modals on mobile */
-  .modal{align-items:flex-end}
+  /* Mobile modal adjustments (centered, not bottom sheet) */
   .modal-inner{
     padding:16px 14px;
-    border-radius:16px 16px 0 0;
-    margin-top:auto;
+    border-radius:16px;
     max-height:92vh;
     overflow-y:auto;
   }
@@ -841,7 +839,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 }
 /* Tile layout for book modal (shared by add & edit) */
 .modal-inner.add-mode{border:2px solid #2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15);border-radius:16px}
-@media (max-width:599px){.modal-inner.add-mode{border-radius:16px 16px 0 0!important}}
+@media (max-width:599px){.modal-inner.add-mode{border-radius:16px}}
 .modal-inner form.inline{margin-top:0}
 .modal-inner .form-as-tile{display:flex;flex-direction:column;align-items:center;gap:16px}
 .modal-inner .tile-cover{width:45%;max-width:220px;aspect-ratio:2/3;min-height:180px;background:#101418;border:1px solid #2b333b;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
