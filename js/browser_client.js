@@ -170,18 +170,23 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
       .catch(err=>{ console.warn('[Bookish] Arweave book search failed:', err.message); return null; });
 
     // --- Irys supplemental query (first page only — catches recently uploaded data) ---
+    // Query BOTH node1 and node2 for redundancy (single node can return inconsistent results)
     // Irys GraphQL: no sort, no owners, no block info; cursors are gateway-specific
-    let irysPromise = Promise.resolve(null);
+    let irysNode1Promise = Promise.resolve(null);
+    let irysNode2Promise = Promise.resolve(null);
     if (!cursor && pub) {
       const irysTagsStr = tags.map(t=>`{name:"${t.name}",values:${JSON.stringify(t.values)}}`).join(',');
       const irysQ = `{transactions(tags:[${irysTagsStr}],first:${limit}){edges{node{id tags{name value}}}}}`;
-      irysPromise = fetch('https://node1.irys.xyz/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:irysQ})})
+      irysNode1Promise = fetch('https://node1.irys.xyz/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:irysQ})})
         .then(r=>r.json())
-        .catch(err=>{ console.warn('[Bookish] Irys book search failed:', err.message); return null; });
+        .catch(err=>{ console.warn('[Bookish] Irys node1 query failed:', err.message); return null; });
+      irysNode2Promise = fetch('https://node2.irys.xyz/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:irysQ})})
+        .then(r=>r.json())
+        .catch(err=>{ console.warn('[Bookish] Irys node2 query failed:', err.message); return null; });
     }
 
-    // Run both in parallel
-    const [arJson, irJson] = await Promise.all([arweavePromise, irysPromise]);
+    // Run all queries in parallel
+    const [arJson, irJson1, irJson2] = await Promise.all([arweavePromise, irysNode1Promise, irysNode2Promise]);
 
     // Extract Arweave edges
     let arweaveHasNext = false;
@@ -198,9 +203,14 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
     }
 
     // Supplement with Irys-only entries (not yet indexed on arweave.net)
+    // Merge results from both Irys nodes, deduplicating by txid
     let irysOnlyCount = 0;
-    if (irJson?.data?.transactions?.edges) {
-      for(const e of irJson.data.transactions.edges){
+    const node1Count = irJson1?.data?.transactions?.edges?.length || 0;
+    const node2Count = irJson2?.data?.transactions?.edges?.length || 0;
+    
+    // Process node1 results
+    if (irJson1?.data?.transactions?.edges) {
+      for(const e of irJson1.data.transactions.edges){
         if(!seen.has(e.node.id)){
           seen.add(e.node.id);
           merged.push({ ...e, node:{ ...e.node, block:null } });
@@ -208,10 +218,25 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
         }
       }
     }
-    if(irysOnlyCount>0) console.log(`[Bookish] Found ${irysOnlyCount} entries on Irys not yet indexed on Arweave`);
+    // Process node2 results (will skip any already seen from node1 or Arweave)
+    if (irJson2?.data?.transactions?.edges) {
+      for(const e of irJson2.data.transactions.edges){
+        if(!seen.has(e.node.id)){
+          seen.add(e.node.id);
+          merged.push({ ...e, node:{ ...e.node, block:null } });
+          irysOnlyCount++;
+        }
+      }
+    }
+    // Diagnostic logging
+    if(irysOnlyCount>0) {
+      console.log(`[Bookish] Found ${irysOnlyCount} entries on Irys not yet indexed on Arweave (node1:${node1Count}, node2:${node2Count})`);
+    } else if(node1Count>0 || node2Count>0) {
+      console.log(`[Bookish] Irys returned ${node1Count}+${node2Count} entries, all already on Arweave`);
+    }
 
-    // If both gateways failed, throw
-    if(merged.length===0 && !arJson?.data && !irJson?.data) throw new Error('graphql');
+    // If all gateways failed, throw
+    if(merged.length===0 && !arJson?.data && !irJson1?.data && !irJson2?.data) throw new Error('graphql');
 
     return { edges: merged, pageInfo: { hasNextPage: arweaveHasNext } };
   }
