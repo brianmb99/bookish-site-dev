@@ -216,7 +216,10 @@ function showCoverLoaded(){ if(coverRemoveBtn) coverRemoveBtn.style.display='inl
 let entries=[]; let replaying=false;
 const SERVERLESS=true;
 let browserClient; let keyState={ loaded:false };
-const editingEntries = new Set(); // Prevent concurrent edits on same entry
+
+// Edit queue: tracks in-flight edits and pending follow-up edits
+// Key: bookId or entryId, Value: { uploading: boolean, pendingPayload: payload|null }
+const editQueue = new Map();
 
 // Export reset function for logout
 export function resetKeyState() {
@@ -1078,65 +1081,107 @@ async function createServerless(payload){ if(window.bookishCache){ const dup=awa
     }
   }
 }
-async function editServerless(priorTxid,payload){
-  const old=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid);
-  if(!old) throw new Error('Entry not found');
+async function editServerless(priorTxid, payload) {
+  const old = entries.find(e => e.txid === priorTxid) || entries.find(e => e.id === priorTxid);
+  if (!old) throw new Error('Entry not found');
   
-  // Prevent concurrent edits on the same entry (race condition fix)
   const entryKey = old.bookId || old.id;
-  if(editingEntries.has(entryKey)){
-    console.warn('[Bookish] Edit already in progress for', entryKey);
+  const queueEntry = editQueue.get(entryKey);
+  
+  // Always update the local state immediately for responsive UI
+  const snapshot = { ...old };
+  Object.assign(old, payload);
+  old.pending = true;
+  old.status = 'pending';
+  old.seenRemote = false;
+  old._committed = false;
+  await window.bookishCache.putEntry(old);
+  markDirty();
+  orderEntries();
+  render();
+  
+  // If an upload is already in progress, queue this as the pending edit
+  if (queueEntry?.uploading) {
+    console.log('[Bookish] Edit queued - will upload after current edit completes');
+    queueEntry.pendingPayload = { ...payload, bookId: old.bookId };
     return;
   }
-  editingEntries.add(entryKey);
   
-  const snapshot={...old};
-  Object.assign(old,payload);
-  old.pending=true; old.status='pending'; old.seenRemote=false; old._committed=false;
-  await window.bookishCache.putEntry(old);
-  markDirty(); orderEntries(); render();
+  // Start the upload chain
+  editQueue.set(entryKey, { uploading: true, pendingPayload: null });
   
-  if(!old.txid){
-    editingEntries.delete(entryKey);
-    return; // local-only entry — saved to cache, no upload needed
+  await doEditUpload(entryKey, old, priorTxid, { ...payload, bookId: old.bookId }, snapshot);
+}
+
+async function doEditUpload(entryKey, entry, prevTxid, payload, snapshot) {
+  if (!entry.txid && !prevTxid) {
+    // local-only entry — saved to cache, no upload needed
+    editQueue.delete(entryKey);
+    return;
   }
   
   try {
     const haveKeys = await ensureKeys();
     if (!haveKeys) throw new Error('Cannot upload: encryption keys not available');
-    payload.bookId=old.bookId;
+    
     diagMaybeSet(['Saving via Irys\u2026']);
-    const res=await browserClient.uploadEntry({ ...payload },{ extraTags:[{name:'Prev',value:priorTxid}] });
-    const oldTxid=priorTxid;
-    old.txid=res.txid; old.id=res.txid; old.pending=false; old.status='confirmed'; old.seenRemote=true;
-    await window.bookishCache.replaceProvisional(oldTxid,old);
-    walletError=null;
-    editingEntries.delete(entryKey);
-    orderEntries(); render(); uiStatusManager.refresh(); diagMaybeClear();
-  } catch(e){
-    editingEntries.delete(entryKey);
-    if(e && e.code==='irys-required'){ // revert UI and prompt refresh
-    Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render();
-    const pending = { type:'edit', priorTxid, payload };
-    if(window.bookishCache) await window.bookishCache.queueOp(pending);
+    const res = await browserClient.uploadEntry(payload, { extraTags: [{ name: 'Prev', value: prevTxid }] });
+    
+    const oldTxid = prevTxid;
+    entry.txid = res.txid;
+    entry.id = res.txid;
+    entry.pending = false;
+    entry.status = 'confirmed';
+    entry.seenRemote = true;
+    await window.bookishCache.replaceProvisional(oldTxid, entry);
+    walletError = null;
+    orderEntries();
+    render();
+    uiStatusManager.refresh();
+    diagMaybeClear();
+    
+    // Check if there's a pending edit waiting
+    const queueEntry = editQueue.get(entryKey);
+    if (queueEntry?.pendingPayload) {
+      console.log('[Bookish] Processing queued edit with new Prev:', res.txid.slice(0, 8));
+      const nextPayload = queueEntry.pendingPayload;
+      queueEntry.pendingPayload = null;
+      // Chain the next edit with the just-completed txid as Prev
+      await doEditUpload(entryKey, entry, res.txid, nextPayload, snapshot);
+    } else {
+      editQueue.delete(entryKey);
+    }
+  } catch (e) {
+    editQueue.delete(entryKey);
+    // Revert to snapshot on error
+    Object.assign(entry, snapshot);
+    await window.bookishCache.putEntry(entry);
+    orderEntries();
+    render();
+    
+    const pending = { type: 'edit', priorTxid: prevTxid, payload };
+    if (window.bookishCache) await window.bookishCache.queueOp(pending);
     lastPendingOp = pending;
-    walletError='Irys client missing. Refresh page and retry.'; uiStatusManager.refresh();
-  diagMaybeSet(['Irys client missing','Refresh page and retry']);
-  } else if(e && e.code==='post-fund-timeout'){
-    Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render();
-    const pending = { type:'edit', priorTxid, payload };
-    if(window.bookishCache) await window.bookishCache.queueOp(pending);
-    lastPendingOp = pending;
-    walletError='Funding sent. Credit pending on Irys (few minutes). Retry from Account shortly.'; uiStatusManager.refresh();
-  diagMaybeSet(['Funding sent – awaiting credit','Retry from Account shortly']);
-  } else if(e && (e.code==='base-insufficient-funds' || e.code==='base-insufficient-funds-recent')){
-    Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render();
-    const pending = { type:'edit', priorTxid, payload };
-    if(window.bookishCache) await window.bookishCache.queueOp(pending);
-    lastPendingOp = pending;
-    walletError='Auto-fund blocked: Base wallet low on ETH. Top up and retry from Account.'; uiStatusManager.refresh();
-  diagMaybeSet(['Base wallet low on ETH','Add a small amount, then retry']);
-  } else { Object.assign(old,snapshot); await window.bookishCache.putEntry(old); orderEntries(); render(); if(window.bookishCache) await window.bookishCache.queueOp({ type:'edit', priorTxid, payload }); walletError='Save failed'; uiStatusManager.refresh(); diagMaybeSet(['Save failed']); } } }
+    
+    if (e && e.code === 'irys-required') {
+      walletError = 'Irys client missing. Refresh page and retry.';
+      uiStatusManager.refresh();
+      diagMaybeSet(['Irys client missing', 'Refresh page and retry']);
+    } else if (e && e.code === 'post-fund-timeout') {
+      walletError = 'Funding sent. Credit pending on Irys (few minutes). Retry from Account shortly.';
+      uiStatusManager.refresh();
+      diagMaybeSet(['Funding sent – awaiting credit', 'Retry from Account shortly']);
+    } else if (e && (e.code === 'base-insufficient-funds' || e.code === 'base-insufficient-funds-recent')) {
+      walletError = 'Auto-fund blocked: Base wallet low on ETH. Top up and retry from Account.';
+      uiStatusManager.refresh();
+      diagMaybeSet(['Base wallet low on ETH', 'Add a small amount, then retry']);
+    } else {
+      walletError = 'Save failed';
+      uiStatusManager.refresh();
+      diagMaybeSet(['Save failed']);
+    }
+  }
+}
 async function deleteServerless(priorTxid){ const entry=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid); if(!entry) return; markDeletingVisual(entry); uiStatusManager.refresh(); if(!entry.txid){ /* local-only entry — just remove from cache and entries */ if(window.bookishCache) await window.bookishCache.deleteById(entry.id); entries=entries.filter(e=>e!==entry); orderEntries(); render(); uiStatusManager.refresh(); return; } try { const haveKeys = await ensureKeys(); if (!haveKeys) throw new Error('Cannot delete: encryption keys not available'); await browserClient.tombstone(priorTxid,{ note:'user delete' }); entry.status='tombstoned'; entry.tombstonedAt=Date.now(); await window.bookishCache.putEntry(entry); entries=entries.filter(e=>e.status!=='tombstoned'); walletError=null; markDirty(); orderEntries(); render(); uiStatusManager.refresh(); } catch{ entry._deleting=false; render(); walletError='Delete failed'; uiStatusManager.refresh(); } }
 
 // --- Form handlers ---
