@@ -209,7 +209,7 @@ if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropaga
 
 // --- Helpers ---
 function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; }
+function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); }
 function showCoverLoaded(){ if(coverRemoveBtn) coverRemoveBtn.style.display='inline-flex'; }
 
 // --- State ---
@@ -276,9 +276,11 @@ function openModal(entry){
   initOptionalFields(entry);
   populateOptionalFields(entry);
   if(entry&&entry.coverImage){
-    coverPreview.src='data:'+(entry.mimeType||'image/*')+';base64,'+entry.coverImage;
+    const coverDataUrl='data:'+(entry.mimeType||'image/*')+';base64,'+entry.coverImage;
+    coverPreview.src=coverDataUrl;
     coverPreview.style.display='block'; coverPlaceholder.style.display='none';
     coverPreview.dataset.b64=entry.coverImage; if(entry.mimeType) coverPreview.dataset.mime=entry.mimeType;
+    tileCoverClick.style.setProperty('--cover-url',`url('${coverDataUrl}')`);
     showCoverLoaded();
   } else { clearCoverPreview(); }
   // Delete button only for existing entry
@@ -325,10 +327,11 @@ coverFileInput.addEventListener('change', async ()=>{ const f=coverFileInput.fil
     coverPlaceholder.style.display = 'none';
     coverPreview.dataset.b64 = base64;
     coverPreview.dataset.mime = mime;
+    tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`);
     showCoverLoaded();
   } catch(err) {
     // Fallback to original if resize fails
-    const r = new FileReader(); r.onload = e => { const b64full = e.target.result; const b64 = b64full.split(',')[1]; coverPreview.src = b64full; coverPreview.style.display = 'block'; coverPlaceholder.style.display = 'none'; coverPreview.dataset.b64 = b64; coverPreview.dataset.mime = f.type || 'image/jpeg'; showCoverLoaded(); }; r.readAsDataURL(f);
+    const r = new FileReader(); r.onload = e => { const b64full = e.target.result; const b64 = b64full.split(',')[1]; coverPreview.src = b64full; coverPreview.style.display = 'block'; coverPlaceholder.style.display = 'none'; coverPreview.dataset.b64 = b64; coverPreview.dataset.mime = f.type || 'image/jpeg'; tileCoverClick.style.setProperty('--cover-url',`url('${b64full}')`); showCoverLoaded(); }; r.readAsDataURL(f);
   }
 });
 
@@ -530,9 +533,10 @@ function buildCardHTML(e){
   const dateDisp=formatDisplayDate(e.dateRead);
   const notesSnippet = e.notes ? `<p class="card-notes">${escapeHtml(e.notes)}</p>` : '';
   const metaStrip = buildCardMetadata(e);
+  const coverDataUrl = e.coverImage ? `data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}` : '';
   return `
       <div class="status-dot ${dotClass}" data-tip="${dotTitle}"></div>
-      <div class="cover">${e.coverImage?`<img src="data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
+      <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
       <div class="meta">
         <p class="title">${e.title||'<i>Untitled</i>'}</p>
         <p class="author">${e.author||''}</p>
