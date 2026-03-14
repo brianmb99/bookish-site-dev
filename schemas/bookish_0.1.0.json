@@ -14,12 +14,7 @@
     "format": { "type": "string", "enum": ["paperback", "hardcover", "ebook", "audiobook", "other"] },
     "dateRead": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
     "mimeType": { "type": "string" },
-    "coverImage": { "type": "string", "description": "base64-encoded image data" },
-    "readingStatus": {
-      "type": "string",
-      "enum": ["want_to_read", "reading", "read"],
-      "description": "Reading status: want_to_read (TBR), reading (in progress), read (finished). Default want_to_read for new books; existing books without it default to read."
-    }
+    "coverImage": { "type": "string", "description": "base64-encoded image data" }
   },
   "allOf": [
     { "if": { "required": ["coverImage"] }, "then": { "required": ["mimeType"] } }

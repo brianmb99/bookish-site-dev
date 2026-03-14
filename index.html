@@ -54,22 +54,7 @@
   </div>
 </div>
 
-<!-- Currently Reading hero section -->
-<div id="currentlyReadingSection" class="currently-reading-section" style="display:none">
-  <h3 class="currently-reading-heading">Currently Reading</h3>
-  <div id="currentlyReadingRow" class="currently-reading-row"></div>
-  <div id="currentlyReadingEmpty" class="currently-reading-empty" style="display:none">Nothing right now. Pick something from your Want to Read list?</div>
-</div>
-<!-- Tab bar: My Shelf / Want to Read -->
-<div id="tabBar" class="tab-bar" style="display:none">
-  <button type="button" id="tabMyShelf" class="tab-btn active" data-tab="shelf">My Shelf <span id="shelfCount" class="tab-count">(0)</span></button>
-  <button type="button" id="tabWantToRead" class="tab-btn" data-tab="wtr">Want to Read <span id="wtrCount" class="tab-count">(0)</span></button>
-</div>
-<!-- Tab content: My Shelf (read) and Want to Read grids -->
-<div id="tabContent" style="display:none">
-  <div id="cards" class="cards"></div>
-  <div id="cardsWtr" class="cards cards-wtr"></div>
-</div>
+<div id="cards" class="cards"></div>
 <div id="empty" class="empty-state" style="display:none">
   <div class="empty-illustration">📚</div>
   <h2 class="empty-headline">Your reading journey starts here</h2>
@@ -81,7 +66,7 @@
   <span class="toast-icon">🎉</span>
   <span class="toast-message">First book added! You're on your way.</span>
 </div>
-<footer>Bookish • Alpha • v0.1.73</footer>
+<footer>Bookish • Alpha • v0.1.73 • <a href="/forever.html">Data export</a></footer>
 </div>
 
 <!-- Notes expand overlay -->
@@ -136,7 +121,6 @@
           <div class="field-block"><label>Title</label><input name="title" required placeholder="Title"></div>
           <div class="field-block"><label>Author</label><input name="author" required placeholder="Author"></div>
           <div class="field-block"><label>Format</label><select name="format"><option value="print">Print</option><option value="ebook">Ebook</option><option value="audio">Audio</option></select></div>
-          <div class="field-block"><label>Status</label><select name="readingStatus"><option value="want_to_read">Want to Read</option><option value="reading">Currently Reading</option><option value="read">Read</option></select></div>
           <div class="field-block"><label>Date Read</label><div class="date-input-wrap"><input name="dateRead" type="date"><button type="button" class="cal-btn" id="openCalendarBtn" title="Pick date">📅</button></div></div>
         </div>
       </div>
