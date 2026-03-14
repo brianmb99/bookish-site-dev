@@ -24,6 +24,16 @@ import { resizeImageToBase64 } from './core/image_utils.js';
 const statusEl = document.getElementById('status');
 // status banner removed; we now write a single status line into the geek panel
 const cardsEl = document.getElementById('cards');
+const cardsWtrEl = document.getElementById('cardsWtr');
+const currentlyReadingSection = document.getElementById('currentlyReadingSection');
+const currentlyReadingRow = document.getElementById('currentlyReadingRow');
+const currentlyReadingEmpty = document.getElementById('currentlyReadingEmpty');
+const tabBar = document.getElementById('tabBar');
+const tabContent = document.getElementById('tabContent');
+const tabMyShelf = document.getElementById('tabMyShelf');
+const tabWantToRead = document.getElementById('tabWantToRead');
+const shelfCountEl = document.getElementById('shelfCount');
+const wtrCountEl = document.getElementById('wtrCount');
 const emptyEl = document.getElementById('empty');
 const geekBtn = document.getElementById('geekBtn');
 const geekPanel = document.getElementById('geekPanel');
@@ -75,6 +85,30 @@ const tagsInputEl = document.getElementById('tagsInput');
 const tagsPillsEl = document.getElementById('tagsPills');
 const OPT_FIELDS_KEY = 'bookish_active_fields';
 const OPTIONAL_FIELDS = ['notes','rating','owned','tags'];
+
+// --- Reading status (PR: Reading Status) ---
+const READING_STATUS = { WANT_TO_READ: 'want_to_read', READING: 'reading', READ: 'read' };
+const TAB_KEY = 'bookish_active_tab';
+function normalizeReadingStatus(e) {
+  const s = e?.readingStatus || e?.status;
+  if (s === READING_STATUS.WANT_TO_READ || s === READING_STATUS.READING || s === READING_STATUS.READ) return s;
+  return READING_STATUS.READ;
+}
+function getActiveTab() {
+  try { const t = localStorage.getItem(TAB_KEY); return (t === 'wtr') ? 'wtr' : 'shelf'; } catch { return 'shelf'; }
+}
+function setActiveTab(tab) { try { localStorage.setItem(TAB_KEY, tab === 'wtr' ? 'wtr' : 'shelf'); } catch {} }
+function showStatusToast(msg) {
+  const existing = document.getElementById('bookishStatusToast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = 'bookishStatusToast';
+  toast.className = 'toast status-toast';
+  toast.innerHTML = `<span class="toast-message">${escapeHtml(msg)}</span>`;
+  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9001;';
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 300); }, 2000);
+}
 
 function getActiveFields(){ try{ return JSON.parse(localStorage.getItem(OPT_FIELDS_KEY))||[]; }catch{ return []; } }
 function setActiveFields(list){ localStorage.setItem(OPT_FIELDS_KEY, JSON.stringify(list)); }
@@ -276,6 +310,8 @@ function openModal(entry){
   form.author.value=entry?entry.author:'';
   form.format.value=entry?mapFormat(entry.format):'print';
   form.dateRead.value=entry?entry.dateRead:new Date().toISOString().slice(0,10);
+  const statusSelect = form.readingStatus || form.querySelector('[name=readingStatus]');
+  if(statusSelect) statusSelect.value = entry ? normalizeReadingStatus(entry) : READING_STATUS.WANT_TO_READ;
   if(notesInput) notesInput.value = entry?.notes || '';
   initOptionalFields(entry);
   populateOptionalFields(entry);
@@ -301,12 +337,13 @@ function closeModal(){ modal.classList.remove('active'); const inner=modal.query
 function clearBooks(){ entries=[]; render(); }
 window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render };
 // Dirty tracking helpers
-function currentFormState(){ return JSON.stringify({
+function currentFormState(){ const rs = form.readingStatus || form.querySelector('[name=readingStatus]'); return JSON.stringify({
   prior: form.priorTxid.value||'',
   title: form.title.value.trim(),
   author: form.author.value.trim(),
   format: form.format.value,
   dateRead: form.dateRead.value,
+  readingStatus: rs ? rs.value : READING_STATUS.WANT_TO_READ,
   cover: coverPreview.dataset.b64||'',
   notes: (notesInput?.value||'').trim(),
   rating: ratingInput?.value||'',
@@ -530,14 +567,20 @@ function generatedCoverColor(title){
 // --- Render ---
 function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false; const key=entry.txid||entry.id||''; const el=key?document.querySelector('.card[data-txid="'+key+'"]'):null; if(el){ el.classList.add('deleting'); el.style.pointerEvents='none'; el.style.opacity='0.35'; } }
 
-/** Build inner HTML for a single book card */
-function buildCardHTML(e){
+/** Build inner HTML for a single book card. ctx: 'reading' | 'shelf' | 'wtr' */
+function buildCardHTML(e, ctx){
   const dotClass = (!e.txid) ? 'local' : (e.onArweave ? 'arweave' : 'irys');
   const dotTitle = (!e.txid) ? 'Local only' : (e.onArweave ? 'Saved to Arweave' : 'Saved to Irys \u2014 settling to Arweave\u2026');
   const dateDisp=formatDisplayDate(e.dateRead);
   const notesSnippet = e.notes ? `<p class="card-notes">${escapeHtml(e.notes)}</p>` : '';
   const metaStrip = buildCardMetadata(e);
   const coverDataUrl = e.coverImage ? `data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}` : '';
+  const rs = normalizeReadingStatus(e);
+  let actionBtn = '';
+  if (ctx === 'reading') actionBtn = `<button type="button" class="card-action-btn finished-btn" data-txid="${e.txid||e.id||''}" onclick="event.stopPropagation()">Finished ✓</button>`;
+  else if (ctx === 'wtr') actionBtn = `<button type="button" class="card-action-btn start-btn" data-txid="${e.txid||e.id||''}" onclick="event.stopPropagation()">Start Reading</button>`;
+  const readingLabel = (ctx === 'reading') ? '<span class="card-reading-label">◐ Reading</span>' : '';
+  const showDate = (ctx !== 'wtr') && dateDisp;
   return `
       <div class="status-dot ${dotClass}" data-tip="${dotTitle}"></div>
       <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
@@ -545,8 +588,9 @@ function buildCardHTML(e){
         <p class="title">${e.title||'<i>Untitled</i>'}</p>
         <p class="author">${e.author||''}</p>
         ${metaStrip}
-        <div class="details">${dateDisp ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
+        <div class="details">${readingLabel}${showDate ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
         ${notesSnippet}
+        ${actionBtn}
       </div>`;
 }
 
@@ -570,7 +614,7 @@ function buildCardMetadata(e){
 
 /** Quick fingerprint for change detection — avoids unnecessary innerHTML rewrites */
 function entryFingerprint(e){
-  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.notes||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e.onArweave?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.status||'')+'\t'+(e.rating||'')+'\t'+(e.owned?'1':'0')+'\t'+(e.tags||'');
+  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.notes||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e.onArweave?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'')+'\t'+(e.owned?'1':'0')+'\t'+(e.tags||'');
 }
 
 function render(){
@@ -601,7 +645,11 @@ function render(){
       if(illustration) illustration.textContent = '\uD83D\uDCDA'; // 📚
     }
 
-    if(cardsEl.children.length > 0) cardsEl.replaceChildren();
+    if(cardsEl?.children.length > 0) cardsEl.replaceChildren();
+    if(cardsWtrEl?.children.length > 0) cardsWtrEl.replaceChildren();
+    if(currentlyReadingSection) currentlyReadingSection.style.display='none';
+    if(tabBar) tabBar.style.display='none';
+    if(tabContent) tabContent.style.display='none';
     emptyEl.style.display='block';
     hideAccountNudge();
     return;
@@ -615,67 +663,130 @@ function render(){
     showAccountNudge();
   }
 
-  // --- Keyed DOM reconciliation (avoids full clear → rebuild flicker) ---
+  // --- Split by reading status ---
+  const readingList = visible.filter(e => normalizeReadingStatus(e) === READING_STATUS.READING);
+  const readList = visible.filter(e => normalizeReadingStatus(e) === READING_STATUS.READ);
+  const wantList = visible.filter(e => normalizeReadingStatus(e) === READING_STATUS.WANT_TO_READ);
 
-  // Map existing DOM cards by their key
-  const existingMap = new Map();
-  for(const el of [...cardsEl.children]){
-    if(el.dataset && el.dataset.txid) existingMap.set(el.dataset.txid, el);
+  // Sort: reading = most recently started; read = most recently read; want = most recently added
+  readingList.sort((a,b)=> (b.readingStartedAt||b.createdAt||0) - (a.readingStartedAt||a.createdAt||0));
+  readList.sort((a,b)=>{ const da=a.dateRead||''; const db=b.dateRead||''; if(da!==db) return db.localeCompare(da); return (b.createdAt||0)-(a.createdAt||0); });
+  wantList.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+
+  // Show layout sections
+  if(currentlyReadingSection) currentlyReadingSection.style.display='block';
+  if(tabBar) tabBar.style.display='flex';
+  if(tabContent) tabContent.style.display='block';
+
+  // Currently Reading section
+  if(currentlyReadingRow && currentlyReadingEmpty){
+    if(readingList.length){
+      currentlyReadingEmpty.style.display='none';
+      currentlyReadingRow.style.display='flex';
+      currentlyReadingRow.replaceChildren();
+      for(const e of readingList){
+        const key = e.txid||e.id||'';
+        const card = document.createElement('div');
+        const rawFmt=(e.format||'').toLowerCase();
+        card.className='card card-currently-reading'+(e._deleting?' deleting':'');
+        card.dataset.txid=key;
+        card.dataset.fmt=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
+        card.innerHTML=buildCardHTML(e,'reading');
+        if(!e._deleting){ card.onclick=()=>openModal(e); }
+        currentlyReadingRow.appendChild(card);
+        const finishedBtn = card.querySelector('.finished-btn');
+        if(finishedBtn) finishedBtn.addEventListener('click',(ev)=>{ ev.stopPropagation(); changeReadingStatus(e,READING_STATUS.READ); });
+      }
+    } else {
+      currentlyReadingRow.style.display='none';
+      currentlyReadingEmpty.style.display='block';
+      const wtrCount = wantList.length;
+      currentlyReadingEmpty.textContent = wtrCount ? 'Nothing right now. Pick something from your Want to Read list?' : 'Nothing right now.';
+    }
   }
 
+  // Tab counts
+  if(shelfCountEl) shelfCountEl.textContent = readList.length;
+  if(wtrCountEl) wtrCountEl.textContent = wantList.length;
+
+  // Tab visibility
+  const activeTab = getActiveTab();
+  if(tabMyShelf) tabMyShelf.classList.toggle('active', activeTab==='shelf');
+  if(tabWantToRead) tabWantToRead.classList.toggle('active', activeTab==='wtr');
+  if(cardsEl) cardsEl.style.display = activeTab==='shelf' ? 'grid' : 'none';
+  if(cardsWtrEl) cardsWtrEl.style.display = activeTab==='wtr' ? 'grid' : 'none';
+
+  // Render My Shelf (read) grid
+  renderCardGrid(cardsEl, readList, 'shelf');
+
+  // Render Want to Read grid
+  renderCardGrid(cardsWtrEl, wantList, 'wtr');
+
+  setTimeout(updateBookDots, 0);
+}
+
+function renderCardGrid(container, list, ctx){
+  if(!container) return;
+  const existingMap = new Map();
+  for(const el of [...container.children]){
+    if(el.dataset?.txid) existingMap.set(el.dataset.txid, el);
+  }
   const desiredKeys = new Set();
   const orderedCards = [];
-
-  for(const e of visible){
-    const key = e.txid || e.id || '';
+  for(const e of list){
+    const key = e.txid||e.id||'';
     desiredKeys.add(key);
     const fp = entryFingerprint(e);
-
     let card = existingMap.get(key);
+    const rawFmt=(e.format||'').toLowerCase();
+    const fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
     if(card){
-      // Reuse existing card — only update innerHTML if data changed
       if(card.dataset._fp !== fp){
-        const rawFmt=(e.format||'').toLowerCase();
-        const fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
-        card.className='card'+(e._deleting?' deleting':'');
+        card.className='card'+(ctx==='wtr'?' card-wtr':'')+(e._deleting?' deleting':'');
         card.dataset.fmt=fmtVariant;
         card.dataset.format=rawFmt;
-        card.innerHTML=buildCardHTML(e);
+        card.innerHTML=buildCardHTML(e,ctx);
         card.dataset._fp=fp;
         if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
         else { card.style.pointerEvents=''; card.style.opacity=''; }
       }
     } else {
-      // Create new card element
       card=document.createElement('div');
-      const rawFmt=(e.format||'').toLowerCase();
-      const fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
-      card.className='card'+(e._deleting?' deleting':'');
+      card.className='card'+(ctx==='wtr'?' card-wtr':'')+(e._deleting?' deleting':'');
       card.dataset.txid=key;
       card.dataset.fmt=fmtVariant;
       card.dataset.format=rawFmt;
-      card.innerHTML=buildCardHTML(e);
+      card.innerHTML=buildCardHTML(e,ctx);
       card.dataset._fp=fp;
       if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
     }
     card.onclick=()=>{ if(!e._deleting) openModal(e); };
+    if(ctx==='wtr'){
+      const startBtn = card.querySelector('.start-btn');
+      if(startBtn) startBtn.addEventListener('click',(ev)=>{ ev.stopPropagation(); changeReadingStatus(e,READING_STATUS.READING); });
+    }
     orderedCards.push(card);
   }
-
-  // Remove stale cards (entries that are gone)
   for(const [key, el] of existingMap){
     if(!desiredKeys.has(key)) el.remove();
   }
-
-  // Reorder cards to match desired order (minimal DOM moves)
-  for(let i=0; i<orderedCards.length; i++){
-    if(cardsEl.children[i] !== orderedCards[i]){
-      cardsEl.insertBefore(orderedCards[i], cardsEl.children[i] || null);
+  for(let i=0;i<orderedCards.length;i++){
+    if(container.children[i]!==orderedCards[i]){
+      container.insertBefore(orderedCards[i], container.children[i]||null);
     }
   }
+}
 
-  // Update book status dots
-  setTimeout(updateBookDots, 0);
+async function changeReadingStatus(entry, newStatus){
+  const priorTxid = entry.txid||entry.id;
+  if(!priorTxid) return;
+  const payload = { ...entry, readingStatus: newStatus };
+  if(newStatus===READING_STATUS.READING) payload.readingStartedAt = Date.now();
+  delete payload.txid; delete payload.id; delete payload.status; delete payload.pending;
+  if(entry.bookId) payload.bookId = entry.bookId;
+  const msg = newStatus===READING_STATUS.READ ? 'Marked as Read' : 'Moved to Currently Reading';
+  showStatusToast(msg);
+  await editServerless(priorTxid, payload).catch(()=>{ walletError='Save failed'; uiStatusManager.refresh(); });
 }
 
 /**
@@ -684,7 +795,8 @@ function render(){
  */
 async function updateBookDots(){
   for(const e of entries){
-    const card = cardsEl.querySelector(`.card[data-txid="${e.txid||e.id||''}"]`);
+    const key = e.txid||e.id||'';
+    const card = document.querySelector(`.card[data-txid="${key}"]`);
     if(!card) continue;
     const dot = card.querySelector('.status-dot');
     if(!dot) continue;
@@ -1197,6 +1309,10 @@ deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value
 // header refresh removed; app auto-syncs
 
 newBtn?.addEventListener('click', ()=>openModal(null));
+
+// Tab bar: switch between My Shelf and Want to Read
+tabMyShelf?.addEventListener('click', ()=>{ setActiveTab('shelf'); render(); });
+tabWantToRead?.addEventListener('click', ()=>{ setActiveTab('wtr'); render(); });
 
 // Phase 2: First-run experience event handlers
 emptyAddBookBtn?.addEventListener('click', ()=>openModal(null));
