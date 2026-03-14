@@ -10,9 +10,21 @@
     #app{width:100%}
     h1{font-size:1.5rem;margin:0 0 8px;text-align:center}
     .sub{text-align:center;color:#64748b;font-size:.9rem;line-height:1.5;margin-bottom:24px}
+    .tabs{display:flex;gap:0;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid #cbd5e1}
+    .tab{flex:1;padding:10px 16px;font-size:.875rem;font-weight:500;border:none;cursor:pointer;background:#f1f5f9;color:#64748b;transition:background .15s,color .15s}
+    .tab.active{background:#2563eb;color:#fff}
+    .tab:not(.active):hover{background:#e2e8f0}
     label{display:block;font-size:.875rem;font-weight:500;margin-bottom:6px}
+    input[type="email"],input[type="password"],input[type="text"]{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:1rem;font-family:inherit}
+    input:focus{outline:2px solid #2563eb;outline-offset:2px;border-color:#2563eb}
+    .field{margin-bottom:12px}
+    .pwd-wrap{position:relative}
+    .pwd-wrap input{padding-right:44px}
+    .pwd-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;padding:4px 6px;color:#64748b;border-radius:4px}
+    .pwd-toggle:hover{background:#f1f5f9}
     #seed{width:100%;min-height:80px;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:1rem;resize:vertical;font-family:inherit}
     #seed:focus{outline:2px solid #2563eb;outline-offset:2px;border-color:#2563eb}
+    .panel{min-height:120px}
     .secure{font-size:.8rem;color:#64748b;margin:8px 0 16px;display:flex;align-items:flex-start;gap:6px}
     .secure::before{content:'🔒';flex-shrink:0}
     .btn{width:100%;padding:12px 24px;font-size:1rem;font-weight:600;border:none;border-radius:8px;cursor:pointer;background:#2563eb;color:#fff}
@@ -29,9 +41,32 @@
   <div id="app">
     <h1>📚 Bookish Data Export</h1>
     <p class="sub">This page exists permanently on Arweave. Even if Bookish disappears, your data is still yours.</p>
-    <label for="seed">Enter your 12-word seed phrase:</label>
-    <textarea id="seed" placeholder="word word word ..." autocomplete="off"></textarea>
-    <p class="secure">Your seed phrase never leaves your browser. All processing happens locally.</p>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="email">Email &amp; Password</button>
+      <button class="tab" data-tab="seed">Seed Phrase</button>
+    </div>
+
+    <div id="emailPanel" class="panel">
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="pwd-wrap">
+          <input type="password" id="password" placeholder="Your password" autocomplete="current-password">
+          <button type="button" id="pwdToggle" class="pwd-toggle" aria-label="Show password">👁</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="seedPanel" class="panel" style="display:none">
+      <label for="seed">Enter your 12-word seed phrase:</label>
+      <textarea id="seed" placeholder="word word word ..." autocomplete="off"></textarea>
+    </div>
+
+    <p class="secure" id="secureMsg">Your credentials never leave your browser. All processing happens locally.</p>
     <button id="exportBtn" class="btn">Export My Books</button>
     <div id="status">Status: Ready</div>
     <div class="footer">
@@ -2128,28 +2163,62 @@ aes-js/lib.esm/aes.js:
 */
 
 (function(){
-  const wallet = typeof BookishExportWallet !== 'undefined' ? BookishExportWallet : {};
-  const validateSeed = wallet.validateSeed || (()=>false);
-  const deriveAddress = wallet.deriveAddress || (()=>'');
-  const deriveEncryptionKey = wallet.deriveEncryptionKey || (async()=>new Uint8Array(32));
+  var wallet = typeof BookishExportWallet !== 'undefined' ? BookishExportWallet : {};
+  var validateSeed = wallet.validateSeed || (function(){return false;});
+  var deriveAddress = wallet.deriveAddress || (function(){return '';});
+  var deriveEncryptionKey = wallet.deriveEncryptionKey || (async function(){return new Uint8Array(32);});
 
-  const statusEl = document.getElementById('status');
-  const exportBtn = document.getElementById('exportBtn');
-  const seedInput = document.getElementById('seed');
+  var statusEl = document.getElementById('status');
+  var exportBtn = document.getElementById('exportBtn');
+  var seedInput = document.getElementById('seed');
+  var emailInput = document.getElementById('email');
+  var passwordInput = document.getElementById('password');
+  var pwdToggle = document.getElementById('pwdToggle');
+  var emailPanel = document.getElementById('emailPanel');
+  var seedPanel = document.getElementById('seedPanel');
+  var secureMsg = document.getElementById('secureMsg');
+  var tabs = document.querySelectorAll('.tab');
+  var activeTab = 'email';
 
+  // --- Tab switching ---
+  tabs.forEach(function(tab){
+    tab.addEventListener('click', function(){
+      activeTab = tab.getAttribute('data-tab');
+      tabs.forEach(function(t){ t.classList.remove('active'); });
+      tab.classList.add('active');
+      emailPanel.style.display = activeTab === 'email' ? '' : 'none';
+      seedPanel.style.display = activeTab === 'seed' ? '' : 'none';
+      secureMsg.textContent = activeTab === 'email'
+        ? 'Your credentials never leave your browser. All processing happens locally.'
+        : 'Your seed phrase never leaves your browser. All processing happens locally.';
+    });
+  });
+
+  // --- Password visibility toggle ---
+  pwdToggle.addEventListener('click', function(){
+    var isPassword = passwordInput.type === 'password';
+    passwordInput.type = isPassword ? 'text' : 'password';
+    pwdToggle.textContent = isPassword ? '🙈' : '👁';
+    pwdToggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+  });
+
+  // --- Enter key submission ---
+  emailInput.addEventListener('keydown', function(e){ if(e.key==='Enter') exportBooks(); });
+  passwordInput.addEventListener('keydown', function(e){ if(e.key==='Enter') exportBooks(); });
+
+  // --- Helpers ---
   function setStatus(msg, isError){
     statusEl.textContent = msg;
     statusEl.className = isError ? 'error' : '';
   }
-
   function escapeCSV(str){
     if(str==null||str==='')return'';
-    const s=String(str);
+    var s=String(str);
     if(s.includes(',')||s.includes('"')||s.includes('\n'))return'"'+s.replace(/"/g,'""')+'"';
     return s;
   }
   function statusToGoodreads(s){
-    const st=(s||'').toLowerCase();
+    var st=(s||'').toLowerCase();
     if(st==='want_to_read')return'to-read';
     if(st==='reading')return'currently-reading';
     if(st==='read')return'read';
@@ -2157,129 +2226,266 @@ aes-js/lib.esm/aes.js:
   }
   function formatDateAdded(ts){
     if(!ts)return'';
-    const d=new Date(ts);
+    var d=new Date(ts);
     if(isNaN(d.getTime()))return'';
     return d.toISOString().slice(0,10);
   }
 
-  async function fetchBytes(txid){
-    const rI=await fetch('https://gateway.irys.xyz/'+txid);
-    if(rI.ok)return new Uint8Array(await rI.arrayBuffer());
-    const rA=await fetch('https://arweave.net/'+txid);
-    if(rA.ok)return new Uint8Array(await rA.arrayBuffer());
-    throw new Error('Failed to fetch '+txid);
-  }
-
-  function base64ToBytes(b64){
-    return Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
-  }
+  // --- Crypto helpers ---
   async function importAesKey(keyBytes){
     return crypto.subtle.importKey('raw',keyBytes,{name:'AES-GCM'},false,['decrypt']);
   }
   async function decryptBytes(aesKey,encryptedBytes){
-    const iv=encryptedBytes.slice(0,12);
-    const tag=encryptedBytes.slice(12,28);
-    const ct=encryptedBytes.slice(28);
-    const joined=new Uint8Array(ct.length+tag.length);
+    var iv=encryptedBytes.slice(0,12);
+    var tag=encryptedBytes.slice(12,28);
+    var ct=encryptedBytes.slice(28);
+    var joined=new Uint8Array(ct.length+tag.length);
     joined.set(ct,0);
     joined.set(tag,ct.length);
-    return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv},aesKey,joined));
+    return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:iv},aesKey,joined));
   }
 
+  // --- PBKDF2 credential derivation (mirrors credential_core.js) ---
+  async function deriveCredentialKeys(email, password){
+    var normalizedEmail = email.trim().toLowerCase();
+    var encoder = new TextEncoder();
+
+    var saltInput = encoder.encode(normalizedEmail + 'bookish-auth-v1');
+    var salt = new Uint8Array(await crypto.subtle.digest('SHA-256', saltInput));
+
+    var passwordKey = await crypto.subtle.importKey(
+      'raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']
+    );
+    var masterKey = new Uint8Array(await crypto.subtle.deriveBits(
+      {name:'PBKDF2', salt:salt, iterations:600000, hash:'SHA-256'},
+      passwordKey, 256
+    ));
+
+    var lookupDomain = encoder.encode('bookish-lookup-v1');
+    var lookupInput = new Uint8Array(masterKey.length + lookupDomain.length);
+    lookupInput.set(masterKey, 0);
+    lookupInput.set(lookupDomain, masterKey.length);
+    var lookupHash = new Uint8Array(await crypto.subtle.digest('SHA-256', lookupInput));
+    var lookupKey = Array.from(lookupHash).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+
+    var encryptDomain = encoder.encode('bookish-encrypt-v1');
+    var encryptInput = new Uint8Array(masterKey.length + encryptDomain.length);
+    encryptInput.set(masterKey, 0);
+    encryptInput.set(encryptDomain, masterKey.length);
+    var encryptHash = new Uint8Array(await crypto.subtle.digest('SHA-256', encryptInput));
+    var encryptionKey = await crypto.subtle.importKey(
+      'raw', encryptHash, {name:'AES-GCM'}, false, ['decrypt']
+    );
+
+    return {lookupKey:lookupKey, encryptionKey:encryptionKey};
+  }
+
+  // --- Network helpers ---
+  var IRYS_GRAPHQL = 'https://node1.irys.xyz/graphql';
+  var ARWEAVE_GRAPHQL = 'https://arweave.net/graphql';
+
+  async function fetchBytes(txid){
+    var rI=await fetch('https://gateway.irys.xyz/'+txid);
+    if(rI.ok)return new Uint8Array(await rI.arrayBuffer());
+    var rA=await fetch('https://arweave.net/'+txid);
+    if(rA.ok)return new Uint8Array(await rA.arrayBuffer());
+    throw new Error('Failed to fetch '+txid);
+  }
+
+  async function gqlQuery(url, query){
+    var res = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query:query})
+    });
+    if(!res.ok) return null;
+    var j = await res.json();
+    return j.data?.transactions?.edges || [];
+  }
+
+  // --- Credential mapping lookup (mirrors credential_mapping.js) ---
+  async function findCredentialMapping(lookupKey){
+    var q = 'query{transactions(tags:[{name:"App-Name",values:["Bookish"]},{name:"Type",values:["credential-mapping"]},{name:"Credential-Lookup-Key",values:["'+lookupKey+'"]}],first:1){edges{node{id}}}}';
+
+    var edges = await gqlQuery(IRYS_GRAPHQL, q);
+    if(edges && edges.length > 0) return edges[0].node.id;
+
+    edges = await gqlQuery(ARWEAVE_GRAPHQL, q);
+    if(edges && edges.length > 0) return edges[0].node.id;
+
+    return null;
+  }
+
+  // --- Arweave book query (fixed: was returning 400 due to extra closing brace) ---
   async function queryArweave(address){
-    const pub=address.toLowerCase();
-    const tags=[
+    var pub=address.toLowerCase();
+    var tags=[
       {name:'App-Name',values:['bookish']},
       {name:'Schema-Name',values:['reading']},
       {name:'Visibility',values:['private']},
       {name:'Pub-Addr',values:[pub]}
     ];
-    const q=`query($after:String,$first:Int,$tags:[TagFilter!]){
-      transactions(after:$after,first:$first,sort:HEIGHT_DESC,tags:$tags){pageInfo{hasNextPage}edges{cursor node{id tags{name value}}}}}
-    }`;
-    const all=[];
-    let cursor=null;
-    for(;;){
-      const res=await fetch('https://arweave.net/graphql',{
+
+    var all=[];
+
+    // Try Irys first (instant indexing for recent uploads)
+    try{
+      var irysQ='query($first:Int,$tags:[TagFilter!]){transactions(first:$first,tags:$tags){edges{cursor node{id tags{name value}}}}}';
+      var irysRes=await fetch(IRYS_GRAPHQL,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({query:q,variables:{after:cursor,first:100,tags}})
+        body:JSON.stringify({query:irysQ,variables:{first:100,tags:tags}})
       });
-      const j=await res.json();
-      if(!j?.data?.transactions)break;
-      const edges=j.data.transactions.edges||[];
-      for(const e of edges)all.push(e);
-      if(!j.data.transactions.pageInfo?.hasNextPage)break;
-      cursor=edges.length?edges[edges.length-1].cursor:null;
-      if(!cursor)break;
+      if(irysRes.ok){
+        var irysJ=await irysRes.json();
+        var irysEdges=irysJ.data?.transactions?.edges||[];
+        for(var ie=0;ie<irysEdges.length;ie++) all.push(irysEdges[ie]);
+      }
+    }catch(e){}
+
+    // Then query arweave.net with pagination (has older/settled data)
+    var q='query($after:String,$first:Int,$tags:[TagFilter!]){transactions(after:$after,first:$first,sort:HEIGHT_DESC,tags:$tags){pageInfo{hasNextPage}edges{cursor node{id tags{name value}}}}}';
+    var cursor=null;
+    for(;;){
+      try{
+        var res=await fetch(ARWEAVE_GRAPHQL,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({query:q,variables:{after:cursor,first:100,tags:tags}})
+        });
+        var j=await res.json();
+        if(!j?.data?.transactions)break;
+        var edges=j.data.transactions.edges||[];
+        for(var ei=0;ei<edges.length;ei++) all.push(edges[ei]);
+        if(!j.data.transactions.pageInfo?.hasNextPage)break;
+        cursor=edges.length?edges[edges.length-1].cursor:null;
+        if(!cursor)break;
+      }catch(e){break;}
     }
-    function isTomb(e){return e.node.tags?.some(t=>t.name==='Op'&&t.value==='tombstone');}
-    function refOf(e){return e.node.tags?.find(t=>t.name==='Ref')?.value;}
-    const tombstones=all.filter(isTomb).map(e=>({txid:e.node.id,ref:refOf(e)}));
-    const superseded=new Set(all.filter(e=>e.node.tags?.some(t=>t.name==='Prev')).map(e=>e.node.tags.find(t=>t.name==='Prev')?.value).filter(Boolean));
-    const tombRefs=new Set(tombstones.map(t=>t.ref).filter(Boolean));
-    const live=all.filter(e=>{
+
+    // Dedup by txid (Irys + arweave.net may overlap)
+    var seen=new Set();
+    var deduped=[];
+    for(var di=0;di<all.length;di++){
+      var id=all[di].node.id;
+      if(!seen.has(id)){seen.add(id);deduped.push(all[di]);}
+    }
+
+    function isTomb(e){return e.node.tags?.some(function(t){return t.name==='Op'&&t.value==='tombstone';});}
+    function refOf(e){var t=e.node.tags?.find(function(t){return t.name==='Ref';});return t?t.value:undefined;}
+    var tombstones=deduped.filter(isTomb);
+    var superseded=new Set();
+    for(var si=0;si<deduped.length;si++){
+      var prevTag=deduped[si].node.tags?.find(function(t){return t.name==='Prev';});
+      if(prevTag&&prevTag.value) superseded.add(prevTag.value);
+    }
+    var tombRefs=new Set(tombstones.map(function(t){return refOf(t);}).filter(Boolean));
+    var live=deduped.filter(function(e){
       if(isTomb(e))return false;
       if(tombRefs.has(e.node.id))return false;
       if(superseded.has(e.node.id))return false;
       return true;
     });
-    return live.map(e=>e.node.id);
+    return live.map(function(e){return e.node.id;});
   }
 
+  // --- Resolve seed from email+password ---
+  async function resolveSeedFromCredentials(email, password){
+    setStatus('Deriving keys...');
+    var keys = await deriveCredentialKeys(email, password);
+
+    setStatus('Looking up account...');
+    var txId = await findCredentialMapping(keys.lookupKey);
+    if(!txId) throw new Error('No account found for these credentials. Double-check your email and password.');
+
+    setStatus('Downloading account data...');
+    var encryptedBytes = await fetchBytes(txId);
+
+    setStatus('Decrypting account...');
+    var ptBytes = await decryptBytes(keys.encryptionKey, encryptedBytes);
+    var payload = JSON.parse(new TextDecoder().decode(ptBytes));
+    if(!payload.seed || typeof payload.seed !== 'string') throw new Error('Could not decrypt account data. Please verify your credentials.');
+    return payload.seed;
+  }
+
+  // --- CSV generation + download ---
+  function generateAndDownloadCSV(books){
+    var headers=['Title','Author','ISBN','Date Added','Date Read','Rating','Status','Notes'];
+    var rows=books.map(function(e){
+      var status=e.readingStatus||e.status||'';
+      var dateRead=e.dateRead||'';
+      var dateAdded=formatDateAdded(e.createdAt||e.created);
+      var rating=(e.rating>=1&&e.rating<=5)?String(e.rating):'';
+      return[
+        escapeCSV(e.title||''),
+        escapeCSV(e.author||''),
+        escapeCSV(e.isbn||e.isbn13||''),
+        dateAdded,
+        dateRead,
+        rating,
+        statusToGoodreads(status),
+        escapeCSV(e.notes||'')
+      ];
+    });
+    var csv=[headers.join(',')].concat(rows.map(function(r){return r.join(',');})).join('\n');
+    var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;
+    a.download='bookish-export.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    return books.length;
+  }
+
+  // --- Export flow (shared tail: seed -> address -> books -> CSV) ---
+  async function exportBooksFromSeed(seed){
+    setStatus('Deriving wallet...');
+    var address=deriveAddress(seed);
+    setStatus('Deriving encryption key...');
+    var keyBytes=await deriveEncryptionKey(seed);
+    var aesKey=await importAesKey(keyBytes);
+
+    setStatus('Searching Arweave for your books...');
+    var txIds=await queryArweave(address);
+    if(txIds.length===0){setStatus('No books found for this account.',true);return;}
+
+    var books=[];
+    for(var i=0;i<txIds.length;i++){
+      setStatus('Decrypting '+(i+1)+' / '+txIds.length+'...');
+      try{
+        var bytes=await fetchBytes(txIds[i]);
+        var pt=await decryptBytes(aesKey,bytes);
+        var obj=JSON.parse(new TextDecoder().decode(pt));
+        if(obj&&obj.title)books.push(obj);
+      }catch(err){}
+    }
+
+    if(books.length===0){setStatus('Found entries but could not decrypt any books.',true);return;}
+    var count=generateAndDownloadCSV(books);
+    setStatus('Exported '+count+' books! Download started.');
+    statusEl.classList.add('success');
+  }
+
+  // --- Main export handler ---
   async function exportBooks(){
-    const raw=seedInput.value;
-    if(!raw.trim()){setStatus('Please enter your seed phrase.',true);return;}
     exportBtn.disabled=true;
-    setStatus('Validating...');
+    setStatus('Starting...');
     try{
-      if(!validateSeed(raw)){setStatus('Invalid seed phrase. Please enter your 12-word recovery phrase.',true);return;}
-      setStatus('Deriving wallet...');
-      const address=deriveAddress(raw);
-      setStatus('Deriving key...');
-      const keyBytes=await deriveEncryptionKey(raw);
-      const aesKey=await importAesKey(keyBytes);
-      setStatus('Searching Arweave...');
-      const txIds=await queryArweave(address);
-      if(txIds.length===0){setStatus('No books found for this account.',true);return;}
-      setStatus('Decrypting '+txIds.length+' books...');
-      const books=[];
-      for(let i=0;i<txIds.length;i++){
-        setStatus('Decrypting '+(i+1)+' / '+txIds.length+'...');
-        try{
-          const bytes=await fetchBytes(txIds[i]);
-          const pt=await decryptBytes(aesKey,bytes);
-          const obj=JSON.parse(new TextDecoder().decode(pt));
-          if(obj&&obj.title)books.push(obj);
-        }catch(err){}
+      if(activeTab==='email'){
+        var email=emailInput.value.trim();
+        var password=passwordInput.value;
+        if(!email){setStatus('Please enter your email.',true);return;}
+        if(!password){setStatus('Please enter your password.',true);return;}
+        var seed=await resolveSeedFromCredentials(email, password);
+        setStatus('Found account. Searching for books...');
+        await exportBooksFromSeed(seed);
+      }else{
+        var raw=seedInput.value;
+        if(!raw.trim()){setStatus('Please enter your seed phrase.',true);return;}
+        if(!validateSeed(raw)){setStatus('Invalid seed phrase. Please enter your 12-word recovery phrase.',true);return;}
+        await exportBooksFromSeed(raw);
       }
-      const headers=['Title','Author','ISBN','Date Added','Date Read','Rating','Status','Notes'];
-      const rows=books.map(e=>{
-        const status=e.readingStatus||e.status||'';
-        const dateRead=e.dateRead||'';
-        const dateAdded=formatDateAdded(e.createdAt||e.created);
-        const rating=(e.rating>=1&&e.rating<=5)?String(e.rating):'';
-        return[
-          escapeCSV(e.title||''),
-          escapeCSV(e.author||''),
-          escapeCSV(e.isbn||e.isbn13||''),
-          dateAdded,
-          dateRead,
-          rating,
-          statusToGoodreads(status),
-          escapeCSV(e.notes||'')
-        ];
-      });
-      const csv=[headers.join(','),...rows.map(r=>r.join(','))].join('\n');
-      const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');
-      a.href=url;
-      a.download='bookish-export.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-      setStatus('Exported '+books.length+' books! Download started.');
-      statusEl.classList.add('success');
     }catch(err){
       setStatus('Error: '+(err?.message||String(err)),true);
     }finally{
