@@ -42,12 +42,22 @@ export async function searchBookEntries(address, { owner = null, limit = 100, cu
     ? { after: cursor ?? null, first: limit, tags, owners: [owner] }
     : { after: cursor ?? null, first: limit, tags };
 
+  console.log('[Bookish] searchBookEntries address:', pub, 'owner:', owner, 'tags:', tags.length);
+
   const arweavePromise = fetch(ARWEAVE_GRAPHQL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query: q, variables })
   })
-    .then(r => r.json())
+    .then(r => {
+      if (!r.ok) console.warn('[Bookish] Arweave HTTP', r.status);
+      return r.json();
+    })
+    .then(j => {
+      if (j?.errors) console.warn('[Bookish] Arweave GraphQL errors:', j.errors);
+      if (!j?.data) console.warn('[Bookish] Arweave response has no data field, keys:', Object.keys(j || {}));
+      return j;
+    })
     .catch(err => { console.warn('[Bookish] Arweave book search failed:', err.message); return null; });
 
   // Irys supplemental — first page only, uses inline tags (Irys syntax differs from arweave.net)
@@ -56,13 +66,14 @@ export async function searchBookEntries(address, { owner = null, limit = 100, cu
   if (!cursor && pub) {
     const irysTagsStr = tags.map(t => `{name:"${t.name}",values:${JSON.stringify(t.values)}}`).join(',');
     const irysQ = `{transactions(tags:[${irysTagsStr}],first:${limit}){edges{node{id tags{name value}}}}}`;
+    console.log('[Bookish] Irys query:', irysQ.slice(0, 120) + '...');
     irysNode1Promise = fetch(IRYS_NODE1_GRAPHQL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: irysQ }) })
-      .then(r => r.json())
-      .then(j => { if (j?.errors) console.warn('[Bookish] Irys node1 errors:', j.errors); return j; })
+      .then(r => { if (!r.ok) console.warn('[Bookish] Irys node1 HTTP', r.status); return r.json(); })
+      .then(j => { if (j?.errors) console.warn('[Bookish] Irys node1 errors:', j.errors); console.log('[Bookish] Irys node1 edges:', j?.data?.transactions?.edges?.length ?? 'no data'); return j; })
       .catch(err => { console.warn('[Bookish] Irys node1 query failed:', err.message); return null; });
     irysNode2Promise = fetch(IRYS_NODE2_GRAPHQL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: irysQ }) })
-      .then(r => r.json())
-      .then(j => { if (j?.errors) console.warn('[Bookish] Irys node2 errors:', j.errors); return j; })
+      .then(r => { if (!r.ok) console.warn('[Bookish] Irys node2 HTTP', r.status); return r.json(); })
+      .then(j => { if (j?.errors) console.warn('[Bookish] Irys node2 errors:', j.errors); console.log('[Bookish] Irys node2 edges:', j?.data?.transactions?.edges?.length ?? 'no data'); return j; })
       .catch(err => { console.warn('[Bookish] Irys node2 query failed:', err.message); return null; });
   }
 
