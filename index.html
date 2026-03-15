@@ -15,6 +15,7 @@
   <h1>Bookish</h1>
   <div style="display:flex;align-items:center;gap:10px;font-size:.65rem">
     <div id="status" style="display:none"></div>
+    <button id="wtrTrigger" class="wtr-trigger" style="display:none" title="Want to Read list"></button>
     <button id="installBtn" class="refresh-link" style="display:none" title="Install">Install</button>
     <button id="syncNowBtn" class="refresh-link" title="Sync now" style="display:none">Sync</button>
     <button id="accountBtn" class="refresh-link account-link" title="Account">Account</button>
@@ -54,6 +55,26 @@
   </div>
 </div>
 
+<!-- Want to Read drawer -->
+<div id="wtrOverlay" style="display:none">
+  <div class="wtr-backdrop" id="wtrBackdrop"></div>
+  <div class="wtr-drawer" id="wtrDrawer">
+    <div class="wtr-drawer-handle"></div>
+    <div class="wtr-header">
+      <h3 class="wtr-title">Want to Read</h3>
+      <button type="button" class="modal-close-btn" id="wtrClose" aria-label="Close">×</button>
+    </div>
+    <div id="wtrList" class="wtr-list"></div>
+    <div id="wtrEmpty" class="wtr-empty" style="display:none">
+      <p>When you hear about a book you want to read, add it here so you don't forget.</p>
+      <button type="button" class="btn secondary" id="wtrAddBtn">+ Add a Book</button>
+    </div>
+    <div class="wtr-footer">
+      <button type="button" class="wtr-footer-add" id="wtrFooterAdd">+ Add a book to read</button>
+    </div>
+  </div>
+</div>
+
 <div id="cards" class="cards"></div>
 <div id="empty" class="empty-state" style="display:none">
   <div class="empty-illustration">📚</div>
@@ -66,7 +87,7 @@
   <span class="toast-icon">🎉</span>
   <span class="toast-message">First book added! You're on your way.</span>
 </div>
-<footer>Bookish • Alpha • v0.1.74 • <a href="/forever.html">Data export</a></footer>
+<footer>Bookish • Alpha • v0.1.73</footer>
 </div>
 
 <!-- Notes expand overlay -->
@@ -85,6 +106,16 @@
 <div id="modal" class="modal">
   <div class="modal-inner">
     <button class="modal-close-btn" id="closeModal" aria-label="Close">×</button>
+    <div id="intentToggle" class="intent-toggle add-only" style="display:none">
+      <button type="button" class="intent-btn active" data-intent="want_to_read">Want to Read</button>
+      <button type="button" class="intent-btn" data-intent="read">Already Read</button>
+    </div>
+    <div id="statusPills" class="status-pills edit-only" style="display:none">
+      <button type="button" class="status-pill" data-status="want_to_read">Want to Read</button>
+      <button type="button" class="status-pill" data-status="reading">Reading</button>
+      <button type="button" class="status-pill" data-status="read">Read</button>
+    </div>
+    <input type="hidden" name="readingStatus" id="readingStatusInput" value="want_to_read"/>
     <div id="bookSearchUI">
       <h3>Add Book</h3>
       <input id="bookSearchInput" placeholder="Search by title, author, or ISBN…" autocomplete="off"/>
