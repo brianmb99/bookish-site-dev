@@ -131,14 +131,19 @@ async function findCredentialMappingTx(lookupKey) {
     }
   }
 
-  // 1. Try Irys first (always has latest data)
-  const irysResult = await queryEndpoint(IRYS_GRAPHQL, irysQuery, 'Irys');
-  if (irysResult) return irysResult;
+  // Query both concurrently — Irys has instant indexing so prefer it, but
+  // don't wait sequentially when Irys misses and Arweave might already have it
+  const [irysResult, arweaveResult] = await Promise.all([
+    queryEndpoint(IRYS_GRAPHQL, irysQuery, 'Irys'),
+    queryEndpoint(ARWEAVE_GRAPHQL, arweaveQuery, 'Arweave')
+  ]);
 
-  // 2. Fall back to Arweave (for older data or if Irys is down)
-  console.log('[Bookish:CredentialMapping] Not found on Irys, trying arweave.net...');
-  const arweaveResult = await queryEndpoint(ARWEAVE_GRAPHQL, arweaveQuery, 'Arweave');
-  return arweaveResult;
+  if (irysResult) return irysResult;
+  if (arweaveResult) {
+    console.log('[Bookish:CredentialMapping] Not found on Irys, using arweave.net result');
+    return arweaveResult;
+  }
+  return null;
 }
 
 /**
