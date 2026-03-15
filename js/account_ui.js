@@ -222,11 +222,17 @@ async function renderAccountModalContent(container) {
       }
       const isBackedUp = persistenceState === 'confirmed';
 
+      const displayNameSafe = (str) => (str || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
     container.innerHTML = `
       <h2>Your Account ${persistenceIndicator}</h2>
 
       <div class="account-info">
-        <div class="account-name">👤 ${displayName}</div>
+        <div class="account-name-row" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span>👤</span>
+          <span id="accountDisplayNameText">${displayNameSafe(displayName)}</span>
+          <button id="editDisplayNameBtn" type="button" aria-label="Edit name" style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px; font-size: 0.9rem;">✏️</button>
+        </div>
         ${accountEmail ? `
           <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px;">${accountEmail}</div>
         ` : ''}
@@ -244,6 +250,12 @@ async function renderAccountModalContent(container) {
           <button id="viewRecoveryBtn" style="background: transparent; border: none; color: #64748b; cursor: pointer; text-decoration: underline; font-size: 0.8rem; padding: 4px;">Recovery Phrase</button>
           <button id="logoutBtn" style="background: transparent; border: none; color: #64748b; cursor: pointer; text-decoration: underline; font-size: 0.8rem; padding: 4px;">Sign Out</button>
         </div>
+      </div>
+
+      <div class="account-data-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #334155;">
+        <h3 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #94a3b8;">Your Data</h3>
+        <button id="exportBooksBtn" type="button" class="btn secondary" style="width: 100%; margin-bottom: 8px;">📥 Export my books</button>
+        <p style="font-size: 0.75rem; color: #64748b; margin: 8px 0 0 0; line-height: 1.5;">Your books are stored locally and encrypted. Only you can access them.</p>
       </div>
     `;
 
@@ -263,6 +275,9 @@ async function renderAccountModalContent(container) {
       // DO NOT close account modal - open recovery phrase view on top
       handleViewSeed();
     });
+
+    setupDisplayNameEdit(displayName);
+    setupExportBooksBtn();
   } else {
     container.innerHTML = `
       <h2>Account</h2>
@@ -278,6 +293,12 @@ async function renderAccountModalContent(container) {
       <div class="auth-footer" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #334155;">
         <div>Already have an account? <button class="link-btn" id="loginBtn">Sign in</button></div>
       </div>
+
+      <div class="account-data-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #334155;">
+        <h3 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #94a3b8;">Your Data</h3>
+        <button id="exportBooksBtn" type="button" class="btn secondary" style="width: 100%; margin-bottom: 8px;">📥 Export my books</button>
+        <p style="font-size: 0.75rem; color: #64748b; margin: 8px 0 0 0; line-height: 1.5;">Export your local books as CSV. Works offline.</p>
+      </div>
     `;
 
     // Setup event listeners for logged-out state
@@ -290,6 +311,8 @@ async function renderAccountModalContent(container) {
       closeAccountModal();
       handleSignIn();
     });
+
+    setupExportBooksBtn();
   }
   } catch (error) {
     console.error('[Bookish:AccountUI] Error in renderAccountModalContent:', error);
@@ -1325,6 +1348,188 @@ async function runSignInFlow(email, password) {
 }
 
 /**
+ * Escape string for CSV (quotes around fields with comma, quote, or newline)
+ */
+function escapeCSV(str) {
+  if (str == null || str === '') return '';
+  const s = String(str);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+/**
+ * Map internal reading status to Goodreads Exclusive Shelf format
+ */
+function statusToGoodreads(s) {
+  const st = (s || '').toLowerCase();
+  if (st === 'want_to_read') return 'to-read';
+  if (st === 'reading') return 'currently-reading';
+  if (st === 'read') return 'read';
+  return st || '';
+}
+
+/**
+ * Format createdAt timestamp as YYYY-MM-DD for CSV
+ */
+function formatDateAdded(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Export all books to CSV and trigger download
+ */
+async function exportBooksToCSV() {
+  const btn = document.getElementById('exportBooksBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Exporting...';
+  }
+  try {
+    const cache = window.bookishCache;
+    if (!cache) {
+      showToast('Export not available');
+      return;
+    }
+    const entries = await cache.getAllActive();
+    if (entries.length === 0) {
+      showToast('No books to export yet');
+      return;
+    }
+    const headers = ['Title', 'Author', 'ISBN', 'Date Added', 'Date Read', 'Rating', 'Status', 'Notes'];
+    const rows = entries.map((e) => {
+      const status = e.readingStatus || e.status || '';
+      const dateRead = e.dateRead || '';
+      const dateAdded = formatDateAdded(e.createdAt || e.created);
+      const rating = (e.rating >= 1 && e.rating <= 5) ? String(e.rating) : '';
+      return [
+        escapeCSV(e.title || ''),
+        escapeCSV(e.author || ''),
+        escapeCSV(e.isbn || e.isbn13 || ''),
+        dateAdded,
+        dateRead,
+        rating,
+        statusToGoodreads(status),
+        escapeCSV(e.notes || '')
+      ];
+    });
+    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bookish-export.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${entries.length} books to bookish-export.csv`);
+  } catch (err) {
+    console.error('[Bookish:AccountUI] Export failed:', err);
+    showToast('Export failed. Please try again.');
+  } finally {
+    const b = document.getElementById('exportBooksBtn');
+    if (b) {
+      b.disabled = false;
+      b.textContent = '📥 Export my books';
+    }
+  }
+}
+
+/**
+ * Update display name: validate, save locally, optionally persist to Arweave
+ */
+async function updateDisplayName(newName) {
+  let trimmed = (newName || '').trim();
+  if (!trimmed) trimmed = 'Bookish User';
+  if (trimmed.length > 50) {
+    showToast('Name must be 50 characters or less');
+    return;
+  }
+  const accountData = localStorage.getItem(ACCOUNT_STORAGE_KEY);
+  if (!accountData) return;
+  let accountObj;
+  try {
+    accountObj = JSON.parse(accountData);
+  } catch {
+    return;
+  }
+  accountObj.displayName = trimmed;
+  localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(accountObj));
+  const textEl = document.getElementById('accountDisplayNameText');
+  if (textEl) textEl.textContent = trimmed;
+  showToast('Name updated');
+  try {
+    const walletInfo = await getStoredWalletInfo();
+    const cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH;
+    const isFunded = cachedBalance != null && parseFloat(cachedBalance) >= 0.00002;
+    if (walletInfo?.address && isFunded) {
+      const symKeyHex = localStorage.getItem('bookish.sym');
+      if (symKeyHex) {
+        const symKeyBytes = hexToBytes(symKeyHex);
+        const symKey = await importAesKey(symKeyBytes);
+        await uploadAccountMetadata({
+          address: walletInfo.address,
+          displayName: trimmed,
+          symKey,
+          createdAt: accountObj.created
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[Bookish:AccountUI] Arweave persist skipped:', err.message);
+  }
+}
+
+/**
+ * Setup display name edit: toggle between view and edit mode
+ */
+function setupDisplayNameEdit(currentName) {
+  const editBtn = document.getElementById('editDisplayNameBtn');
+  const textEl = document.getElementById('accountDisplayNameText');
+  const row = document.querySelector('.account-name-row');
+  if (!editBtn || !textEl || !row) return;
+  editBtn.addEventListener('click', () => {
+    const name = textEl.textContent || currentName || '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = name;
+    input.maxLength = 50;
+    input.style.cssText = 'flex:1;min-width:80px;max-width:200px;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:0.95rem;';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.textContent = '✓';
+    saveBtn.setAttribute('aria-label', 'Save name');
+    saveBtn.style.cssText = 'background:none;border:none;color:#10b981;cursor:pointer;padding:4px;font-size:1rem;';
+    const doSave = () => {
+      updateDisplayName(input.value);
+      row.replaceChildren(document.createTextNode('👤 '), textEl, editBtn);
+      textEl.textContent = (input.value || '').trim() || 'Bookish User';
+    };
+    saveBtn.addEventListener('click', doSave);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        row.replaceChildren(document.createTextNode('👤 '), textEl, editBtn);
+      }
+    });
+    row.replaceChildren(document.createTextNode('👤 '), input, saveBtn);
+    input.focus();
+    input.select();
+  });
+}
+
+/**
+ * Setup Export my books button
+ */
+function setupExportBooksBtn() {
+  document.getElementById('exportBooksBtn')?.addEventListener('click', () => exportBooksToCSV());
+}
+
+/**
  * Show a temporary toast notification
  * @param {string} message - Toast message
  * @param {number} duration - Duration in ms (default 3000)
@@ -1640,6 +1845,10 @@ function showSeedPhraseModal(seed) {
         `).join('')}
       </div>
     </div>
+
+    <p style="font-size:.75rem;color:#64748b;margin:0 0 16px 0;">
+      You can export your books anytime at <a href="/forever.html" target="_blank" rel="noopener">getbookish.app/forever</a> using just your seed phrase.
+    </p>
 
     <div style="text-align:center;margin:24px 0;display:flex;gap:8px;justify-content:center;">
       <button id="copySeedBtn" class="btn secondary">Copy to Clipboard</button>
