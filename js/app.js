@@ -989,14 +989,8 @@ async function syncBooksFromArweave(){
   entries = await window.bookishCache.applyRemote(remote, tombstones);
   
   // Compact duplicates (handles race conditions from quick edits)
-  const { toKeep, toDelete } = window.bookishCache.compactDuplicates(entries);
-  if (toDelete.length > 0) {
-    console.warn('[Bookish] Compacting', toDelete.length, 'duplicate entries from cache');
-    for (const id of toDelete) {
-      await window.bookishCache.deleteById(id);
-    }
-    entries = toKeep;
-  }
+  await window.bookishCache.compactDuplicates();
+  entries = await window.bookishCache.getAllActive();
   
   entries.forEach(e => e._committed = true);
   orderEntries();

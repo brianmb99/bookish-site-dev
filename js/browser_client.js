@@ -3,6 +3,7 @@
 // Layout of encrypted payload: iv(12) | tag(16) | ciphertext (matches Node implementation)
 
 import { hexToBytes, base64ToBytes, bytesToBase64, importAesKey, encryptJsonToBytes, decryptBytesToJson } from './core/crypto_core.js';
+import { searchBookEntries, computeLiveSets as coreComputeLiveSets } from './core/arweave_query.js';
 
 /**
  * Derive a stable bookId for a reading event.
@@ -146,140 +147,13 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
   window.bookishNet.probeAvailability = probeAvailability;
   window.bookishNet.forceProbe = async (txid)=>{ availCache.delete(txid); return probeAvailability(txid); };
 
-  async function searchByOwner(owner,{ limit=25, cursor }={}){
-    // Prefer tag-based discovery using Pub-Addr (EVM address). Owner fallback is optional now.
+  async function searchByOwner(owner, { limit = 25, cursor } = {}) {
     const pub = (await (window.bookishWallet?.getAddress?.()))?.toLowerCase();
-    const tags=[
-      {name:'App-Name', values:[appName]},
-      {name:'Schema-Name', values:['reading']},
-      {name:'Visibility', values:['private']},
-      ...(pub? [{name:'Pub-Addr', values:[pub]}]: [])
-    ];
-
-    // --- Arweave query (existing: supports sort, owners, block info) ---
-    const q = owner ? `query($after:String,$first:Int,$tags:[TagFilter!],$owners:[String!]){
-      t1: transactions(after:$after,first:$first,sort:HEIGHT_DESC,tags:$tags){pageInfo{hasNextPage}edges{cursor node{id tags{name value} block{timestamp height}}}}
-      t2: transactions(after:$after,first:$first,sort:HEIGHT_DESC,owners:$owners,tags:$tags){pageInfo{hasNextPage}edges{cursor node{id tags{name value} block{timestamp height}}}}
-    }` : `query($after:String,$first:Int,$tags:[TagFilter!]){
-      t1: transactions(after:$after,first:$first,sort:HEIGHT_DESC,tags:$tags){pageInfo{hasNextPage}edges{cursor node{id tags{name value} block{timestamp height}}}}
-    }`;
-    const variables = owner ? { after: cursor??null, first: limit, tags, owners:[owner] } : { after: cursor??null, first: limit, tags };
-
-    const arweavePromise = fetch('https://arweave.net/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,variables})})
-      .then(r=>r.json())
-      .catch(err=>{ console.warn('[Bookish] Arweave book search failed:', err.message); return null; });
-
-    // --- Irys supplemental query (first page only — catches recently uploaded data) ---
-    // Query BOTH node1 and node2 for redundancy (single node can return inconsistent results)
-    // Irys GraphQL: no sort, no owners, no block info; cursors are gateway-specific
-    let irysNode1Promise = Promise.resolve(null);
-    let irysNode2Promise = Promise.resolve(null);
-    if (!cursor && pub) {
-      const irysTagsStr = tags.map(t=>`{name:"${t.name}",values:${JSON.stringify(t.values)}}`).join(',');
-      const irysQ = `{transactions(tags:[${irysTagsStr}],first:${limit}){edges{node{id tags{name value}}}}}`;
-      irysNode1Promise = fetch('https://node1.irys.xyz/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:irysQ})})
-        .then(r=>r.json())
-        .then(j=>{ if(j?.errors) console.warn('[Bookish] Irys node1 errors:', j.errors); return j; })
-        .catch(err=>{ console.warn('[Bookish] Irys node1 query failed:', err.message); return null; });
-      irysNode2Promise = fetch('https://node2.irys.xyz/graphql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:irysQ})})
-        .then(r=>r.json())
-        .then(j=>{ if(j?.errors) console.warn('[Bookish] Irys node2 errors:', j.errors); return j; })
-        .catch(err=>{ console.warn('[Bookish] Irys node2 query failed:', err.message); return null; });
-    }
-
-    // Run all queries in parallel
-    const [arJson, irJson1, irJson2] = await Promise.all([arweavePromise, irysNode1Promise, irysNode2Promise]);
-
-    // Extract Arweave edges
-    let arweaveHasNext = false;
-    const seen = new Set();
-    const merged = [];
-
-    if (arJson?.data) {
-      const edges1 = arJson.data.t1?.edges||[];
-      const edges2 = arJson.data.t2?.edges||[];
-      for(const e of [...edges1, ...edges2]){
-        if(!seen.has(e.node.id)){ seen.add(e.node.id); merged.push(e); }
-      }
-      arweaveHasNext = !!(arJson.data.t1?.pageInfo?.hasNextPage || arJson.data.t2?.pageInfo?.hasNextPage);
-    }
-
-    // Supplement with Irys-only entries (not yet indexed on arweave.net)
-    // Merge results from both Irys nodes, deduplicating by txid
-    let irysOnlyCount = 0;
-    const node1Count = irJson1?.data?.transactions?.edges?.length || 0;
-    const node2Count = irJson2?.data?.transactions?.edges?.length || 0;
-    
-    // Process node1 results
-    if (irJson1?.data?.transactions?.edges) {
-      for(const e of irJson1.data.transactions.edges){
-        if(!seen.has(e.node.id)){
-          seen.add(e.node.id);
-          merged.push({ ...e, node:{ ...e.node, block:null } });
-          irysOnlyCount++;
-        }
-      }
-    }
-    // Process node2 results (will skip any already seen from node1 or Arweave)
-    if (irJson2?.data?.transactions?.edges) {
-      for(const e of irJson2.data.transactions.edges){
-        if(!seen.has(e.node.id)){
-          seen.add(e.node.id);
-          merged.push({ ...e, node:{ ...e.node, block:null } });
-          irysOnlyCount++;
-        }
-      }
-    }
-    // Diagnostic logging
-    const arweaveCount = merged.length - irysOnlyCount;
-    console.log(`[Bookish] Merged edges: ${merged.length} total (Arweave:${arweaveCount}, Irys-only:${irysOnlyCount}, node1:${node1Count}, node2:${node2Count})`);
-    
-    // Log Prev tags from Irys entries to diagnose version chain issues
-    const irysEdgesWithPrev = [];
-    for(const e of merged) {
-      const prevTag = e.node.tags?.find(t=>t.name==='Prev');
-      if(prevTag && !e.node.block) { // Irys entries have block:null
-        irysEdgesWithPrev.push({ txid: e.node.id.slice(0,8), prev: prevTag.value.slice(0,8) });
-      }
-    }
-    if(irysEdgesWithPrev.length > 0) {
-      console.log('[Bookish] Irys entries with Prev tags:', irysEdgesWithPrev);
-    }
-
-    // If all gateways failed, throw
-    if(merged.length===0 && !arJson?.data && !irJson1?.data && !irJson2?.data) throw new Error('graphql');
-
-    return { edges: merged, pageInfo: { hasNextPage: arweaveHasNext } };
+    return searchBookEntries(pub, { owner, limit, cursor, appName });
   }
 
-  function isTomb(e){ return e.node.tags?.some(t=>t.name==='Op' && t.value==='tombstone'); }
-  function refOf(e){ return e.node.tags?.find(t=>t.name==='Ref')?.value; }
-
-  function computeLiveSets(allEdges){
-    const tombstones = allEdges.filter(isTomb).map(e=>({ txid:e.node.id, ref: refOf(e) }));
-    
-    // Build superseded set from Prev tags
-    const edgesWithPrev = allEdges.filter(e=>e.node.tags?.some(t=>t.name==='Prev'));
-    const superseded = new Set(edgesWithPrev.map(e=> e.node.tags.find(t=>t.name==='Prev')?.value).filter(Boolean));
-    
-    // Diagnostic: log version chains
-    if(edgesWithPrev.length > 0) {
-      console.log('[Bookish] Version chains found:', edgesWithPrev.map(e => ({
-        txid: e.node.id.slice(0,8),
-        prev: e.node.tags.find(t=>t.name==='Prev')?.value?.slice(0,8)
-      })));
-      console.log('[Bookish] Superseded txids:', [...superseded].map(s=>s.slice(0,8)));
-    }
-    
-    const tombRefs = new Set(tombstones.map(t=>t.ref).filter(Boolean));
-    const liveEdges = allEdges.filter(e=>{ if(isTomb(e)) return false; if(tombRefs.has(e.node.id)) return false; if(superseded.has(e.node.id)) return false; return true; });
-    
-    // Diagnostic: if more live edges than expected, show what survived
-    if(liveEdges.length > 5) {
-      console.warn('[Bookish] More live entries than expected:', liveEdges.map(e => e.node.id.slice(0,8)));
-    }
-    
-    return { liveEdges, tombstones };
+  function computeLiveSets(allEdges) {
+    return coreComputeLiveSets(allEdges);
   }
 
   async function tombstone(priorTxid,{ note }={}){
