@@ -156,18 +156,15 @@ export async function deriveAndStoreSymmetricKey(mnemonic) {
     throw new Error('Invalid mnemonic: must be a non-empty string');
   }
 
-  // Use same derivation as wallet.js ensure() for consistency
   const salt = new TextEncoder().encode('bookish-evm-v1');
   const seedBytes = new TextEncoder().encode(mnemonic);
   const toHash = new Uint8Array(seedBytes.length + salt.length);
   toHash.set(seedBytes, 0);
   toHash.set(salt, seedBytes.length);
 
-  // Derive 256-bit key using SHA-256
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', toHash));
   const symHex = Array.from(digest).map(b => b.toString(16).padStart(2, '0')).join('');
 
-  // Store in localStorage
   localStorage.setItem('bookish.sym', symHex);
 
   console.log('[Bookish:CryptoCore] Symmetric key derived and stored (bookish.sym)');
@@ -246,7 +243,60 @@ export function clearSessionEncryptedSeed() {
   console.log('[Bookish:CryptoCore] Session-encrypted seed cleared');
 }
 
-// PRF key functions removed — passkey no longer supported
+/**
+ * Derive symmetric key from seed phrase for account encryption (manual seed accounts)
+ * This key is used for encrypting ACCOUNT data for Arweave storage
+ * Uses different salt than bookish.sym to ensure key separation
+ * @param {string} mnemonic - 12-word BIP39 mnemonic
+ * @returns {Promise<CryptoKey>} - AES-GCM encryption key
+ */
+export async function deriveAccountEncryptionKey(mnemonic) {
+  if (!mnemonic || typeof mnemonic !== 'string') {
+    throw new Error('Invalid mnemonic: must be a non-empty string');
+  }
 
+  const salt = new TextEncoder().encode('bookish-account-enc-v1');
+  const seedBytes = new TextEncoder().encode(mnemonic);
+  const toHash = new Uint8Array(seedBytes.length + salt.length);
+  toHash.set(seedBytes, 0);
+  toHash.set(salt, seedBytes.length);
 
+  const digest = await crypto.subtle.digest('SHA-256', toHash);
+  const keyBytes = new Uint8Array(digest);
 
+  return await importAesKey(keyBytes);
+}
+
+/**
+ * Derive seed-based encryption key using PBKDF2 (for account metadata)
+ * Separate from bookish.sym (book encryption key)
+ * @param {string} seedPhrase - BIP39 mnemonic seed phrase
+ * @returns {Promise<CryptoKey>} - AES-GCM key for account encryption
+ */
+export async function deriveSeedBasedEncryptionKey(seedPhrase) {
+  const salt = 'bookish-account-enc-v1';
+  const iterations = 100000;
+
+  const seedBytes = new TextEncoder().encode(seedPhrase);
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    seedBytes,
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+
+  const saltBytes = new TextEncoder().encode(salt);
+  return await crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: saltBytes,
+      iterations: iterations,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
