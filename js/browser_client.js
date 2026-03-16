@@ -129,10 +129,11 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
       window.bookishNet.lastProbeAt = now;
       window.bookishNet.nextProbeAt = now + 60000;
     }catch{}
-    const [pa, pt] = await Promise.all([
-      probeGatewayTracked('arweave', `https://arweave.net/${txid}`),
-      probeGatewayTracked('turbo', `https://turbo-gateway.com/${txid}`)
-    ]);
+    const pa = await probeGatewayTracked('arweave', `https://arweave.net/${txid}`);
+    let pt = false;
+    if (!pa) {
+      pt = await probeGatewayTracked('turbo', `https://turbo-gateway.com/${txid}`);
+    }
     const rec = { arweave: !!pa, turbo: !!pt, t: now };
     availCache.set(txid, rec);
     return rec;
