@@ -2607,7 +2607,7 @@ function getPersistenceIndicatorHTML(state) {
   // Use same status dot styling as books
   const classes = {
     local: 'local',      // yellow/orange
-    syncing: 'irys',     // green
+    syncing: 'syncing',  // green
     confirmed: 'arweave' // dark green
   };
   const titles = {

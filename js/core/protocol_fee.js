@@ -1,5 +1,4 @@
 // protocol_fee.js - Calculate and execute protocol fee split
-// Fee is taken as a percentage of each Irys funding transaction.
 // Fee failure never blocks the user's upload.
 
 import { PROTOCOL_CONFIG } from './protocol_config.js';
@@ -7,7 +6,7 @@ import { PROTOCOL_CONFIG } from './protocol_config.js';
 /**
  * Calculate fee split for a funding amount.
  * @param {bigint|string} totalAmountWei - Total amount the user would fund
- * @returns {{ protocolFeeWei: bigint, irysAmountWei: bigint, feeSkipped: boolean, reason?: string }}
+ * @returns {{ protocolFeeWei: bigint, remainderWei: bigint, feeSkipped: boolean, reason?: string }}
  */
 export function calculateFeeSplit(totalAmountWei) {
   const total = BigInt(totalAmountWei);
@@ -21,18 +20,17 @@ export function calculateFeeSplit(totalAmountWei) {
   if (protocolFee < minFee) {
     return {
       protocolFeeWei: 0n,
-      irysAmountWei: total,
+      remainderWei: total,
       feeSkipped: true,
       reason: 'below-minimum',
     };
   }
 
-  // Remainder goes to Irys
-  const irysAmount = total - protocolFee;
+  const remainder = total - protocolFee;
 
   return {
     protocolFeeWei: protocolFee,
-    irysAmountWei: irysAmount,
+    remainderWei: remainder,
     feeSkipped: false,
   };
 }
@@ -54,7 +52,6 @@ export async function sendProtocolFee(feeWei, signer) {
     });
 
     // Don't wait for confirmation — fire and forget.
-    // The Irys funding tx is what matters for the user.
     return { txHash: tx.hash };
   } catch (err) {
     // Fee failure must never block the upload

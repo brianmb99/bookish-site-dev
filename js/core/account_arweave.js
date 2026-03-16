@@ -47,13 +47,13 @@ export async function uploadAccountMetadata({ address, displayName, symKey, crea
     { name: 'Schema-Version', value: '0.1.0' }
   ];
 
-  console.log('[Bookish:AccountArweave] Uploading to Arweave via Irys...');
+  console.log('[Bookish:AccountArweave] Uploading to Arweave via Turbo...');
 
-  if (!window.bookishIrys) {
-    throw new Error('Irys uploader not initialized');
+  if (!window.bookishUpload) {
+    throw new Error('Upload client not initialized');
   }
 
-  const result = await window.bookishIrys.upload(encryptedPayload, tags);
+  const result = await window.bookishUpload.upload(encryptedPayload, tags);
   const txId = result.id;
 
   console.log('[Bookish:AccountArweave] Account metadata uploaded:', txId);

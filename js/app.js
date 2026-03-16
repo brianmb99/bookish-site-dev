@@ -37,7 +37,7 @@ const fundClose = document.getElementById('fundClose');
 const fundAddrEl = document.getElementById('fundAddr');
 const fundCopyBtn = document.getElementById('fundCopy');
 const fundL1El = document.getElementById('fundL1');
-const fundIrysEl = document.getElementById('fundIrys');
+const fundTurboEl = document.getElementById('fundTurbo');
 const fundCostEl = document.getElementById('fundCost');
 const fundMsgEl = document.getElementById('fundMsg');
 const fundRefreshBtn = document.getElementById('fundRefresh');
@@ -361,15 +361,14 @@ async function refreshFundingInfo(){
     if(balWei!=null){
       const eth = Number(balWei)/1e18; fundL1El.textContent = eth.toFixed(6)+' ETH';
     }
-    // Irys balance removed from UI
-    // Estimate current pending cost if payload present
-    if(lastPendingOp && window.bookishIrys){
+    // Estimate current pending cost if payload present (protocol fee + Turbo storage)
+    if(lastPendingOp){
       try{
-        // use estimator based on entry json size
         const bytes = await (browserClient?.estimateEntryBytes?.(lastPendingOp.payload) || window.bookishEstimate?.entryBytes?.(lastPendingOp.payload));
         if(bytes){
-          const price = await window.bookishIrys.estimateCost(bytes);
-          fundCostEl.textContent = `${bytes} bytes ≈ ${(Number(price)/1e18).toFixed(6)} ETH`;
+          const { PROTOCOL_CONFIG } = await import('./core/protocol_config.js');
+          const feeWei = BigInt(PROTOCOL_CONFIG.FLAT_FEE_WEI || '0');
+          fundCostEl.textContent = `${bytes} bytes — protocol fee ≈ ${(Number(feeWei)/1e18).toFixed(6)} ETH`;
         }
       }catch{}
     }
@@ -380,17 +379,9 @@ fundClose?.addEventListener('click', closeFundingModal);
 fundCopyBtn?.addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText(fundAddrEl.textContent||''); fundMsgEl.textContent='Address copied'; }catch{} });
 fundRefreshBtn?.addEventListener('click', ()=> refreshFundingInfo());
 fundDoBtn?.addEventListener('click', async ()=>{
-  fundDoBtn.disabled=true; fundMsgEl.textContent='Funding...';
-  try{
-    if(!lastPendingOp) throw new Error('no-pending');
-    const bytes = await (browserClient?.estimateEntryBytes?.(lastPendingOp.payload) || window.bookishEstimate?.entryBytes?.(lastPendingOp.payload));
-    if(!bytes) throw new Error('no-estimate');
-    const price = await window.bookishIrys.estimateCost(bytes);
-    await window.bookishIrys.fund(price.toString());
-    fundMsgEl.textContent='Funded. You can retry publish now.';
-    await refreshFundingInfo();
-  }catch(e){ fundMsgEl.textContent='Funding failed.'; }
-  finally{ fundDoBtn.disabled=false; }
+  fundDoBtn.disabled=true;
+  fundMsgEl.textContent='Turbo handles funding automatically during upload. Just retry publish.';
+  fundDoBtn.disabled=false;
 });
 fundRetryBtn?.addEventListener('click', async ()=>{
   if(!lastPendingOp){ fundMsgEl.textContent='Nothing to retry.'; return; }
@@ -532,8 +523,8 @@ function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false
 
 /** Build inner HTML for a single book card */
 function buildCardHTML(e){
-  const dotClass = (!e.txid) ? 'local' : (e.onArweave ? 'arweave' : 'irys');
-  const dotTitle = (!e.txid) ? 'Local only' : (e.onArweave ? 'Saved to Arweave' : 'Saved to Irys \u2014 settling to Arweave\u2026');
+  const dotClass = (!e.txid) ? 'local' : (e.onArweave ? 'arweave' : 'syncing');
+  const dotTitle = (!e.txid) ? 'Local only' : (e.onArweave ? 'Saved to Arweave' : 'Uploaded \u2014 settling to Arweave\u2026');
   const dateDisp=formatDisplayDate(e.dateRead);
   const notesSnippet = e.notes ? `<p class="card-notes">${escapeHtml(e.notes)}</p>` : '';
   const metaStrip = buildCardMetadata(e);
@@ -690,7 +681,7 @@ async function updateBookDots(){
     if(!dot) continue;
 
     // Set color based on current state
-    dot.classList.remove('local','irys','arweave');
+    dot.classList.remove('local','syncing','arweave');
 
     if(!e.txid) {
       // Local only - not uploaded
@@ -701,9 +692,8 @@ async function updateBookDots(){
       dot.classList.add('arweave');
       dot.dataset.tip = 'Saved to Arweave';
     } else {
-      // On Irys - check if reached Arweave
-      dot.classList.add('irys');
-      dot.dataset.tip = 'Saved to Irys \u2014 settling to Arweave\u2026';
+      dot.classList.add('syncing');
+      dot.dataset.tip = 'Uploaded \u2014 settling to Arweave\u2026';
 
       // Probe in background (only for entries needing it)
       probeAndUpdateDot(e, dot);
@@ -745,7 +735,7 @@ async function probeAndUpdateDot(entry, dot) {
       if(window.bookishCache) {
         await window.bookishCache.putEntry(entry);
       }
-      dot.classList.remove('irys');
+      dot.classList.remove('syncing');
       dot.classList.add('arweave');
       dot.dataset.tip = 'Saved to Arweave';
     } else {
@@ -788,12 +778,11 @@ function diagIdleSeed(){
   const syncIn = Math.max(0, nextSyncAt - now);
   const nextProbeAt = (window.bookishNet?.nextProbeAt)||0;
   const probeIn = Math.max(0, nextProbeAt - now);
-  const inflightIrys = (window.bookishNet?.irysInFlight)||0;
   const inflightAr = (window.bookishNet?.arweaveInFlight)||0;
   const probePart = inflightAr>0 ? 'Probing Arweave now...' : (probeIn<=0 ? 'Probing Arweave now...' : `Next Arweave probe in ${fmtCountdown(probeIn)}`);
   const syncStatus = window.bookishSyncManager?.getSyncStatus?.();
-  const isSyncing = syncStatus?.isSyncing || inflightIrys > 0;
-  const syncPart = isSyncing ? 'Syncing...' : `Next Irys sync in ${fmtCountdown(syncIn)}`;
+  const isSyncing = syncStatus?.isSyncing;
+  const syncPart = isSyncing ? 'Syncing...' : `Next sync in ${fmtCountdown(syncIn)}`;
   const line = `${syncPart}; ${probePart}`;
   // Do not flip to active; keep idle mode and recompute every tick
   diagItems=[line]; diagRender();
@@ -840,7 +829,7 @@ async function serverlessFetchEntries(){
 
   console.log('[Bookish] Cache check:', alreadySynced.length, 'already synced,', needsDecrypt.length, 'need decrypt');
   // Track cache hits for geek panel
-  window.bookishNet = window.bookishNet || { reads:{ irys:0, arweave:0, errors:0 }, cacheHits:0 };
+  window.bookishNet = window.bookishNet || { reads:{ arweave:0, turbo:0, errors:0 }, cacheHits:0 };
   window.bookishNet.cacheHits = (window.bookishNet.cacheHits || 0) + alreadySynced.length;
 
   // Step 3: Decrypt entries that aren't fully synced in cache
@@ -873,11 +862,11 @@ async function serverlessFetchEntries(){
   console.log('[Bookish] Decrypted', needsDecrypt.length, 'entries in', Date.now() - decryptStart, 'ms');
   
   // Step 5: Deduplicate by bookId (safety net if Prev chain is broken)
-  // Keep newest version of each book (no block = Irys-only = most recent)
+  // Keep newest version of each book (no block = most recent)
   const byBookId = new Map();
   const entryScore = (e) => {
     // Higher score = keep this one
-    // Irys-only (no block) is newest, give highest score
+    // No block = not yet in an Arweave block = most recent
     // Otherwise, higher block height = more recent
     if (!e.block || !e.block.height) return Infinity;
     return e.block.height;
@@ -931,7 +920,7 @@ async function replayOps(){
           orderEntries(); render();
         } catch{
           setStatus('Replay pending...');
-          diagMaybeSet(['Awaiting Irys credit...','Will retry automatically']);
+          diagMaybeSet(['Awaiting upload credit...','Will retry automatically']);
           break;
         }
       } else if(op.type==='edit'){
@@ -947,7 +936,7 @@ async function replayOps(){
           orderEntries(); render();
         } catch{
           setStatus('Replay pending...');
-          diagMaybeSet(['Awaiting Irys credit...','Will retry automatically']);
+          diagMaybeSet(['Awaiting upload credit...','Will retry automatically']);
           break;
         }
       }
@@ -1036,7 +1025,7 @@ async function createServerless(payload){ if(window.bookishCache){ const dup=awa
     // Ensure hidden EVM wallet exists before upload
     if(window.bookishWallet?.ensure){ const ensured = await window.bookishWallet.ensure(); if(window.BOOKISH_DEBUG) console.debug('[Bookish] wallet ensure:', ensured, await window.bookishWallet.getAddress()); }
     if(window.BOOKISH_DEBUG) console.debug('[Bookish] uploadEntry start');
-  diagMaybeSet(['Publishing via Irys...','If funding is needed, you\'ll be prompted']);
+  diagMaybeSet(['Publishing to Arweave...','If funding is needed, you\'ll be prompted']);
     const res=await browserClient.uploadEntry(payload,{});
     if(window.BOOKISH_DEBUG) console.debug('[Bookish] uploadEntry ok:', res);
     const oldId=rec.id; rec.txid=res.txid; rec.id=res.txid; rec.pending=false; rec.status='confirmed'; rec.seenRemote=true; rec.onArweave=false;
@@ -1047,19 +1036,18 @@ async function createServerless(payload){ if(window.bookishCache){ const dup=awa
     setTimeout(updateBookDots, 50);
   } catch(e){
     console.warn('[Bookish] uploadEntry error:', e);
-    if(e && e.code==='irys-required'){
-      // Queue op and nudge user to Account panel
+    if(e && e.code==='upload-required'){
       const pending = { type:'create', localId:rec.id, payload };
       if(window.bookishCache) await window.bookishCache.queueOp(pending);
       lastPendingOp = pending;
-  walletError='Irys client missing. Refresh page and retry.'; uiStatusManager.refresh();
-  diagMaybeSet(['Irys client missing','Refresh page and retry']);
+  walletError='Upload client missing. Refresh page and retry.'; uiStatusManager.refresh();
+  diagMaybeSet(['Upload client missing','Refresh page and retry']);
     } else if(e && e.code==='post-fund-timeout'){
       // We funded, but node hasn't credited yet. Keep the op queued and inform the user.
       const pending = { type:'create', localId:rec.id, payload };
       if(window.bookishCache) await window.bookishCache.queueOp(pending);
       lastPendingOp = pending;
-      walletError='Funding sent. Credit pending on Irys (can take a few minutes). Try again shortly from Account.'; uiStatusManager.refresh();
+      walletError='Funding sent. Credit pending (can take a few minutes). Try again shortly from Account.'; uiStatusManager.refresh();
   diagMaybeSet(['Funding sent – awaiting credit','Retry from Account shortly']);
     } else if(e && (e.code==='base-insufficient-funds' || e.code==='base-insufficient-funds-recent')){
       // Wallet lacks L1 ETH to fund bundler; queue op and prompt manual top-up
@@ -1118,7 +1106,7 @@ async function doEditUpload(entryKey, entry, prevTxid, payload, snapshot) {
     const haveKeys = await ensureKeys();
     if (!haveKeys) throw new Error('Cannot upload: encryption keys not available');
     
-    diagMaybeSet(['Saving via Irys\u2026']);
+    diagMaybeSet(['Saving to Arweave\u2026']);
     const res = await browserClient.uploadEntry(payload, { extraTags: [{ name: 'Prev', value: prevTxid }] });
     
     const oldTxid = prevTxid;
@@ -1157,12 +1145,12 @@ async function doEditUpload(entryKey, entry, prevTxid, payload, snapshot) {
     if (window.bookishCache) await window.bookishCache.queueOp(pending);
     lastPendingOp = pending;
     
-    if (e && e.code === 'irys-required') {
-      walletError = 'Irys client missing. Refresh page and retry.';
+    if (e && e.code === 'upload-required') {
+      walletError = 'Upload client missing. Refresh page and retry.';
       uiStatusManager.refresh();
-      diagMaybeSet(['Irys client missing', 'Refresh page and retry']);
+      diagMaybeSet(['Upload client missing', 'Refresh page and retry']);
     } else if (e && e.code === 'post-fund-timeout') {
-      walletError = 'Funding sent. Credit pending on Irys (few minutes). Retry from Account shortly.';
+      walletError = 'Funding sent. Credit pending (few minutes). Retry from Account shortly.';
       uiStatusManager.refresh();
       diagMaybeSet(['Funding sent – awaiting credit', 'Retry from Account shortly']);
     } else if (e && (e.code === 'base-insufficient-funds' || e.code === 'base-insufficient-funds-recent')) {
@@ -1344,8 +1332,8 @@ function updateGeekPanel(){
     geekBody.textContent = 'Sign in to view sync status';
     return;
   }
-  const net = window.bookishNet || { reads:{ irys:0, arweave:0, errors:0 }, cacheHits:0 };
-  const fetched = (net.reads.irys||0) + (net.reads.arweave||0);
+  const net = window.bookishNet || { reads:{ arweave:0, turbo:0, errors:0 }, cacheHits:0 };
+  const fetched = (net.reads.turbo||0) + (net.reads.arweave||0);
   const cached = net.cacheHits || 0;
   const errs = net.reads.errors || 0;
   geekBody.textContent = `Fetched: ${fetched}  Cached: ${cached}  Err: ${errs}`;

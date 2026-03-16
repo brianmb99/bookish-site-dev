@@ -22,7 +22,7 @@ export async function deriveBookId({ isbn, title, author, edition, createdAt }) 
   return `hash:${hex}`;
 }
 
-export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookish', schemaVersion='0.1.0', keyId='default', useIrysProxy=false }){
+export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookish', schemaVersion='0.1.0', keyId='default' }={}){
   if(!symKeyHex) throw new Error('missing symKeyHex');
   const symKey = hexToBytes(symKeyHex.trim());
   const aesKey = await importAesKey(symKey);
@@ -81,43 +81,40 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
     try{ const pubAddr = await (window.bookishWallet?.getAddress?.()); if(pubAddr) tags.push({ name:'Pub-Addr', value: String(pubAddr).toLowerCase() }); }catch{}
     extraTags.forEach(t=> tags.push({ name:t.name, value:t.value }));
 
-    // vNext: Browser Irys client handles funding + upload; no Arweave or proxy fallback
-    if(!window.bookishIrys) { const e = new Error('Irys required'); e.code='irys-required'; throw e; }
+    if(!window.bookishUpload) { const e = new Error('Upload client required'); e.code='upload-required'; throw e; }
     try {
-      const res = await window.bookishIrys.upload(payload, tags);
-      return { txid: res.id, status: 200, irys: true };
+      const res = await window.bookishUpload.upload(payload, tags);
+      return { txid: res.id, status: 200 };
     } catch(err){ throw err; }
   }
 
   async function fetchBytes(txid){
-    // Prefer Irys gateway first for faster availability
-    try {
-      const rI = await fetch(`https://gateway.irys.xyz/${txid}`);
-      if (rI.ok){
-        window.bookishNet = window.bookishNet||{reads:{irys:0, arweave:0, errors:0}};
-        window.bookishNet.reads.irys++; if(window.BOOKISH_DEBUG) console.debug('[Bookish] read from Irys', txid);
-        return new Uint8Array(await rI.arrayBuffer());
-      }
-    } catch{ /* ignore */ }
-    // Fallback to public Arweave if Irys misses
     try {
       const rA = await fetch(`https://arweave.net/${txid}`);
       if (rA.ok){
-        window.bookishNet = window.bookishNet||{reads:{irys:0, arweave:0, errors:0}};
+        window.bookishNet = window.bookishNet||{reads:{arweave:0, turbo:0, errors:0}};
         window.bookishNet.reads.arweave++; if(window.BOOKISH_DEBUG) console.debug('[Bookish] read from Arweave', txid);
         return new Uint8Array(await rA.arrayBuffer());
       }
     } catch{ /* ignore */ }
-    window.bookishNet = window.bookishNet||{reads:{irys:0, arweave:0, errors:0}};
+    try {
+      const rT = await fetch(`https://turbo-gateway.com/${txid}`);
+      if (rT.ok){
+        window.bookishNet = window.bookishNet||{reads:{arweave:0, turbo:0, errors:0}};
+        window.bookishNet.reads.turbo++; if(window.BOOKISH_DEBUG) console.debug('[Bookish] read from Turbo cache', txid);
+        return new Uint8Array(await rT.arrayBuffer());
+      }
+    } catch{ /* ignore */ }
+    window.bookishNet = window.bookishNet||{reads:{arweave:0, turbo:0, errors:0}};
     window.bookishNet.reads.errors++; if(window.BOOKISH_DEBUG) console.debug('[Bookish] read failed', txid);
-    throw new Error('fetch '+txid+': irys+arweave failed');
+    throw new Error('fetch '+txid+': arweave+turbo failed');
   }
   async function decryptTx(txid){ const bytes = await fetchBytes(txid); return decBytes(bytes); }
 
   // --- Availability probes (best-effort; cached per session) ---
-  const availCache = new Map(); // key: txid -> { irys:bool, arweave:bool, t:number }
+  const availCache = new Map();
   async function probeGateway(url){ try{ const r = await fetch(url, { method:'HEAD', cache:'no-store' }); return r.ok; } catch{ return false; } }
-  function inc(kind){ try{ window.bookishNet = window.bookishNet||{reads:{irys:0, arweave:0, errors:0}}; const key = kind+"InFlight"; window.bookishNet[key] = (window.bookishNet[key]||0)+1; }catch{} }
+  function inc(kind){ try{ window.bookishNet = window.bookishNet||{reads:{arweave:0, turbo:0, errors:0}}; const key = kind+"InFlight"; window.bookishNet[key] = (window.bookishNet[key]||0)+1; }catch{} }
   function dec(kind){ try{ const key = kind+"InFlight"; window.bookishNet[key] = Math.max(0, (window.bookishNet[key]||0)-1); }catch{} }
   async function probeGatewayTracked(kind, url){
     inc(kind);
@@ -127,23 +124,21 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
   async function probeAvailability(txid){
     const hit = availCache.get(txid); const now=Date.now();
     if(hit && (now-hit.t)<60000) return hit; // 60s cache
-    // record when we actually perform a fresh probe for UI countdowns
     try{
-      window.bookishNet = window.bookishNet||{reads:{irys:0, arweave:0, errors:0}};
+      window.bookishNet = window.bookishNet||{reads:{arweave:0, turbo:0, errors:0}};
       window.bookishNet.lastProbeAt = now;
       window.bookishNet.nextProbeAt = now + 60000;
     }catch{}
-    const [pi, pa] = await Promise.all([
-      probeGatewayTracked('irys', `https://gateway.irys.xyz/${txid}`),
-      probeGatewayTracked('arweave', `https://arweave.net/${txid}`)
+    const [pa, pt] = await Promise.all([
+      probeGatewayTracked('arweave', `https://arweave.net/${txid}`),
+      probeGatewayTracked('turbo', `https://turbo-gateway.com/${txid}`)
     ]);
-    const rec = { irys: !!pi, arweave: !!pa, t: now };
+    const rec = { arweave: !!pa, turbo: !!pt, t: now };
     availCache.set(txid, rec);
     return rec;
   }
 
-  // expose probe on window for UI
-  window.bookishNet = window.bookishNet || { reads:{ irys:0, arweave:0, errors:0 } };
+  window.bookishNet = window.bookishNet || { reads:{ arweave:0, turbo:0, errors:0 } };
   window.bookishNet.probeAvailability = probeAvailability;
   window.bookishNet.forceProbe = async (txid)=>{ availCache.delete(txid); return probeAvailability(txid); };
 
@@ -161,8 +156,8 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
     const tags = []; addCommonTags({ addTag:(n,v)=>tags.push({name:n,value:v}) });
     tags.push({ name:'Op', value:'tombstone' }); tags.push({ name:'Ref', value: priorTxid });
     try{ const pubAddr = await (window.bookishWallet?.getAddress?.()); if(pubAddr) tags.push({ name:'Pub-Addr', value: String(pubAddr).toLowerCase() }); }catch{}
-    if(!window.bookishIrys) { const e = new Error('Irys required'); e.code='irys-required'; throw e; }
-    const res = await window.bookishIrys.upload(content, tags);
+    if(!window.bookishUpload) { const e = new Error('Upload client required'); e.code='upload-required'; throw e; }
+    const res = await window.bookishUpload.upload(content, tags);
     return { txid: res.id, status: 200 };
   }
 

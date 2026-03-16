@@ -4,8 +4,7 @@
  * Estimated cost per book upload in wei.
  * This is dominated by the flat protocol fee (0.0000025 ETH per upload)
  * plus a small gas allowance for the fee transaction on Base L2.
- * Irys storage may be free (subsidised) or charged via 402 auto-funding;
- * when Irys charges, the actual cost per book will be slightly higher.
+ * Turbo storage is free for items under 100 KiB (covers all Bookish uploads).
  *
  * Must stay in sync with PROTOCOL_CONFIG.FLAT_FEE_WEI in protocol_config.js
  */

@@ -1,15 +1,12 @@
 // credential_mapping.js - Arweave credential mapping operations
 // Handles upload/download of credential-mapping entries on Arweave
-// Uses Irys GraphQL as primary search (instant indexing) with arweave.net fallback
 
 import { bytesToBase64, base64ToBytes, encryptJsonToBytes, decryptBytesToJson } from './crypto_core.js';
 
 // Gateway configuration
-// Irys indexes transactions instantly; arweave.net can take minutes–hours to index Irys bundles
-const IRYS_GRAPHQL = 'https://node1.irys.xyz/graphql';
 const ARWEAVE_GRAPHQL = 'https://arweave.net/graphql';
-const IRYS_GATEWAY = 'https://gateway.irys.xyz';
 const ARWEAVE_GATEWAY = 'https://arweave.net';
+const TURBO_GATEWAY = 'https://turbo-gateway.com';
 
 /**
  * Validate that a lookup key is a 64-char hex string (SHA-256 output)
@@ -50,12 +47,12 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
     { name: 'Schema-Version', value: '0.1.0' }
   ];
 
-  if (!window.bookishIrys) {
-    throw new Error('Irys uploader not initialized');
+  if (!window.bookishUpload) {
+    throw new Error('Upload client not initialized');
   }
 
   try {
-    const result = await window.bookishIrys.upload(encryptedPayload, tags);
+    const result = await window.bookishUpload.upload(encryptedPayload, tags);
 
     console.log(`[Bookish:CredentialMapping] Mapping uploaded: ${result.id}`);
     return result.id;
@@ -67,30 +64,12 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
 
 /**
  * Search for a credential mapping transaction by lookup key tag.
- * Queries Irys first (instant indexing), then falls back to arweave.net.
  *
  * @param {string} lookupKey - Hex-encoded credential lookup key (64 chars)
  * @returns {Promise<string|null>} - Transaction ID or null if not found
  */
 async function findCredentialMappingTx(lookupKey) {
-  // Irys GraphQL — does NOT support `sort`, but has instant indexing
-  const irysQuery = `query {
-    transactions(
-      tags: [
-        {name: "App-Name", values: ["Bookish"]},
-        {name: "Type", values: ["credential-mapping"]},
-        {name: "Credential-Lookup-Key", values: ["${lookupKey}"]}
-      ],
-      first: 1
-    ) {
-      edges {
-        node { id }
-      }
-    }
-  }`;
-
-  // Arweave GraphQL — supports `sort: HEIGHT_DESC`, slower to index Irys bundles
-  const arweaveQuery = `query {
+  const query = `query {
     transactions(
       tags: [
         {name: "App-Name", values: ["Bookish"]},
@@ -106,57 +85,40 @@ async function findCredentialMappingTx(lookupKey) {
     }
   }`;
 
-  // Helper: run a single GraphQL query and extract the first tx ID
-  async function queryEndpoint(url, query, label) {
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-      });
-      if (!response.ok) {
-        console.warn(`[Bookish:CredentialMapping] ${label} query returned ${response.status}`);
-        return null;
-      }
-      const result = await response.json();
-      const edges = result.data?.transactions?.edges || [];
-      if (edges.length > 0) {
-        console.log(`[Bookish:CredentialMapping] Found mapping on ${label}: ${edges[0].node.id}`);
-        return edges[0].node.id;
-      }
-      return null;
-    } catch (err) {
-      console.warn(`[Bookish:CredentialMapping] ${label} query failed:`, err.message);
+  try {
+    const response = await fetch(ARWEAVE_GRAPHQL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    });
+    if (!response.ok) {
+      console.warn(`[Bookish:CredentialMapping] Arweave query returned ${response.status}`);
       return null;
     }
+    const result = await response.json();
+    const edges = result.data?.transactions?.edges || [];
+    if (edges.length > 0) {
+      console.log(`[Bookish:CredentialMapping] Found mapping: ${edges[0].node.id}`);
+      return edges[0].node.id;
+    }
+    return null;
+  } catch (err) {
+    console.warn('[Bookish:CredentialMapping] Arweave query failed:', err.message);
+    return null;
   }
-
-  // Query both concurrently — Irys has instant indexing so prefer it, but
-  // don't wait sequentially when Irys misses and Arweave might already have it
-  const [irysResult, arweaveResult] = await Promise.all([
-    queryEndpoint(IRYS_GRAPHQL, irysQuery, 'Irys'),
-    queryEndpoint(ARWEAVE_GRAPHQL, arweaveQuery, 'Arweave')
-  ]);
-
-  if (irysResult) return irysResult;
-  if (arweaveResult) {
-    console.log('[Bookish:CredentialMapping] Not found on Irys, using arweave.net result');
-    return arweaveResult;
-  }
-  return null;
 }
 
 /**
- * Download raw data for a transaction, trying Irys gateway first.
+ * Download raw data for a transaction.
+ * Tries Arweave L1 first, then Turbo cache for recently uploaded data.
  *
  * @param {string} txId - Transaction ID
  * @returns {Promise<Uint8Array>} - Raw bytes
  */
 async function downloadTxData(txId) {
-  // Try Irys gateway first (instant for Irys-uploaded data)
   const gateways = [
-    { url: `${IRYS_GATEWAY}/${txId}`, label: 'Irys' },
-    { url: `${ARWEAVE_GATEWAY}/${txId}`, label: 'Arweave' }
+    { url: `${ARWEAVE_GATEWAY}/${txId}`, label: 'Arweave' },
+    { url: `${TURBO_GATEWAY}/${txId}`, label: 'Turbo' }
   ];
 
   let lastError = null;
@@ -179,7 +141,7 @@ async function downloadTxData(txId) {
 }
 
 /**
- * Download encrypted credential mapping from Arweave/Irys
+ * Download encrypted credential mapping from Arweave
  * Returns raw encrypted bytes — caller must decrypt with credential_encryption_key
  *
  * @param {string} lookupKey - Hex-encoded credential lookup key
@@ -198,17 +160,15 @@ export async function downloadCredentialMapping(lookupKey) {
   console.log('[Bookish:CredentialMapping] Querying credential mapping...');
 
   try {
-    // Search across both gateways
     const txId = await findCredentialMappingTx(lookupKey);
 
     if (!txId) {
-      console.log('[Bookish:CredentialMapping] No mapping found on any gateway');
+      console.log('[Bookish:CredentialMapping] No mapping found');
       return null;
     }
 
     console.log(`[Bookish:CredentialMapping] Found mapping: ${txId}, downloading...`);
 
-    // Download raw encrypted payload (tries Irys, then Arweave)
     const encryptedPayload = await downloadTxData(txId);
 
     console.log('[Bookish:CredentialMapping] Mapping downloaded successfully');
@@ -218,7 +178,6 @@ export async function downloadCredentialMapping(lookupKey) {
       txId
     };
   } catch (error) {
-    // Distinguish network errors from "not found"
     if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
       throw new Error(`Network error: ${error.message}`);
     }
@@ -229,7 +188,6 @@ export async function downloadCredentialMapping(lookupKey) {
 
 /**
  * Check if a credential mapping exists for the given lookup key.
- * Uses the same dual-gateway search (Irys first, then Arweave).
  *
  * @param {string} lookupKey - Hex-encoded credential lookup key
  * @returns {Promise<boolean>}
