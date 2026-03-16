@@ -49,6 +49,7 @@ export async function uploadAccountMetadata({ address, displayName, symKey, crea
 
   console.log('[Bookish:AccountArweave] Uploading to Arweave via Turbo...');
 
+  if (!window.bookishUpload) try { await import('../turbo_client.js'); } catch {}
   if (!window.bookishUpload) {
     throw new Error('Upload client not initialized');
   }

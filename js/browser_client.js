@@ -81,6 +81,7 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
     try{ const pubAddr = await (window.bookishWallet?.getAddress?.()); if(pubAddr) tags.push({ name:'Pub-Addr', value: String(pubAddr).toLowerCase() }); }catch{}
     extraTags.forEach(t=> tags.push({ name:t.name, value:t.value }));
 
+    if(!window.bookishUpload) try { await import('./turbo_client.js'); } catch {}
     if(!window.bookishUpload) { const e = new Error('Upload client required'); e.code='upload-required'; throw e; }
     try {
       const res = await window.bookishUpload.upload(payload, tags);
@@ -157,6 +158,7 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
     const tags = []; addCommonTags({ addTag:(n,v)=>tags.push({name:n,value:v}) });
     tags.push({ name:'Op', value:'tombstone' }); tags.push({ name:'Ref', value: priorTxid });
     try{ const pubAddr = await (window.bookishWallet?.getAddress?.()); if(pubAddr) tags.push({ name:'Pub-Addr', value: String(pubAddr).toLowerCase() }); }catch{}
+    if(!window.bookishUpload) try { await import('./turbo_client.js'); } catch {}
     if(!window.bookishUpload) { const e = new Error('Upload client required'); e.code='upload-required'; throw e; }
     const res = await window.bookishUpload.upload(content, tags);
     return { txid: res.id, status: 200 };

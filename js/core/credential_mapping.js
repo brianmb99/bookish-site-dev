@@ -47,6 +47,7 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
     { name: 'Schema-Version', value: '0.1.0' }
   ];
 
+  if (!window.bookishUpload) try { await import('../turbo_client.js'); } catch {}
   if (!window.bookishUpload) {
     throw new Error('Upload client not initialized');
   }
