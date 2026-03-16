@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <title>Bookish Data Export</title>
+  <title>Bookish — Export Your Books</title>
   <style>
     *{box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:24px;max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f8fafc;color:#1e293b}
+    body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:24px 28px;max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f8fafc;color:#1e293b}
     #app{width:100%}
     h1{font-size:1.5rem;margin:0 0 8px;text-align:center}
     .sub{text-align:center;color:#64748b;font-size:.9rem;line-height:1.5;margin-bottom:24px}
@@ -41,11 +41,11 @@
 <body>
   <div id="app">
     <h1>📚 Bookish Data Export</h1>
-    <p class="sub">This page exists permanently on Arweave. Even if Bookish disappears, your data is still yours.</p>
+    <p class="sub">This page is permanently stored and can never be taken down. Even if Bookish disappears, your books are yours — available forever.</p>
 
     <div class="tabs">
       <button class="tab active" data-tab="email">Email &amp; Password</button>
-      <button class="tab" data-tab="seed">Seed Phrase</button>
+      <button class="tab" data-tab="seed">Recovery Phrase</button>
     </div>
 
     <div id="emailPanel" class="panel">
@@ -63,15 +63,15 @@
     </div>
 
     <div id="seedPanel" class="panel" style="display:none">
-      <label for="seed">Enter your 12-word seed phrase:</label>
+      <label for="seed">Enter your 12-word recovery phrase:</label>
       <textarea id="seed" placeholder="word word word ..." autocomplete="off"></textarea>
     </div>
 
     <p class="secure" id="secureMsg">Your credentials never leave your browser. All processing happens locally.</p>
     <button id="exportBtn" class="btn">Export My Books</button>
-    <div id="status">Status: Ready</div>
+    <div id="status">Ready to export.</div>
     <div class="footer">
-      Nothing is sent to any server except Arweave queries. Right-click → View Page Source — it's auditable.
+      Nothing leaves your browser except read-only storage queries. Right-click → View Page Source — it's fully auditable.
     </div>
   </div>
   <script>
@@ -2209,7 +2209,7 @@ aes-js/lib.esm/aes.js:
       seedPanel.style.display = activeTab === 'seed' ? '' : 'none';
       secureMsg.textContent = activeTab === 'email'
         ? 'Your credentials never leave your browser. All processing happens locally.'
-        : 'Your seed phrase never leaves your browser. All processing happens locally.';
+        : 'Your recovery phrase never leaves your browser. All processing happens locally.';
     });
   });
 
@@ -2328,7 +2328,7 @@ aes-js/lib.esm/aes.js:
     var keyBytes = await B.deriveEncryptionKey(seed);
     var aesKey = await B.importAesKey(keyBytes);
 
-    setStatus('Searching Arweave for your books...');
+    setStatus('Searching for your books...');
     var txIds = await queryAllBooks(address);
     if(txIds.length===0){setStatus('No books found for this account.',true);return;}
 
@@ -2347,8 +2347,11 @@ aes-js/lib.esm/aes.js:
 
     if(books.length===0){setStatus('Found entries but could not decrypt any books.',true);return;}
     var count=generateAndDownloadCSV(books);
-    setStatus('Exported '+count+' books! Download started.');
+    setStatus('Exported '+count+' books! Your download has started.');
     statusEl.classList.add('success');
+    emailInput.value = '';
+    passwordInput.value = '';
+    seedInput.value = '';
   }
 
   // --- Main export handler ---
@@ -2366,8 +2369,8 @@ aes-js/lib.esm/aes.js:
         await exportBooksFromSeed(seed);
       }else{
         var raw=seedInput.value;
-        if(!raw.trim()){setStatus('Please enter your seed phrase.',true);return;}
-        if(!B.validateSeed(raw)){setStatus('Invalid seed phrase. Please enter your 12-word recovery phrase.',true);return;}
+        if(!raw.trim()){setStatus('Please enter your recovery phrase.',true);return;}
+        if(!B.validateSeed(raw)){setStatus('Invalid recovery phrase. Please check that you\'ve entered all 12 words correctly.',true);return;}
         await exportBooksFromSeed(raw);
       }
     }catch(err){

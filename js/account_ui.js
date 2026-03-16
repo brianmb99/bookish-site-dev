@@ -1846,7 +1846,7 @@ function showSeedPhraseModal(seed) {
     </div>
 
     <p style="font-size:.75rem;color:#64748b;margin:0 0 16px 0;">
-      You can export your books anytime at <a href="/forever.html" target="_blank" rel="noopener">getbookish.app/forever</a> using just your seed phrase.
+      You can export your books anytime at <a href="/forever.html" target="_blank" rel="noopener">getbookish.app/forever</a> using your recovery phrase.
     </p>
 
     <div style="text-align:center;margin:24px 0;display:flex;gap:8px;justify-content:center;">
