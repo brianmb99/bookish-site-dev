@@ -66,7 +66,7 @@
   <span class="toast-icon">🎉</span>
   <span class="toast-message">First book added! You're on your way.</span>
 </div>
-<footer>Bookish • Alpha • v0.2.0 • <a href="/forever.html">Data export</a></footer>
+<footer>Bookish • Alpha • v0.2.1 • <a href="/forever.html">Data export</a></footer>
 </div>
 
 <!-- Notes expand overlay -->
@@ -191,8 +191,6 @@
  installBtn?.addEventListener('click', async ()=>{ if(!deferredPrompt) return; installBtn.disabled=true; try{ deferredPrompt.prompt(); await deferredPrompt.userChoice; }finally{ installBtn.style.display='none'; deferredPrompt=null; }
  });
 </script>
-<!-- Arweave web bundle + browser client (serverless mode) -->
-<script src="https://unpkg.com/arweave/bundles/web.bundle.min.js"></script>
 <script type="module" src="js/browser_client.js"></script>
 <script type="module" src="js/wallet.js"></script>
 <script type="module" src="js/turbo_client.js"></script>

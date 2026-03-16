@@ -36,7 +36,7 @@ export async function deriveWalletFromSeed(mnemonic) {
   }
 
   // Import ethers dynamically
-  const { HDNodeWallet } = await import('https://esm.sh/ethers@6');
+  const { HDNodeWallet } = await import('https://esm.sh/ethers@6.13.0');
 
   // Derive wallet from mnemonic (BIP44 path: m/44'/60'/0'/0/0)
   const wallet = HDNodeWallet.fromPhrase(mnemonic);

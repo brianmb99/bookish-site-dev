@@ -1,8 +1,8 @@
 // turbo_client.js - Bookish upload client using ArDrive Turbo SDK (Base-ETH)
 // Uploads via Turbo, which bundles data items and posts them to Arweave L1.
 
-import { TurboFactory } from 'https://esm.sh/@ardrive/turbo-sdk';
-import { Wallet, JsonRpcProvider } from 'https://esm.sh/ethers@6';
+import { TurboFactory } from 'https://esm.sh/@ardrive/turbo-sdk/web';
+import { Wallet, JsonRpcProvider } from 'https://esm.sh/ethers@6.13.0';
 import { append as logAppend } from './core/log_local.js';
 
 const BASE_RPC = window.BOOKISH_BASE_RPC || 'https://mainnet.base.org';

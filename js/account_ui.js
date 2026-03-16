@@ -2,12 +2,10 @@
 // Coordinates between: account_creation, credential_core, credential_mapping, account_arweave
 // Clear separation: creation → email+password auth → persistence on funding
 
-import { createNewAccount, restoreAccountFromSeed } from './core/account_creation.js';
 import uiStatusManager from './ui_status_manager.js';
 import { stopSync, startSync } from './sync_manager.js';
 import { resetKeyState } from './app.js';
 import { uploadAccountMetadata, downloadAccountMetadata } from './core/account_arweave.js';
-import { formatAddress, copyAddressToClipboard, getWalletBalance } from './core/wallet_core.js';
 import { deriveAndStoreSymmetricKey, hexToBytes, storeSessionEncryptedSeed, getSessionEncryptedSeed, clearSessionEncryptedSeed, importAesKey, bytesToBase64, base64ToBytes } from './core/crypto_core.js';
 import { ACCOUNT_STORAGE_KEY, SEED_SHOWN_KEY, CREDENTIAL_STORAGE_KEY, PENDING_CREDENTIAL_MAPPING_KEY, PENDING_ESCROW_MAPPING_KEY } from './core/storage_constants.js';
 import * as storageManager from './core/storage_manager.js';
@@ -193,7 +191,7 @@ async function renderAccountModalContent(container) {
       } else if (address) {
         // No cached balance - fetch in background, show Loading for now
         // Don't await - let modal open immediately
-        getWalletBalance(address).then(result => {
+        import('./core/wallet_core.js').then(m => m.getWalletBalance(address)).then(result => {
           const el = document.getElementById('accountBalanceDisplay');
           if (el) {
             const balanceETH = result.balanceETH || '0';
@@ -738,6 +736,7 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
     }
 
     // Step 1c: Create account locally (generate new seed)
+    const { createNewAccount } = await import('./core/account_creation.js');
     const account = await createNewAccount();
     console.log('[Bookish:AccountUI] Account created:', account.address);
 
@@ -1976,6 +1975,7 @@ function showFundingValueModal(address, isFunded = false) {
   // Copy address
   document.getElementById('copyAddressBtn').onclick = async () => {
     try {
+      const { copyAddressToClipboard } = await import('./core/wallet_core.js');
       await copyAddressToClipboard(address);
       const btn = document.getElementById('copyAddressBtn');
       btn.textContent = '✓ Copied!';
@@ -2213,6 +2213,7 @@ function openCoinbaseOnrampWithInstructions(address) {
     }
 
     try {
+      const { getWalletBalance } = await import('./core/wallet_core.js');
       const { balanceETH } = await getWalletBalance(address);
       console.log('[Bookish:AccountUI] Fast poll balance check:', balanceETH);
       
@@ -2307,6 +2308,7 @@ function openCoinbaseOnrampWithInstructions(address) {
       if (showManualOption) {
         document.getElementById('copyAddressManualBtn').onclick = async () => {
           try {
+            const { copyAddressToClipboard } = await import('./core/wallet_core.js');
             await copyAddressToClipboard(address);
             const btn = document.getElementById('copyAddressManualBtn');
             btn.textContent = '✓ Copied!';
@@ -2342,6 +2344,7 @@ function openCoinbaseOnrampWithInstructions(address) {
       if (progressModal && progressModal.style.display !== 'none') {
         console.log('[Bookish:AccountUI] Doing final balance check...');
         try {
+          const { getWalletBalance } = await import('./core/wallet_core.js');
           const { balanceETH } = await getWalletBalance(address);
           const currentCached = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH || '0';
           

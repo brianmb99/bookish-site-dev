@@ -2,7 +2,6 @@
 // Manages: balance checking, auto-persistence, book sync, and global sync status
 // Uses adaptive intervals: Active (30s) → Cooling (60s) → Idle (5min)
 
-import { getWalletBalance } from './core/wallet_core.js';
 import * as storageManager from './core/storage_manager.js';
 
 // Sync state
@@ -280,6 +279,7 @@ async function checkBalanceAndAutoPersist() {
       console.debug(`[Bookish:SyncManager] Balance throttled (cached ${currentBalanceETH}), next check in ${Math.round((BALANCE_THROTTLE_MS - (now - lastBalanceCheckAt)) / 1000)}s`);
     } else {
       // Perform actual balance check
+      const { getWalletBalance } = await import('./core/wallet_core.js');
       const { balanceETH } = await getWalletBalance(walletInfo.address);
       const balanceChanged = currentBalanceETH !== null && currentBalanceETH !== balanceETH;
       currentBalanceETH = balanceETH;

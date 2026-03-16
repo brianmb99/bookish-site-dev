@@ -1,7 +1,7 @@
 // wallet.js - Hidden EVM wallet (Base) stored locally, encrypted with the Bookish symmetric key
 // Exposes window.bookishWallet with: ensure(), getAddress(), getBalance(), signMessage(), export(), import()
 
-import { Wallet, JsonRpcProvider } from 'https://esm.sh/ethers@6';
+import { Wallet, JsonRpcProvider } from 'https://esm.sh/ethers@6.13.0';
 import { hexToBytes, importAesKey, encryptJson as coreEncryptJson, decryptJson as coreDecryptJson } from './core/crypto_core.js';
 
 const BASE_RPC = window.BOOKISH_BASE_RPC || 'https://mainnet.base.org';
