@@ -346,7 +346,7 @@ function openModal(entry, forceIntent){
 
   // Reading status: unified selector for both add and edit mode
   const status = entry ? normalizeReadingStatus(entry) : (forceIntent || READING_STATUS.WANT_TO_READ);
-  setStatus(status);
+  setReadingStatus(status);
   if(statusSelector) statusSelector.style.display='flex';
 
   snapshotOriginal();
@@ -355,7 +355,7 @@ function openModal(entry, forceIntent){
   setTimeout(()=>{ if(notesInput){ notesInput.style.height='auto'; notesInput.style.height=Math.max(60,notesInput.scrollHeight)+'px'; }}, 0);
 }
 
-function setStatus(status){
+function setReadingStatus(status){
   if(readingStatusInput) readingStatusInput.value = status;
   statusSelector?.querySelectorAll('.status-option').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.status === status);
@@ -977,7 +977,7 @@ document.addEventListener('keydown', (e)=>{
 statusSelector?.addEventListener('click', (ev)=>{
   const btn = ev.target.closest('.status-option');
   if(!btn) return;
-  setStatus(btn.dataset.status);
+  setReadingStatus(btn.dataset.status);
   updateDirty();
 });
 
