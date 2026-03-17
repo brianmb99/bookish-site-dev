@@ -810,7 +810,7 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
       try {
         const faucetResult = await Promise.race([
           requestFaucetFunding(address, null, 3),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 20000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 45000))
         ]);
         faucetOK = faucetResult.success;
         transientState.faucetResult = faucetResult.success ? 'funded' : 'failed';
