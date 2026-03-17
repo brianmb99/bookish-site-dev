@@ -377,8 +377,8 @@ button.secondary:hover, .btn.secondary:hover{
 .card-reading-label{font-size:.7rem;color:var(--color-primary);opacity:.85;display:flex;align-items:center;gap:4px}
 
 /* WTR trigger in header */
-.wtr-trigger{font-size:.75rem;color:var(--color-text-muted);cursor:pointer;transition:color .2s,background .2s;padding:6px 10px;border-radius:6px;background:transparent;border:none;font-weight:500;font-family:var(--font-body);min-height:auto;box-shadow:none}
-.wtr-trigger:hover{color:var(--color-text-secondary);background:var(--color-bg-surface)}
+.wtr-trigger{font-size:.8rem;color:var(--color-text-secondary);cursor:pointer;transition:color .2s,background .2s,border-color .2s;padding:6px 10px;border-radius:6px;background:transparent;border:none;border-bottom:2px solid rgba(74,144,226,.25);font-weight:500;font-family:var(--font-body);min-height:auto;box-shadow:none}
+.wtr-trigger:hover{color:var(--color-primary);background:var(--color-bg-surface);border-bottom-color:var(--color-primary)}
 
 /* WTR drawer overlay */
 .wtr-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:5000;animation:fadeIn .2s ease-out}
@@ -1080,7 +1080,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 .star-rating .star.filled{color:var(--color-warning)}
 
 /* Owned toggle */
-.toggle-switch{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.75rem}
+.toggle-switch{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.75rem;flex-wrap:nowrap}
 .toggle-switch input{display:none}
 .toggle-track{
   position:relative;
@@ -1104,7 +1104,7 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 }
 .toggle-switch input:checked+.toggle-track{background:var(--color-primary)}
 .toggle-switch input:checked+.toggle-track::after{transform:translateX(16px);background:#fff}
-.toggle-label{color:var(--color-text-secondary);font-size:.75rem;font-weight:500}
+.toggle-label{color:var(--color-text-secondary);font-size:.75rem;font-weight:500;position:relative;z-index:1;min-width:0;flex-shrink:0}
 
 /* Tags input */
 .tags-input{
@@ -1180,6 +1180,8 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
 /* Date picker enhancements */
 .date-input-wrap{display:flex;align-items:center;gap:6px;position:relative}
 .date-input-wrap input[type=date]{flex:1;min-width:0}
+.date-readonly input[type=date]{color:var(--color-text-muted);background:transparent;border-color:transparent;pointer-events:none}
+.date-readonly .cal-btn{display:none}
 /* Hide native date picker icon - we use custom .cal-btn */
 .date-input-wrap input[type=date]::-webkit-calendar-picker-indicator{display:none}
 .date-input-wrap input[type=date]::-webkit-inner-spin-button{display:none}

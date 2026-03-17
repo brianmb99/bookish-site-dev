@@ -318,7 +318,20 @@ function openModal(entry, forceIntent){
   form.title.value=entry?entry.title:'';
   form.author.value=entry?entry.author:'';
   form.format.value=entry?mapFormat(entry.format):'print';
-  form.dateRead.value=entry?entry.dateRead:new Date().toISOString().slice(0,10);
+  if(entry){
+    const rs = normalizeReadingStatus(entry);
+    if(rs === READING_STATUS.WANT_TO_READ){
+      const ts = entry.createdAt;
+      form.dateRead.value = ts ? new Date(ts).toISOString().slice(0,10) : (entry.dateRead || new Date().toISOString().slice(0,10));
+    } else if(rs === READING_STATUS.READING){
+      const ts = entry.readingStartedAt;
+      form.dateRead.value = ts ? new Date(ts).toISOString().slice(0,10) : (entry.dateRead || new Date().toISOString().slice(0,10));
+    } else {
+      form.dateRead.value = entry.dateRead || new Date().toISOString().slice(0,10);
+    }
+  } else {
+    form.dateRead.value = new Date().toISOString().slice(0,10);
+  }
   if(notesInput) notesInput.value = entry?.notes || '';
   initOptionalFields(entry);
   populateOptionalFields(entry);
@@ -365,14 +378,45 @@ function setIntent(intent){
 
 function applyIntentUI(intent){
   const dateBlock = form.dateRead?.closest('.field-block');
-  const ratingChip = fieldChipsEl?.querySelector('.field-chip[data-field="rating"]');
-  if(intent === READING_STATUS.WANT_TO_READ || intent === READING_STATUS.READING){
-    if(dateBlock) dateBlock.style.display='none';
-    if(ratingChip) ratingChip.style.display='none';
+  const dateLabel = dateBlock?.querySelector('label');
+  const dateInput = form.dateRead;
+  const isWtr = intent === READING_STATUS.WANT_TO_READ;
+  const isReading = intent === READING_STATUS.READING;
+
+  if(dateBlock){
+    dateBlock.style.display = '';
+    if(isWtr){
+      if(dateLabel) dateLabel.textContent = 'Added';
+      if(dateInput){
+        const entry = form.priorTxid.value ? entries.find(e=>(e.txid||e.id)===form.priorTxid.value) : null;
+        const ts = entry?.createdAt;
+        dateInput.value = ts ? new Date(ts).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+        dateInput.readOnly = true;
+        dateBlock.classList.add('date-readonly');
+      }
+    } else if(isReading){
+      if(dateLabel) dateLabel.textContent = 'Started';
+      if(dateInput){
+        const entry = form.priorTxid.value ? entries.find(e=>(e.txid||e.id)===form.priorTxid.value) : null;
+        const ts = entry?.readingStartedAt;
+        if(!dateInput.value || dateInput.readOnly) dateInput.value = ts ? new Date(ts).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+        dateInput.readOnly = false;
+        dateBlock.classList.remove('date-readonly');
+      }
+    } else {
+      if(dateLabel) dateLabel.textContent = 'Completed';
+      if(dateInput){
+        const entry = form.priorTxid.value ? entries.find(e=>(e.txid||e.id)===form.priorTxid.value) : null;
+        if(dateInput.readOnly || !dateInput.value) dateInput.value = entry?.dateRead || new Date().toISOString().slice(0,10);
+        dateInput.readOnly = false;
+        dateBlock.classList.remove('date-readonly');
+      }
+    }
+  }
+
+  if(isWtr || isReading){
     if(saveBtn) saveBtn.textContent='Add to List';
   } else {
-    if(dateBlock) dateBlock.style.display='';
-    if(ratingChip) ratingChip.style.display='';
     if(saveBtn) saveBtn.textContent='Save';
   }
 }
@@ -382,9 +426,12 @@ function updateStatusPills(activeStatus){
     p.classList.toggle('active', p.dataset.status === activeStatus);
   });
 }
-function closeModal(){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(intentToggle) intentToggle.style.display='none'; if(statusPills) statusPills.style.display='none'; currentIntent=READING_STATUS.WANT_TO_READ; // restore dateRead display
+function closeModal(){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(intentToggle) intentToggle.style.display='none'; if(statusPills) statusPills.style.display='none'; currentIntent=READING_STATUS.WANT_TO_READ;
   const dateBlock = form.dateRead?.closest('.field-block');
-  if(dateBlock) dateBlock.style.display='';
+  if(dateBlock){ dateBlock.style.display=''; dateBlock.classList.remove('date-readonly'); }
+  if(form.dateRead) form.dateRead.readOnly=false;
+  const dateLabel = dateBlock?.querySelector('label');
+  if(dateLabel) dateLabel.textContent='Completed';
   if(window.bookSearch) window.bookSearch.handleModalOpen(true); }
 function clearBooks(){ entries=[]; render(); }
 window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus };
@@ -1413,7 +1460,7 @@ async function deleteServerless(priorTxid){ const entry=entries.find(e=>e.txid==
 
 // --- Form handlers ---
 let _formSubmitting = false;
-form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) return; _formSubmitting=true; const priorTxid=form.priorTxid.value||undefined; const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ; const payload={ title:form.title.value.trim(), author:form.author.value.trim(), format:form.format.value, dateRead:form.dateRead.value, readingStatus:rsValue }; if(rsValue === READING_STATUS.WANT_TO_READ){ payload.dateRead = ''; } if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; } const notesVal=(notesInput?.value||'').trim(); if(notesVal) payload.notes=notesVal; const optVals=getOptionalFieldValues(); if(priorTxid){ payload.rating=optVals.rating||0; payload.owned=!!optVals.owned; payload.tags=optVals.tags||''; if(!notesVal) payload.notes=''; } else { if(optVals.rating) payload.rating=optVals.rating; if(optVals.owned) payload.owned=optVals.owned; if(optVals.tags) payload.tags=optVals.tags; } uiStatusManager.refresh();
+form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) return; _formSubmitting=true; const priorTxid=form.priorTxid.value||undefined; const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ; const dateVal = form.dateRead.value; const payload={ title:form.title.value.trim(), author:form.author.value.trim(), format:form.format.value, dateRead:'', readingStatus:rsValue }; if(rsValue === READING_STATUS.READ){ payload.dateRead = dateVal; } else if(rsValue === READING_STATUS.READING){ payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now(); } if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; } const notesVal=(notesInput?.value||'').trim(); if(notesVal) payload.notes=notesVal; const optVals=getOptionalFieldValues(); if(priorTxid){ payload.rating=optVals.rating||0; payload.owned=!!optVals.owned; payload.tags=optVals.tags||''; if(!notesVal) payload.notes=''; } else { if(optVals.rating) payload.rating=optVals.rating; if(optVals.owned) payload.owned=optVals.owned; if(optVals.tags) payload.tags=optVals.tags; } uiStatusManager.refresh();
   const toastMsg = rsValue === READING_STATUS.WANT_TO_READ ? 'Added to Want to Read' : rsValue === READING_STATUS.READING ? 'Added to Currently Reading' : (!priorTxid ? 'Added to Shelf' : null);
   if(priorTxid){
   closeModal();

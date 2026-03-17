@@ -3,7 +3,7 @@
   "title": "Bookish Reading v0.1.0",
   "description": "Book reading entry stored on Arweave, keyed by wallet address",
   "type": "object",
-  "required": ["schema", "version", "bookId", "title", "author", "edition", "format", "dateRead"],
+  "required": ["schema", "version", "bookId", "title", "author", "edition", "format"],
   "properties": {
     "schema": { "const": "reading" },
     "version": { "const": "0.1.0" },
