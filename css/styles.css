@@ -845,11 +845,13 @@ body[data-superuser] #syncNowBtn{display:inline-flex!important}
   /* Filters collapsed on mobile */
   .filters-toggle{display:inline-flex}
   .search-controls:not(.expanded){display:none}
-  /* Mobile modal adjustments (centered, not bottom sheet) */
+  /* Mobile modal: anchor to top so tall content scrolls naturally */
+  .modal{align-items:flex-start;padding:12px 8px 24px}
   .modal-inner{
     padding:16px 14px;
     border-radius:16px;
-    max-height:92vh;
+    max-height:calc(100vh - 36px);
+    max-height:calc(100dvh - 36px);
     overflow-y:auto;
   }
   .modal-inner .btn{
