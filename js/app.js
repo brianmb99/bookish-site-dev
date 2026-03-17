@@ -87,10 +87,8 @@ const wtrListEl = document.getElementById('wtrList');
 const wtrEmptyEl = document.getElementById('wtrEmpty');
 const wtrAddBtn = document.getElementById('wtrAddBtn');
 const wtrFooterAdd = document.getElementById('wtrFooterAdd');
-const intentToggle = document.getElementById('intentToggle');
-const statusPills = document.getElementById('statusPills');
+const statusSelector = document.getElementById('statusSelector');
 const readingStatusInput = document.getElementById('readingStatusInput');
-let currentIntent = READING_STATUS.WANT_TO_READ;
 
 function normalizeReadingStatus(e) {
   const s = e?.readingStatus;
@@ -346,20 +344,10 @@ function openModal(entry, forceIntent){
   if(deleteBtn) deleteBtn.style.display=entry?'inline-flex':'none';
   if(cancelBtn) cancelBtn.style.display='inline-flex';
 
-  // Reading status: intent toggle (add mode) or status pills (edit mode)
-  if(!entry){
-    const intent = forceIntent || READING_STATUS.WANT_TO_READ;
-    setIntent(intent);
-    if(intentToggle) intentToggle.style.display='flex';
-    if(statusPills) statusPills.style.display='none';
-  } else {
-    const rs = normalizeReadingStatus(entry);
-    if(readingStatusInput) readingStatusInput.value = rs;
-    if(intentToggle) intentToggle.style.display='none';
-    if(statusPills) statusPills.style.display='flex';
-    updateStatusPills(rs);
-    applyIntentUI(rs === READING_STATUS.READ ? READING_STATUS.READ : rs);
-  }
+  // Reading status: unified selector for both add and edit mode
+  const status = entry ? normalizeReadingStatus(entry) : (forceIntent || READING_STATUS.WANT_TO_READ);
+  setStatus(status);
+  if(statusSelector) statusSelector.style.display='flex';
 
   snapshotOriginal();
   updateDirty();
@@ -367,13 +355,12 @@ function openModal(entry, forceIntent){
   setTimeout(()=>{ if(notesInput){ notesInput.style.height='auto'; notesInput.style.height=Math.max(60,notesInput.scrollHeight)+'px'; }}, 0);
 }
 
-function setIntent(intent){
-  currentIntent = intent;
-  if(readingStatusInput) readingStatusInput.value = intent;
-  intentToggle?.querySelectorAll('.intent-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.intent === intent);
+function setStatus(status){
+  if(readingStatusInput) readingStatusInput.value = status;
+  statusSelector?.querySelectorAll('.status-option').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.status === status);
   });
-  applyIntentUI(intent);
+  applyIntentUI(status);
 }
 
 function applyIntentUI(intent){
@@ -414,19 +401,15 @@ function applyIntentUI(intent){
     }
   }
 
-  if(isWtr || isReading){
-    if(saveBtn) saveBtn.textContent='Add to List';
+  const isAddMode = modal.querySelector('.modal-inner')?.classList.contains('add-mode');
+  if(isAddMode){
+    if(saveBtn) saveBtn.textContent = (isWtr || isReading) ? 'Add to List' : 'Add to Shelf';
   } else {
-    if(saveBtn) saveBtn.textContent='Save';
+    if(saveBtn) saveBtn.textContent = 'Save';
   }
 }
 
-function updateStatusPills(activeStatus){
-  statusPills?.querySelectorAll('.status-pill').forEach(p => {
-    p.classList.toggle('active', p.dataset.status === activeStatus);
-  });
-}
-function closeModal(){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(intentToggle) intentToggle.style.display='none'; if(statusPills) statusPills.style.display='none'; currentIntent=READING_STATUS.WANT_TO_READ;
+function closeModal(){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(statusSelector) statusSelector.style.display='none';
   const dateBlock = form.dateRead?.closest('.field-block');
   if(dateBlock){ dateBlock.style.display=''; dateBlock.classList.remove('date-readonly'); }
   if(form.dateRead) form.dateRead.readOnly=false;
@@ -990,22 +973,11 @@ document.addEventListener('keydown', (e)=>{
   }
 });
 
-// Intent toggle event listeners
-intentToggle?.addEventListener('click', (ev)=>{
-  const btn = ev.target.closest('.intent-btn');
+// Status selector event listener
+statusSelector?.addEventListener('click', (ev)=>{
+  const btn = ev.target.closest('.status-option');
   if(!btn) return;
-  setIntent(btn.dataset.intent);
-  updateDirty();
-});
-
-// Status pills event listeners
-statusPills?.addEventListener('click', (ev)=>{
-  const pill = ev.target.closest('.status-pill');
-  if(!pill) return;
-  const newStatus = pill.dataset.status;
-  if(readingStatusInput) readingStatusInput.value = newStatus;
-  updateStatusPills(newStatus);
-  applyIntentUI(newStatus);
+  setStatus(btn.dataset.status);
   updateDirty();
 });
 

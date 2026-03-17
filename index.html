@@ -87,7 +87,7 @@
   <span class="toast-icon">🎉</span>
   <span class="toast-message">First book added! You're on your way.</span>
 </div>
-<footer>Bookish • Alpha • v0.2.4 • <a href="/forever.html">Data export</a></footer>
+<footer>Bookish • Alpha • v0.2.5 • <a href="/forever.html">Data export</a></footer>
 </div>
 
 <!-- Notes expand overlay -->
@@ -106,14 +106,10 @@
 <div id="modal" class="modal">
   <div class="modal-inner">
     <button class="modal-close-btn" id="closeModal" aria-label="Close">×</button>
-    <div id="intentToggle" class="intent-toggle add-only" style="display:none">
-      <button type="button" class="intent-btn active" data-intent="want_to_read">Want to Read</button>
-      <button type="button" class="intent-btn" data-intent="read">Finished</button>
-    </div>
-    <div id="statusPills" class="status-pills edit-only" style="display:none">
-      <button type="button" class="status-pill" data-status="want_to_read">Want to Read</button>
-      <button type="button" class="status-pill" data-status="reading">Reading</button>
-      <button type="button" class="status-pill" data-status="read">Finished</button>
+    <div id="statusSelector" class="status-selector" style="display:none">
+      <button type="button" class="status-option active" data-status="want_to_read">Want to Read</button>
+      <button type="button" class="status-option" data-status="reading">Reading</button>
+      <button type="button" class="status-option" data-status="read">Read</button>
     </div>
     <input type="hidden" name="readingStatus" id="readingStatusInput" value="want_to_read"/>
     <div id="bookSearchUI">
