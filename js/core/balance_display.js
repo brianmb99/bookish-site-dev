@@ -1,10 +1,10 @@
 // balance_display.js - User-friendly USDC balance formatting
 
-// $0.005 per upload = 5000 USDC units (6 decimals)
-const COST_PER_BOOK_USDC = 5000n;
+// $0.001 per upload = 1000 USDC units (6 decimals)
+const COST_PER_BOOK_USDC = 1000n;
 
-// Below $0.001 (1000 units) there's not enough for anything useful
-const MIN_USEFUL_BALANCE_USDC = 1000n;
+// Below $0.0005 (500 units) there's not enough for anything useful
+const MIN_USEFUL_BALANCE_USDC = 500n;
 
 /**
  * Parse a USDC balance into raw units (BigInt).

@@ -53,7 +53,7 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
   }
 
   try {
-    const result = await window.bookishUpload.upload(encryptedPayload, tags);
+    const result = await window.bookishUpload.upload(encryptedPayload, tags, { skipFee: true });
 
     console.log(`[Bookish:CredentialMapping] Mapping uploaded: ${result.id}`);
     return result.id;

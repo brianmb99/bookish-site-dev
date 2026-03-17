@@ -54,7 +54,7 @@ export async function uploadAccountMetadata({ address, displayName, symKey, crea
     throw new Error('Upload client not initialized');
   }
 
-  const result = await window.bookishUpload.upload(encryptedPayload, tags);
+  const result = await window.bookishUpload.upload(encryptedPayload, tags, { skipFee: true });
   const txId = result.id;
 
   console.log('[Bookish:AccountArweave] Account metadata uploaded:', txId);

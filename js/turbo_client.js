@@ -75,26 +75,27 @@ async function signERC3009Authorization(feeSchedule) {
 
 // ============ Upload ============
 
-async function upload(dataBytes, tags) {
+async function upload(dataBytes, tags, { skipFee = false } = {}) {
   let dtTags = Array.isArray(tags) ? [...tags] : [];
   const hasCT = dtTags.some(t => (t.name || '').toLowerCase() === 'content-type');
   if (!hasCT) dtTags.unshift({ name: 'Content-Type', value: 'application/octet-stream' });
 
   const payloadBytes = dataBytes instanceof Uint8Array ? dataBytes.length : (dataBytes?.byteLength || 0);
-  console.info('[Bookish:Upload] uploading via proxy', { bytes: payloadBytes, tags: dtTags.length });
-  logAppend('upload', 'proxy-start', { bytes: payloadBytes });
+  console.info('[Bookish:Upload] uploading via proxy', { bytes: payloadBytes, tags: dtTags.length, skipFee });
+  logAppend('upload', 'proxy-start', { bytes: payloadBytes, skipFee });
 
-  let feeSchedule = await getFeeSchedule();
-  if (!feeSchedule) throw new Error('Unable to fetch fee schedule from upload proxy');
-
-  let payment = await signERC3009Authorization(feeSchedule);
+  let payment = null;
+  if (!skipFee) {
+    let feeSchedule = await getFeeSchedule();
+    if (!feeSchedule) throw new Error('Unable to fetch fee schedule from upload proxy');
+    payment = await signERC3009Authorization(feeSchedule);
+  }
 
   let response = await doUpload(dataBytes, dtTags, payment);
 
-  // If 402, re-fetch fee schedule (may have changed) and retry once
-  if (response.status === 402) {
+  if (!skipFee && response.status === 402) {
     console.warn('[Bookish:Upload] 402 received, re-fetching fee schedule and retrying');
-    feeSchedule = await getFeeSchedule(true);
+    const feeSchedule = await getFeeSchedule(true);
     if (feeSchedule) {
       payment = await signERC3009Authorization(feeSchedule);
       response = await doUpload(dataBytes, dtTags, payment);
@@ -119,13 +120,15 @@ async function upload(dataBytes, tags) {
 }
 
 async function doUpload(dataBytes, tags, payment) {
+  const headers = {
+    'Content-Type': 'application/octet-stream',
+    'X-Arweave-Tags': JSON.stringify(tags),
+  };
+  if (payment) headers['X-Payment'] = JSON.stringify(payment);
+
   return fetch(`${UPLOAD_PROXY}/upload`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/octet-stream',
-      'X-Arweave-Tags': JSON.stringify(tags),
-      'X-Payment': JSON.stringify(payment),
-    },
+    headers,
     body: dataBytes,
   });
 }

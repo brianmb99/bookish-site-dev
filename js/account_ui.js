@@ -802,32 +802,23 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
       });
     }
 
-    // Step 2: Faucet funding
+    // Step 2: Faucet funding (non-blocking — runs in background while uploads proceed)
     const address = await window.bookishWallet?.getAddress?.();
-    let faucetOK = false;
 
     if (address) {
-      try {
-        const faucetResult = await Promise.race([
-          requestFaucetFunding(address, null, 3),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 45000))
-        ]);
-        faucetOK = faucetResult.success;
-        transientState.faucetResult = faucetResult.success ? 'funded' : 'failed';
-        transientState.faucetTxHash = faucetResult.txHash || null;
-      } catch (e) {
-        console.error('[Bookish:AccountUI] Faucet error:', e);
-        transientState.faucetResult = e.message === 'timeout' ? 'timeout' : 'failed';
-      }
+      requestFaucetFunding(address, null, 3)
+        .then(r => {
+          transientState.faucetResult = r.success ? 'funded' : 'failed';
+          transientState.faucetTxHash = r.txHash || null;
+          console.log('[Bookish:AccountUI] Faucet completed in background:', r.success ? 'funded' : 'failed');
+        })
+        .catch(e => {
+          transientState.faucetResult = 'failed';
+          console.warn('[Bookish:AccountUI] Faucet failed in background (non-fatal):', e.message);
+        });
     }
 
-    if (!faucetOK) {
-      // Faucet failed - show fallback success
-      showCreationFallbackSuccess(displayName, email);
-      return;
-    }
-
-    // Step 3: Upload to Arweave
+    // Step 3: Upload to Arweave (fee-exempt for account creation — no faucet dependency)
     updateProgressStep('createStep2', 'complete', '✓', 'Cloud storage activated');
     updateProgressStep('createStep3', 'active', '◐', 'Syncing to cloud...');
 
