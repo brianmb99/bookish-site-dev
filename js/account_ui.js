@@ -16,7 +16,7 @@ import { deriveCredentialKeys, normalizeUsername, encryptCredentialPayload, decr
 import { uploadCredentialMapping, downloadCredentialMapping, credentialMappingExists } from './core/credential_mapping.js';
 
 // Global state
-let currentBalanceETH = null;
+let currentBalanceUSDC = null;
 
 // Transient state for UI status manager
 const transientState = {
@@ -181,12 +181,11 @@ async function renderAccountModalContent(container) {
       let balanceText = 'Loading...';
       let balanceStatus = 'ok';
       let isFunded = false;
-      const cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH;
+      const cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceUSDC;
       if (cachedBalance !== null && cachedBalance !== undefined) {
-        // Use cached balance immediately (no RPC call)
         const balance = parseFloat(cachedBalance);
-        isFunded = balance >= 0.00002; // MIN_FUNDING_ETH
-        balanceText = formatBalanceAsBooks(cachedBalance, { showExact: false });
+        isFunded = balance >= 0.001;
+        balanceText = formatBalanceAsBooks(cachedBalance);
         balanceStatus = getBalanceStatus(cachedBalance);
       } else if (address) {
         // No cached balance - fetch in background, show Loading for now
@@ -194,9 +193,9 @@ async function renderAccountModalContent(container) {
         import('./core/wallet_core.js').then(m => m.getWalletBalance(address)).then(result => {
           const el = document.getElementById('accountBalanceDisplay');
           if (el) {
-            const balanceETH = result.balanceETH || '0';
-            el.textContent = formatBalanceAsBooks(balanceETH, { showExact: false });
-            el.className = `balance-display balance-${getBalanceStatus(balanceETH)}`;
+            const balanceUSDC = result.balanceUSDC || '0';
+            el.textContent = formatBalanceAsBooks(balanceUSDC);
+            el.className = `balance-display balance-${getBalanceStatus(balanceUSDC)}`;
           }
         }).catch(e => {
           console.error('[Bookish:AccountUI] Error getting balance:', e);
@@ -1462,8 +1461,8 @@ async function updateDisplayName(newName) {
   showToast('Name updated');
   try {
     const walletInfo = await getStoredWalletInfo();
-    const cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH;
-    const isFunded = cachedBalance != null && parseFloat(cachedBalance) >= 0.00002;
+    const cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceUSDC;
+    const isFunded = cachedBalance != null && parseFloat(cachedBalance) >= 0.001;
     if (walletInfo?.address && isFunded) {
       const symKeyHex = localStorage.getItem('bookish.sym');
       if (symKeyHex) {
@@ -2150,8 +2149,8 @@ async function handleBuyStorage() {
     }
 
     // Use cached balance for instant display (non-blocking)
-    const cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH;
-    const isFunded = cachedBalance !== null && cachedBalance !== undefined && parseFloat(cachedBalance) >= 0.00002;
+    const cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceUSDC;
+    const isFunded = cachedBalance !== null && cachedBalance !== undefined && parseFloat(cachedBalance) >= 0.001;
 
     // Show modal immediately with cached state
     showFundingValueModal(walletInfo.address, isFunded);
@@ -2188,7 +2187,7 @@ function openCoinbaseOnrampWithInstructions(address) {
   }
 
   // Start fast balance polling (every 5 seconds) while Coinbase widget is open
-  const initialBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH || '0';
+  const initialBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceUSDC || '0';
   const startTime = Date.now();
   const FAST_POLL_INTERVAL = 5000; // 5 seconds
   const MAX_POLL_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -2214,12 +2213,12 @@ function openCoinbaseOnrampWithInstructions(address) {
 
     try {
       const { getWalletBalance } = await import('./core/wallet_core.js');
-      const { balanceETH } = await getWalletBalance(address);
-      console.log('[Bookish:AccountUI] Fast poll balance check:', balanceETH);
-      
-      if (parseFloat(balanceETH) > parseFloat(initialBalance)) {
+      const { balanceUSDC } = await getWalletBalance(address);
+      console.log('[Bookish:AccountUI] Fast poll balance check:', balanceUSDC);
+
+      if (parseFloat(balanceUSDC) > parseFloat(initialBalance)) {
         fundsDetected = true;
-        console.log('[Bookish:AccountUI] Funds detected! Balance increased from', initialBalance, 'to', balanceETH);
+        console.log('[Bookish:AccountUI] Funds detected! Balance increased from', initialBalance, 'to', balanceUSDC);
         clearInterval(fastPollInterval);
         window.__fastPollInterval = null;
         
@@ -2345,10 +2344,10 @@ function openCoinbaseOnrampWithInstructions(address) {
         console.log('[Bookish:AccountUI] Doing final balance check...');
         try {
           const { getWalletBalance } = await import('./core/wallet_core.js');
-          const { balanceETH } = await getWalletBalance(address);
-          const currentCached = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH || '0';
-          
-          if (parseFloat(balanceETH) > parseFloat(initialBalance)) {
+          const { balanceUSDC } = await getWalletBalance(address);
+          const currentCached = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceUSDC || '0';
+
+          if (parseFloat(balanceUSDC) > parseFloat(initialBalance)) {
             // Funds arrived! Show simple confirmation
             closeAccountModal();
             setTimeout(() => {
@@ -2651,17 +2650,16 @@ export async function getStoredWalletInfo() {
  * Update balance display with current value
  * Exported for sync_manager to use
  */
-export function updateBalanceDisplay(balanceETH) {
-  currentBalanceETH = balanceETH;
+export function updateBalanceDisplay(balanceUSDC) {
+  currentBalanceUSDC = balanceUSDC;
   const balanceElement = document.getElementById('accountBalanceDisplay');
   if (!balanceElement) return;
 
-  const balance = parseFloat(balanceETH);
-  const isFunded = balance > 0.00002; // ~$0.07 Base ETH
+  const balance = parseFloat(balanceUSDC);
+  const isFunded = balance > 0.001;
 
-  // Format as "~X books remaining"
-  const formattedBalance = formatBalanceAsBooks(balanceETH, { showExact: false });
-  const status = getBalanceStatus(balanceETH);
+  const formattedBalance = formatBalanceAsBooks(balanceUSDC);
+  const status = getBalanceStatus(balanceUSDC);
 
   balanceElement.textContent = formattedBalance;
   balanceElement.className = `balance-display balance-${status}`;

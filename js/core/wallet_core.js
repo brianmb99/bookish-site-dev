@@ -4,9 +4,9 @@
 import { ethers } from 'https://esm.sh/ethers@6.13.0';
 import { WALLET_STORAGE_KEY } from './storage_constants.js';
 
-// Base mainnet network configuration
 const BASE_MAINNET_RPC = 'https://mainnet.base.org';
-const BASE_MAINNET_CHAIN_ID = 8453;
+const USDC_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+const USDC_ABI = ['function balanceOf(address) view returns (uint256)'];
 
 /**
  * Derive Ethereum wallet from BIP39 mnemonic seed
@@ -30,29 +30,20 @@ export async function deriveWalletFromSeed(mnemonic) {
 }
 
 /**
- * Get Base mainnet wallet balance (in ETH)
+ * Get Base mainnet USDC balance
  * @param {string} address - Ethereum address
- * @returns {Promise<{balanceETH: string, balanceUSD: string}>}
+ * @returns {Promise<{balanceUSDC: string}>} balanceUSDC is a decimal dollar string (e.g. "0.05")
  */
 export async function getWalletBalance(address) {
   try {
     const provider = new ethers.JsonRpcProvider(BASE_MAINNET_RPC);
-    const balance = await provider.getBalance(address);
-    const balanceETH = ethers.formatEther(balance);
-
-    // For mainnet, USD value could be calculated with price oracle
-    // For now, returning $0 (price calculation is out of scope for Phase 1b)
-    return {
-      balanceETH,
-      balanceUSD: '0.00',
-    };
+    const usdc = new ethers.Contract(USDC_CONTRACT, USDC_ABI, provider);
+    const raw = await usdc.balanceOf(address);
+    const balanceUSDC = (Number(raw) / 1e6).toFixed(6);
+    return { balanceUSDC };
   } catch (error) {
     console.error('Balance fetch failed:', error);
-    // Return $0 on error (better than throwing)
-    return {
-      balanceETH: '0',
-      balanceUSD: '0.00',
-    };
+    return { balanceUSDC: '0' };
   }
 }
 

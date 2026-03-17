@@ -485,9 +485,7 @@ async function refreshFundingInfo(){
       try{
         const bytes = await (browserClient?.estimateEntryBytes?.(lastPendingOp.payload) || window.bookishEstimate?.entryBytes?.(lastPendingOp.payload));
         if(bytes){
-          const { PROTOCOL_CONFIG } = await import('./core/protocol_config.js');
-          const feeWei = BigInt(PROTOCOL_CONFIG.FLAT_FEE_WEI || '0');
-          fundCostEl.textContent = `${bytes} bytes — protocol fee ≈ ${(Number(feeWei)/1e18).toFixed(6)} ETH`;
+          fundCostEl.textContent = `${bytes} bytes — protocol fee $0.005 per upload`;
         }
       }catch{}
     }
@@ -1501,10 +1499,9 @@ async function initCacheLayer(){
           return null;
         }
       },
-      updateBalance: (balanceETH) => {
-        // Delegate to account_ui if available
+      updateBalance: (balanceUSDC) => {
         if (window.accountUI?.updateBalanceDisplay) {
-          window.accountUI.updateBalanceDisplay(balanceETH);
+          window.accountUI.updateBalanceDisplay(balanceUSDC);
         }
       }
     });
