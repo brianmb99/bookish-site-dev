@@ -8,7 +8,7 @@ import * as storageManager from './core/storage_manager.js';
 let syncInterval = null;
 let isSyncing = false;
 let initialSynced = false;
-let currentBalanceUSDC = null;
+let currentBalanceETH = null;
 let previousFundingState = false;
 let autoPersistenceTriggered = false;
 let syncCycleCount = 0;
@@ -28,7 +28,7 @@ const INTERVAL_IDLE_MS    = 300000;  // 5min — no writes for 5+ min
 const ACTIVE_WINDOW_MS    = 120000;  // 2min — how long Active lasts after a write
 const COOLING_WINDOW_MS   = 300000;  // 5min — how long Cooling lasts
 const BALANCE_THROTTLE_MS = 300000;  // 5min — skip balance RPC when confirmed
-const MIN_FUNDING_USDC = 0.001; // $0.001 USDC
+const MIN_FUNDING_ETH = 0.00002; // ~$0.04 at $2000/ETH
 
 // Callbacks for external modules
 let statusCallback = null;
@@ -51,7 +51,7 @@ window.bookishSyncManager = {
   getSyncStatus: () => ({
     isSyncing,
     initialSynced,
-    currentBalanceUSDC,
+    currentBalanceETH,
     accountState: getAccountPersistenceState()
   })
 };
@@ -133,7 +133,7 @@ export function stopSync() {
   }
   // Reset state so next login shows "Syncing..." properly
   initialSynced = false;
-  currentBalanceUSDC = null;
+  currentBalanceETH = null;
 }
 
 /**
@@ -271,34 +271,34 @@ async function checkBalanceAndAutoPersist() {
     const now = Date.now();
     const canThrottle = accountState === 'confirmed'
       && !forceBalanceCheck
-      && currentBalanceUSDC !== null
+      && currentBalanceETH !== null
       && (now - lastBalanceCheckAt) < BALANCE_THROTTLE_MS;
 
     if (canThrottle) {
       // Reuse cached balance — no RPC call
-      console.debug(`[Bookish:SyncManager] Balance throttled (cached ${currentBalanceUSDC}), next check in ${Math.round((BALANCE_THROTTLE_MS - (now - lastBalanceCheckAt)) / 1000)}s`);
+      console.debug(`[Bookish:SyncManager] Balance throttled (cached ${currentBalanceETH}), next check in ${Math.round((BALANCE_THROTTLE_MS - (now - lastBalanceCheckAt)) / 1000)}s`);
     } else {
       // Perform actual balance check
       const { getWalletBalance } = await import('./core/wallet_core.js');
-      const { balanceUSDC } = await getWalletBalance(walletInfo.address);
-      const balanceChanged = currentBalanceUSDC !== null && currentBalanceUSDC !== balanceUSDC;
-      currentBalanceUSDC = balanceUSDC;
+      const { balanceETH } = await getWalletBalance(walletInfo.address);
+      const balanceChanged = currentBalanceETH !== null && currentBalanceETH !== balanceETH;
+      currentBalanceETH = balanceETH;
       lastBalanceCheckAt = now;
       forceBalanceCheck = false;
 
       if (updateBalanceCallback) {
-        updateBalanceCallback(balanceUSDC);
+        updateBalanceCallback(balanceETH);
       }
 
       if (balanceChanged) {
-        console.log('[Bookish:SyncManager] Balance changed:', balanceUSDC);
+        console.log('[Bookish:SyncManager] Balance changed:', balanceETH);
       } else {
-        console.debug('[Bookish:SyncManager] Balance:', balanceUSDC);
+        console.debug('[Bookish:SyncManager] Balance:', balanceETH);
       }
     }
 
     // Check if wallet just became funded (transition from underfunded to funded)
-    const isFunded = parseFloat(currentBalanceUSDC || '0') >= MIN_FUNDING_USDC;
+    const isFunded = parseFloat(currentBalanceETH || '0') >= MIN_FUNDING_ETH;
     const justFunded = isFunded && !previousFundingState;
     previousFundingState = isFunded;
 
@@ -358,7 +358,7 @@ export function getSyncStatus() {
   return {
     isSyncing,
     initialSynced,
-    currentBalanceUSDC,
+    currentBalanceETH,
     accountState: getAccountPersistenceState()
   };
 }
@@ -414,7 +414,7 @@ export function resetForTesting() {
   stopSync();
   isSyncing = false;
   initialSynced = false;
-  currentBalanceUSDC = null;
+  currentBalanceETH = null;
   previousFundingState = false;
   autoPersistenceTriggered = false;
   syncCycleCount = 0;

@@ -8,7 +8,7 @@ import { encryptWithPassword, decryptWithPassword } from './core/crypto_utils.js
 
 // Balance polling configuration (AC1)
 const BALANCE_POLL_INTERVAL_MS = 30000; // 30 seconds
-const DUST_THRESHOLD_USDC = 0.001; // $0.001 USDC
+const DUST_THRESHOLD_ETH = 0.00002; // ~$0.04 at $2000/ETH
 
 /**
  * Derive bookish.sym from seed phrase using PBKDF2

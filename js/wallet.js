@@ -1,12 +1,10 @@
 // wallet.js - Hidden EVM wallet (Base) stored locally, encrypted with the Bookish symmetric key
 // Exposes window.bookishWallet with: ensure(), getAddress(), getBalance(), signMessage(), export(), import()
 
-import { Wallet, JsonRpcProvider, Contract } from 'https://esm.sh/ethers@6.13.0';
+import { Wallet, JsonRpcProvider } from 'https://esm.sh/ethers@6.13.0';
 import { hexToBytes, importAesKey, encryptJson as coreEncryptJson, decryptJson as coreDecryptJson } from './core/crypto_core.js';
 
-const BASE_RPC = window.BOOKISH_BASE_RPC || 'https://mainnet.base.org';
-const USDC_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const USDC_ABI = ['function balanceOf(address) view returns (uint256)'];
+const BASE_RPC = window.BOOKISH_BASE_RPC || 'https://base.llamarpc.com';
 const STORAGE_KEY = 'bookish.evmWallet.v1';
 
 async function getAesKeyFromSym(){
@@ -62,7 +60,7 @@ async function getWallet(){
   return new Wallet(parsed.privateKey, provider);
 }
 
-async function getBalance(){ const addr = await getAddress(); if(!addr) return null; const provider = getProvider(); const usdc = new Contract(USDC_CONTRACT, USDC_ABI, provider); return await usdc.balanceOf(addr); }
+async function getBalance(){ const addr = await getAddress(); if(!addr) return null; const provider = getProvider(); return await provider.getBalance(addr); }
 
 async function signMessage(message){ const w = await getWallet(); return await w.signMessage(message); }
 

@@ -1,22 +1,24 @@
-// balance_display.js - User-friendly USDC balance formatting
+// balance_display.js - User-friendly ETH balance formatting with USD estimates
 
-// $0.001 per upload = 1000 USDC units (6 decimals)
-const COST_PER_BOOK_USDC = 1000n;
+// Protocol fee per upload: 0.000001 ETH (~$0.002 at $2000/ETH)
+const COST_PER_BOOK_WEI = 1000000000000n; // 1e12 wei = 0.000001 ETH
 
-// Below $0.0005 (500 units) there's not enough for anything useful
-const MIN_USEFUL_BALANCE_USDC = 500n;
+// Below half the fee there's not enough for anything useful
+const MIN_USEFUL_BALANCE_WEI = 500000000000n; // 5e11 wei
+
+const ASSUMED_ETH_PRICE_USD = 2000;
 
 /**
- * Parse a USDC balance into raw units (BigInt).
- * Accepts: raw BigInt, numeric string of units, or decimal dollar string (e.g. "0.05").
+ * Parse an ETH balance into wei (BigInt).
+ * Accepts: raw BigInt, numeric string of wei, or decimal ETH string (e.g. "0.001").
  */
-function parseUSDC(input) {
+function parseWei(input) {
   if (input == null) return 0n;
   if (typeof input === 'bigint') return input;
 
   if (typeof input === 'number') {
     if (isNaN(input)) return 0n;
-    if (input < 1000) return BigInt(Math.floor(input * 1e6));
+    if (input < 1e9) return BigInt(Math.floor(input * 1e18));
     return BigInt(Math.floor(input));
   }
 
@@ -25,9 +27,7 @@ function parseUSDC(input) {
     if (!s) return 0n;
     const parsed = parseFloat(s);
     if (isNaN(parsed)) return 0n;
-    // If it looks like a dollar amount (has decimal or < 1), convert to raw units
-    if (s.includes('.') || parsed < 1) return BigInt(Math.floor(parsed * 1e6));
-    // Otherwise treat as raw USDC units
+    if (s.includes('.') || parsed < 1) return BigInt(Math.floor(parsed * 1e18));
     return BigInt(Math.floor(parsed));
   }
 
@@ -35,35 +35,36 @@ function parseUSDC(input) {
 }
 
 /**
- * Format a USDC balance as "$X.XX (~N books)"
+ * Format an ETH balance as "~$X.XX (~N books)"
  *
- * @param {string|bigint|number} balanceUSDC - Balance in USDC (raw units or dollar string)
+ * @param {string|bigint|number} balanceETH - Balance in wei (raw BigInt or ETH decimal string)
  * @returns {string} Human-readable balance string
  */
-export function formatBalanceAsBooks(balanceUSDC) {
-  const balance = parseUSDC(balanceUSDC);
+export function formatBalanceAsBooks(balanceETH) {
+  const balance = parseWei(balanceETH);
 
   if (balance <= 0n) return 'No balance';
-  if (balance < MIN_USEFUL_BALANCE_USDC) return 'Balance too low';
+  if (balance < MIN_USEFUL_BALANCE_WEI) return 'Balance too low';
 
-  const dollars = (Number(balance) / 1e6).toFixed(2);
-  const books = balance / COST_PER_BOOK_USDC;
+  const ethFloat = Number(balance) / 1e18;
+  const usd = (ethFloat * ASSUMED_ETH_PRICE_USD).toFixed(2);
+  const books = balance / COST_PER_BOOK_WEI;
 
-  if (books <= 0n) return `$${dollars}`;
-  if (books === 1n) return `$${dollars} (~1 book)`;
-  if (books < 100n) return `$${dollars} (~${books} books)`;
-  return `$${dollars} (100+ books)`;
+  if (books <= 0n) return `~$${usd}`;
+  if (books === 1n) return `~$${usd} (~1 book)`;
+  if (books < 100n) return `~$${usd} (~${books} books)`;
+  return `~$${usd} (100+ books)`;
 }
 
 /**
  * Get balance status for UI styling
  *
- * @param {string|bigint|number} balanceUSDC
+ * @param {string|bigint|number} balanceETH
  * @returns {'empty'|'low'|'ok'|'good'}
  */
-export function getBalanceStatus(balanceUSDC) {
-  const balance = parseUSDC(balanceUSDC);
-  const books = balance / COST_PER_BOOK_USDC;
+export function getBalanceStatus(balanceETH) {
+  const balance = parseWei(balanceETH);
+  const books = balance / COST_PER_BOOK_WEI;
 
   if (balance <= 0n) return 'empty';
   if (books < 3n) return 'low';
@@ -74,6 +75,6 @@ export function getBalanceStatus(balanceUSDC) {
 /**
  * Check if balance is sufficient for at least one operation
  */
-export function hasUsableBalance(balanceUSDC) {
-  return parseUSDC(balanceUSDC) >= COST_PER_BOOK_USDC;
+export function hasUsableBalance(balanceETH) {
+  return parseWei(balanceETH) >= COST_PER_BOOK_WEI;
 }

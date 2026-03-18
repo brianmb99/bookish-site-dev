@@ -1499,9 +1499,9 @@ async function initCacheLayer(){
           return null;
         }
       },
-      updateBalance: (balanceUSDC) => {
+      updateBalance: (balanceETH) => {
         if (window.accountUI?.updateBalanceDisplay) {
-          window.accountUI.updateBalanceDisplay(balanceUSDC);
+          window.accountUI.updateBalanceDisplay(balanceETH);
         }
       }
     });

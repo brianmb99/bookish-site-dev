@@ -1,11 +1,11 @@
 // turbo_client.js - Bookish upload client via Upload Proxy (Cloudflare Worker)
-// Signs an ERC-3009 USDC payment authorization and sends it with encrypted data.
+// Signs a native ETH fee transaction and sends it (serialized) with encrypted data.
 
-import { Wallet, Signature } from 'https://esm.sh/ethers@6.13.0';
+import { Wallet, JsonRpcProvider, parseUnits } from 'https://esm.sh/ethers@6.13.0';
 import { append as logAppend } from './core/log_local.js';
 
 const UPLOAD_PROXY = window.BOOKISH_UPLOAD_PROXY || 'https://bookish-upload-proxy.bookish.workers.dev';
-const USDC_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+const BASE_RPC = window.BOOKISH_BASE_RPC || 'https://base.llamarpc.com';
 
 let _feeSchedule = null;
 
@@ -31,46 +31,28 @@ async function estimateCost(byteLength) {
   }
 }
 
-// ============ ERC-3009 Signing ============
+// ============ ETH Fee Transaction Signing ============
 
-async function signERC3009Authorization(feeSchedule) {
+async function signFeeTx(feeSchedule) {
   const pk = await window.bookishWallet.getPrivateKey();
-  const wallet = new Wallet(pk);
+  const provider = new JsonRpcProvider(BASE_RPC, 8453, { staticNetwork: true });
+  const wallet = new Wallet(pk, provider);
 
-  const domain = {
-    name: 'USD Coin',
-    version: '2',
-    chainId: 8453,
-    verifyingContract: USDC_CONTRACT,
-  };
+  const feeWei = BigInt(feeSchedule.fee);
+  const nonce = await provider.getTransactionCount(wallet.address, 'latest');
 
-  const types = {
-    TransferWithAuthorization: [
-      { name: 'from', type: 'address' },
-      { name: 'to', type: 'address' },
-      { name: 'value', type: 'uint256' },
-      { name: 'validAfter', type: 'uint256' },
-      { name: 'validBefore', type: 'uint256' },
-      { name: 'nonce', type: 'bytes32' },
-    ],
-  };
-
-  const nonce = '0x' + Array.from(crypto.getRandomValues(new Uint8Array(32)))
-    .map(b => b.toString(16).padStart(2, '0')).join('');
-
-  const value = {
-    from: wallet.address,
+  const tx = await wallet.signTransaction({
     to: feeSchedule.address,
-    value: feeSchedule.fee,
-    validAfter: 0,
-    validBefore: Math.floor(Date.now() / 1000) + 300, // 5 min expiry
+    value: feeWei,
+    chainId: 8453,
+    type: 2,
     nonce,
-  };
+    maxFeePerGas: parseUnits('0.15', 'gwei'),
+    maxPriorityFeePerGas: parseUnits('0.001', 'gwei'),
+    gasLimit: 21000n,
+  });
 
-  const signature = await wallet.signTypedData(domain, types, value);
-  const { v, r, s } = Signature.from(signature);
-
-  return { ...value, v, r, s };
+  return { signedTx: tx };
 }
 
 // ============ Upload ============
@@ -88,7 +70,7 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
   if (!skipFee) {
     let feeSchedule = await getFeeSchedule();
     if (!feeSchedule) throw new Error('Unable to fetch fee schedule from upload proxy');
-    payment = await signERC3009Authorization(feeSchedule);
+    payment = await signFeeTx(feeSchedule);
   }
 
   let response = await doUpload(dataBytes, dtTags, payment);
@@ -97,7 +79,7 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
     console.warn('[Bookish:Upload] 402 received, re-fetching fee schedule and retrying');
     const feeSchedule = await getFeeSchedule(true);
     if (feeSchedule) {
-      payment = await signERC3009Authorization(feeSchedule);
+      payment = await signFeeTx(feeSchedule);
       response = await doUpload(dataBytes, dtTags, payment);
     }
   }
