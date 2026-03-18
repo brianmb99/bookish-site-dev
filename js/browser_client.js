@@ -91,6 +91,14 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
 
   async function fetchBytes(txid){
     try {
+      const rT = await fetch(`https://turbo-gateway.com/${txid}`);
+      if (rT.ok){
+        window.bookishNet = window.bookishNet||{reads:{arweave:0, turbo:0, errors:0}};
+        window.bookishNet.reads.turbo++; if(window.BOOKISH_DEBUG) console.debug('[Bookish] read from Turbo', txid);
+        return new Uint8Array(await rT.arrayBuffer());
+      }
+    } catch{ /* ignore */ }
+    try {
       const rA = await fetch(`https://arweave.net/${txid}`);
       if (rA.ok){
         window.bookishNet = window.bookishNet||{reads:{arweave:0, turbo:0, errors:0}};
@@ -98,17 +106,9 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
         return new Uint8Array(await rA.arrayBuffer());
       }
     } catch{ /* ignore */ }
-    try {
-      const rT = await fetch(`https://turbo-gateway.com/${txid}`);
-      if (rT.ok){
-        window.bookishNet = window.bookishNet||{reads:{arweave:0, turbo:0, errors:0}};
-        window.bookishNet.reads.turbo++; if(window.BOOKISH_DEBUG) console.debug('[Bookish] read from Turbo cache', txid);
-        return new Uint8Array(await rT.arrayBuffer());
-      }
-    } catch{ /* ignore */ }
     window.bookishNet = window.bookishNet||{reads:{arweave:0, turbo:0, errors:0}};
     window.bookishNet.reads.errors++; if(window.BOOKISH_DEBUG) console.debug('[Bookish] read failed', txid);
-    throw new Error('fetch '+txid+': arweave+turbo failed');
+    throw new Error('fetch '+txid+': turbo+arweave failed');
   }
   async function decryptTx(txid){ const bytes = await fetchBytes(txid); return decBytes(bytes); }
 
@@ -130,10 +130,10 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
       window.bookishNet.lastProbeAt = now;
       window.bookishNet.nextProbeAt = now + 60000;
     }catch{}
-    const pa = await probeGatewayTracked('arweave', `https://arweave.net/${txid}`);
-    let pt = false;
-    if (!pa) {
-      pt = await probeGatewayTracked('turbo', `https://turbo-gateway.com/${txid}`);
+    const pt = await probeGatewayTracked('turbo', `https://turbo-gateway.com/${txid}`);
+    let pa = false;
+    if (!pt) {
+      pa = await probeGatewayTracked('arweave', `https://arweave.net/${txid}`);
     }
     const rec = { arweave: !!pa, turbo: !!pt, t: now };
     availCache.set(txid, rec);

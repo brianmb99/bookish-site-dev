@@ -18,6 +18,16 @@ function isValidLookupKey(lookupKey) {
   return typeof lookupKey === 'string' && /^[0-9a-f]{64}$/.test(lookupKey);
 }
 
+const TX_CACHE_PREFIX = 'bookish.txcache.cred.';
+
+function cacheTxId(lookupKey, txId) {
+  try { localStorage.setItem(TX_CACHE_PREFIX + lookupKey, txId); } catch {}
+}
+
+function getCachedTxId(lookupKey) {
+  try { return localStorage.getItem(TX_CACHE_PREFIX + lookupKey); } catch { return null; }
+}
+
 /**
  * Upload credential mapping to Arweave
  * The entire payload (seed + metadata) is encrypted before upload per the spec.
@@ -56,6 +66,7 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
     const result = await window.bookishUpload.upload(encryptedPayload, tags, { skipFee: true });
 
     console.log(`[Bookish:CredentialMapping] Mapping uploaded: ${result.id}`);
+    cacheTxId(lookupKey, result.id);
     return result.id;
   } catch (error) {
     console.error('[Bookish:CredentialMapping] Upload failed:', error);
@@ -70,6 +81,12 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
  * @returns {Promise<string|null>} - Transaction ID or null if not found
  */
 async function findCredentialMappingTx(lookupKey) {
+  const cached = getCachedTxId(lookupKey);
+  if (cached) {
+    console.log(`[Bookish:CredentialMapping] Using cached tx: ${cached}`);
+    return cached;
+  }
+
   const query = `query {
     transactions(
       tags: [
@@ -99,8 +116,10 @@ async function findCredentialMappingTx(lookupKey) {
     const result = await response.json();
     const edges = result.data?.transactions?.edges || [];
     if (edges.length > 0) {
-      console.log(`[Bookish:CredentialMapping] Found mapping: ${edges[0].node.id}`);
-      return edges[0].node.id;
+      const txId = edges[0].node.id;
+      console.log(`[Bookish:CredentialMapping] Found mapping: ${txId}`);
+      cacheTxId(lookupKey, txId);
+      return txId;
     }
     return null;
   } catch (err) {
@@ -111,15 +130,15 @@ async function findCredentialMappingTx(lookupKey) {
 
 /**
  * Download raw data for a transaction.
- * Tries Arweave L1 first, then Turbo cache for recently uploaded data.
+ * Tries Turbo first (immediate availability for recent uploads), then Arweave L1.
  *
  * @param {string} txId - Transaction ID
  * @returns {Promise<Uint8Array>} - Raw bytes
  */
 async function downloadTxData(txId) {
   const gateways = [
-    { url: `${ARWEAVE_GATEWAY}/${txId}`, label: 'Arweave' },
-    { url: `${TURBO_GATEWAY}/${txId}`, label: 'Turbo' }
+    { url: `${TURBO_GATEWAY}/${txId}`, label: 'Turbo' },
+    { url: `${ARWEAVE_GATEWAY}/${txId}`, label: 'Arweave' }
   ];
 
   let lastError = null;

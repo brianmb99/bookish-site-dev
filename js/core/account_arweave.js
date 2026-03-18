@@ -4,6 +4,16 @@
 
 import { encryptJsonToBytes, decryptBytesToJson, hexToBytes } from './crypto_core.js';
 
+const TX_CACHE_PREFIX = 'bookish.txcache.acct.';
+
+function cacheTxId(hashedLookupKey, txId) {
+  try { localStorage.setItem(TX_CACHE_PREFIX + hashedLookupKey, txId); } catch {}
+}
+
+function getCachedTxId(hashedLookupKey) {
+  try { return localStorage.getItem(TX_CACHE_PREFIX + hashedLookupKey); } catch { return null; }
+}
+
 /**
  * Upload encrypted account metadata to Arweave (profile only, NO SEED)
  * @param {Object} params
@@ -58,6 +68,7 @@ export async function uploadAccountMetadata({ address, displayName, symKey, crea
   const txId = result.id;
 
   console.log('[Bookish:AccountArweave] Account metadata uploaded:', txId);
+  cacheTxId(hashedLookupKey, txId);
   return txId;
 }
 
@@ -100,31 +111,52 @@ export async function downloadAccountMetadata(walletAddress, symKey) {
   }`;
 
   try {
-    const response = await fetch('https://arweave.net/graphql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
-    });
+    // Check local tx ID cache first (instant, avoids GraphQL indexing delay)
+    let txId = getCachedTxId(hashedLookupKey);
+    if (txId) {
+      console.log(`[Bookish:AccountArweave] Using cached tx: ${txId}`);
+    } else {
+      const response = await fetch('https://arweave.net/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      });
 
-    const result = await response.json();
-    const edges = result.data?.transactions?.edges || [];
+      const result = await response.json();
+      const edges = result.data?.transactions?.edges || [];
 
-    if (edges.length === 0) {
-      console.log('[Bookish:AccountArweave] No account metadata found');
-      return null;
+      if (edges.length === 0) {
+        console.log('[Bookish:AccountArweave] No account metadata found');
+        return null;
+      }
+
+      txId = edges[0].node.id;
+      cacheTxId(hashedLookupKey, txId);
     }
-
-    const txId = edges[0].node.id;
     console.log(`[Bookish:AccountArweave] Found metadata: ${txId}`);
 
-    // Download encrypted payload
-    const dataResponse = await fetch(`https://arweave.net/${txId}`);
-    if (!dataResponse.ok) {
-      throw new Error(`Failed to download metadata: ${dataResponse.status}`);
+    // Download encrypted payload — Turbo first (immediate for recent uploads), Arweave fallback
+    const gateways = [
+      { url: `https://turbo-gateway.com/${txId}`, label: 'Turbo' },
+      { url: `https://arweave.net/${txId}`, label: 'Arweave' }
+    ];
+    let encryptedBytes = null;
+    for (const gw of gateways) {
+      try {
+        const dataResponse = await fetch(gw.url);
+        if (dataResponse.ok) {
+          encryptedBytes = new Uint8Array(await dataResponse.arrayBuffer());
+          console.log(`[Bookish:AccountArweave] Downloaded from ${gw.label} (${encryptedBytes.length} bytes)`);
+          break;
+        }
+        console.warn(`[Bookish:AccountArweave] ${gw.label} returned ${dataResponse.status} for ${txId}`);
+      } catch (err) {
+        console.warn(`[Bookish:AccountArweave] ${gw.label} fetch failed:`, err.message);
+      }
     }
-
-    const encryptedBytes = new Uint8Array(await dataResponse.arrayBuffer());
-    console.log('[Bookish:AccountArweave] Downloaded encrypted payload, size:', encryptedBytes.length, 'bytes');
+    if (!encryptedBytes) {
+      throw new Error(`Failed to download metadata from any gateway: ${txId}`);
+    }
 
     // Decrypt
     const decrypted = await decryptBytesToJson(symKey, encryptedBytes);
