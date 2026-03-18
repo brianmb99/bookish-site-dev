@@ -146,6 +146,7 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
 
   async function searchByOwner(owner, { limit = 25, cursor } = {}) {
     const pub = (await (window.bookishWallet?.getAddress?.()))?.toLowerCase();
+    if (!pub && !owner) return { edges: [], pageInfo: { hasNextPage: false } };
     return searchBookEntries(pub, { owner, limit, cursor, appName });
   }
 

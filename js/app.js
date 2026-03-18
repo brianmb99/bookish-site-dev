@@ -1506,6 +1506,16 @@ async function initCacheLayer(){
       }
     });
 
+    // Ensure wallet is available before any sync cycle (prevents address:undefined race)
+    try {
+      await import('./wallet.js');
+      await window.bookishWallet?.ensure?.();
+      const addr = await window.bookishWallet?.getAddress?.();
+      if (addr) setStatus((statusEl.textContent ? statusEl.textContent + ' • ' : '') + 'EVM ' + addr.slice(0, 6) + '...');
+    } catch (e) {
+      console.warn('[Bookish] Wallet init failed (non-fatal):', e.message);
+    }
+
     // Only start sync loop if user is logged in
     if (storageManager.isLoggedIn()) {
       console.log('[Bookish] User logged in, starting sync loop');
@@ -1578,9 +1588,7 @@ uiStatusManager.init({
   getBalanceStatus
 });
 
-loadStatus(); initCacheLayer(); // sync started in initCacheLayer
-// Initialize hidden EVM wallet (ensures presence once sym key exists) and show address hint
-(async function initWallet(){ try { await import('./wallet.js'); const ok = await (window.bookishWallet?.ensure?.()); const addr = await (window.bookishWallet?.getAddress?.()); if(addr){ setStatus((statusEl.textContent?statusEl.textContent+' • ':'')+'EVM '+addr.slice(0,6)+'...'); } } catch{} })();
+loadStatus(); initCacheLayer(); // wallet init + sync started in initCacheLayer
 // Initialize account UI
 (async function initAccount(){ try { const { initAccountUI } = await import('./account_ui.js'); await initAccountUI(); } catch(e){ console.error('Failed to init account UI:', e); } })();
 window.addEventListener('online',()=>{ uiStatusManager.refresh(); replayOps(); });
