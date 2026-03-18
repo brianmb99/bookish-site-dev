@@ -1,7 +1,8 @@
 // turbo_client.js - Bookish upload client via Upload Proxy (Cloudflare Worker)
-// Signs a native ETH fee transaction and sends it (serialized) with encrypted data.
+// Creates client-signed ANS-104 data items and sends them through the proxy to Turbo.
 
 import { Wallet, JsonRpcProvider, parseUnits } from 'https://esm.sh/ethers@6.13.0';
+import { createData, EthereumSigner } from 'https://esm.sh/@dha-team/arbundles@1.0.4';
 import { append as logAppend } from './core/log_local.js';
 
 const UPLOAD_PROXY = window.BOOKISH_UPLOAD_PROXY || 'https://bookish-upload-proxy.bookish.workers.dev';
@@ -57,6 +58,14 @@ async function signFeeTx(feeSchedule) {
 
 // ============ Upload ============
 
+async function signDataItem(dataBytes, tags) {
+  const pk = await window.bookishWallet.getPrivateKey();
+  const signer = new EthereumSigner(pk);
+  const dataItem = createData(dataBytes, signer, { tags });
+  await dataItem.sign(signer);
+  return dataItem.getRaw();
+}
+
 async function upload(dataBytes, tags, { skipFee = false } = {}) {
   let dtTags = Array.isArray(tags) ? [...tags] : [];
   const hasCT = dtTags.some(t => (t.name || '').toLowerCase() === 'content-type');
@@ -66,6 +75,8 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
   console.info('[Bookish:Upload] uploading via proxy', { bytes: payloadBytes, tags: dtTags.length, skipFee });
   logAppend('upload', 'proxy-start', { bytes: payloadBytes, skipFee });
 
+  const signedBytes = await signDataItem(dataBytes, dtTags);
+
   let payment = null;
   if (!skipFee) {
     let feeSchedule = await getFeeSchedule();
@@ -73,14 +84,14 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
     payment = await signFeeTx(feeSchedule);
   }
 
-  let response = await doUpload(dataBytes, dtTags, payment);
+  let response = await doUpload(signedBytes, dtTags, payment);
 
   if (!skipFee && response.status === 402) {
     console.warn('[Bookish:Upload] 402 received, re-fetching fee schedule and retrying');
     const feeSchedule = await getFeeSchedule(true);
     if (feeSchedule) {
       payment = await signFeeTx(feeSchedule);
-      response = await doUpload(dataBytes, dtTags, payment);
+      response = await doUpload(signedBytes, dtTags, payment);
     }
   }
 
@@ -101,17 +112,18 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
   return { id };
 }
 
-async function doUpload(dataBytes, tags, payment) {
+async function doUpload(signedBytes, tags, payment) {
   const headers = {
     'Content-Type': 'application/octet-stream',
     'X-Arweave-Tags': JSON.stringify(tags),
+    'X-Signed-DataItem': 'true',
   };
   if (payment) headers['X-Payment'] = JSON.stringify(payment);
 
   return fetch(`${UPLOAD_PROXY}/upload`, {
     method: 'POST',
     headers,
-    body: dataBytes,
+    body: signedBytes,
   });
 }
 
