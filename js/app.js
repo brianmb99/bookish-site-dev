@@ -5,6 +5,7 @@ import * as storageManager from './core/storage_manager.js';
 import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
+import { registerPendingTx, fetchPendingTxIds } from './core/pending_tx_bridge.js';
 
 // --- Version logging (always visible in console) ---
 {
@@ -1063,6 +1064,30 @@ async function ensureKeys(){
 async function serverlessFetchEntries(){
   if(!browserClient) return { entries:[], tombstones:[] };
 
+  // Step 0: Fetch pending tx IDs from bridge (accelerates cross-device discovery)
+  let bridgeEntries = [];
+  try {
+    const addr = await window.bookishWallet?.getAddress?.();
+    if (addr) {
+      const pendingIds = await fetchPendingTxIds(addr);
+      if (pendingIds.length > 0) {
+        const cached = window.bookishCache ? await window.bookishCache.listAllRaw() : [];
+        const knownTxids = new Set(cached.filter(e => e.txid).map(e => e.txid));
+        const newIds = pendingIds.filter(id => !knownTxids.has(id));
+        if (newIds.length > 0) {
+          console.log('[Bookish] Bridge: fetching', newIds.length, 'pending tx IDs from Turbo');
+          for (const txid of newIds) {
+            try {
+              const dec = await browserClient.decryptTx(txid);
+              bridgeEntries.push({ txid, ...dec, block: null });
+            } catch { /* skip undecryptable entries (tombstones, other wallets, etc) */ }
+          }
+          console.log('[Bookish] Bridge: decrypted', bridgeEntries.length, 'of', newIds.length, 'entries');
+        }
+      }
+    }
+  } catch { /* bridge unavailable — continue with GraphQL only */ }
+
   // Step 1: Query GraphQL for all transactions
   const owner=null; let allEdges=[]; let cursor=undefined; let safety=0; const PAGE=50;
   console.log('[Bookish] Querying Arweave GraphQL for book entries...');
@@ -1122,6 +1147,16 @@ async function serverlessFetchEntries(){
   }
 
   console.log('[Bookish] Decrypted', needsDecrypt.length, 'entries in', Date.now() - decryptStart, 'ms');
+
+  // Step 4b: Merge bridge-discovered entries (deduplicate by txid)
+  if (bridgeEntries.length > 0) {
+    const hydratedTxids = new Set(hydrated.map(e => e.txid));
+    let added = 0;
+    for (const be of bridgeEntries) {
+      if (!hydratedTxids.has(be.txid)) { hydrated.push(be); added++; }
+    }
+    if (added > 0) console.log('[Bookish] Bridge: merged', added, 'new entries into sync results');
+  }
   
   // Step 5: Deduplicate by bookId (safety net if Prev chain is broken)
   // Keep newest version of each book (no block = most recent)
@@ -1175,6 +1210,7 @@ async function replayOps(){
         if(local.txid){ await window.bookishCache.removeOp(op.id); continue; }
         try {
           const res=await browserClient.uploadEntry(op.payload,{});
+          registerPendingTx(await window.bookishWallet?.getAddress?.(), res.txid).catch(()=>{});
           const oldId=local.id; local.txid=res.txid; local.id=res.txid; local.pending=false; local.status='confirmed'; local.seenRemote=true;
           await window.bookishCache.replaceProvisional(oldId,local);
           await window.bookishCache.removeOp(op.id);
@@ -1191,6 +1227,7 @@ async function replayOps(){
         try {
           op.payload.bookId=local.bookId;
           const res=await browserClient.uploadEntry(op.payload,{ extraTags:[{name:'Prev',value:op.priorTxid}] });
+          registerPendingTx(await window.bookishWallet?.getAddress?.(), res.txid).catch(()=>{});
           const oldTxid=op.priorTxid; local.txid=res.txid; local.id=res.txid; local.pending=false; local.status='confirmed'; local.seenRemote=true;
           await window.bookishCache.replaceProvisional(oldTxid,local);
           await window.bookishCache.removeOp(op.id);
@@ -1290,6 +1327,7 @@ async function createServerless(payload){ if(window.bookishCache){ const dup=awa
   diagMaybeSet(['Publishing to Arweave...','If funding is needed, you\'ll be prompted']);
     const res=await browserClient.uploadEntry(payload,{});
     if(window.BOOKISH_DEBUG) console.debug('[Bookish] uploadEntry ok:', res);
+    registerPendingTx(await window.bookishWallet?.getAddress?.(), res.txid).catch(()=>{});
     const oldId=rec.id; rec.txid=res.txid; rec.id=res.txid; rec.pending=false; rec.status='confirmed'; rec.seenRemote=true; rec.onArweave=false;
     if(window.bookishCache) await window.bookishCache.replaceProvisional(oldId,rec);
     walletError=null; // Clear any previous errors
@@ -1370,6 +1408,7 @@ async function doEditUpload(entryKey, entry, prevTxid, payload, snapshot) {
     
     diagMaybeSet(['Saving to Arweave\u2026']);
     const res = await browserClient.uploadEntry(payload, { extraTags: [{ name: 'Prev', value: prevTxid }] });
+    registerPendingTx(await window.bookishWallet?.getAddress?.(), res.txid).catch(()=>{});
     
     const oldTxid = prevTxid;
     entry.txid = res.txid;
@@ -1426,7 +1465,7 @@ async function doEditUpload(entryKey, entry, prevTxid, payload, snapshot) {
     }
   }
 }
-async function deleteServerless(priorTxid){ const entry=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid); if(!entry) return; markDeletingVisual(entry); uiStatusManager.refresh(); if(!entry.txid){ /* local-only entry — just remove from cache and entries */ if(window.bookishCache) await window.bookishCache.deleteById(entry.id); entries=entries.filter(e=>e!==entry); orderEntries(); render(); uiStatusManager.refresh(); return; } try { const haveKeys = await ensureKeys(); if (!haveKeys) throw new Error('Cannot delete: encryption keys not available'); await browserClient.tombstone(priorTxid,{ note:'user delete' }); entry.status='tombstoned'; entry.tombstonedAt=Date.now(); await window.bookishCache.putEntry(entry); entries=entries.filter(e=>e.status!=='tombstoned'); walletError=null; markDirty(); orderEntries(); render(); uiStatusManager.refresh(); } catch{ entry._deleting=false; render(); walletError='Delete failed'; uiStatusManager.refresh(); } }
+async function deleteServerless(priorTxid){ const entry=entries.find(e=>e.txid===priorTxid) || entries.find(e=>e.id===priorTxid); if(!entry) return; markDeletingVisual(entry); uiStatusManager.refresh(); if(!entry.txid){ /* local-only entry — just remove from cache and entries */ if(window.bookishCache) await window.bookishCache.deleteById(entry.id); entries=entries.filter(e=>e!==entry); orderEntries(); render(); uiStatusManager.refresh(); return; } try { const haveKeys = await ensureKeys(); if (!haveKeys) throw new Error('Cannot delete: encryption keys not available'); const _tombRes = await browserClient.tombstone(priorTxid,{ note:'user delete' }); registerPendingTx(await window.bookishWallet?.getAddress?.(), _tombRes?.txid).catch(()=>{}); entry.status='tombstoned'; entry.tombstonedAt=Date.now(); await window.bookishCache.putEntry(entry); entries=entries.filter(e=>e.status!=='tombstoned'); walletError=null; markDirty(); orderEntries(); render(); uiStatusManager.refresh(); } catch{ entry._deleting=false; render(); walletError='Delete failed'; uiStatusManager.refresh(); } }
 
 // --- Form handlers ---
 let _formSubmitting = false;
