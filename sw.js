@@ -1,5 +1,5 @@
 // sw.js - basic PWA service worker
-const VERSION='v97';
+const VERSION='v98';
 const CACHE_NAME='bookish-precache-'+VERSION;
 const PRECACHE=[
   '/',
@@ -23,17 +23,12 @@ const PRECACHE=[
   '/js/core/account_creation.js',
   '/js/core/account_arweave.js',
   '/js/core/credential_mapping.js',
-  '/js/core/passkey_core.js',
   '/js/core/seed_core.js',
   '/js/core/seed_core_v2.js',
   '/js/core/wallet_core.js',
   '/js/core/id_core.js',
   '/js/core/storage_constants.js',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/icon-maskable-192.png',
-  '/icons/icon-maskable-512.png'
+  '/manifest.json'
 ];
 self.addEventListener('install',e=>{
   e.waitUntil((async()=>{ const c=await caches.open(CACHE_NAME); try{ await c.addAll(PRECACHE); }catch(err){ console.warn('[SW] Precache partial failure:',err); } self.skipWaiting(); })());
