@@ -3,7 +3,7 @@
 // Clear separation: creation → email+password auth → persistence on funding
 
 import uiStatusManager from './ui_status_manager.js';
-import { stopSync, startSync } from './sync_manager.js';
+import { stopSync, startSync, markInitialSyncDone } from './sync_manager.js';
 import { resetKeyState } from './app.js';
 import { uploadAccountMetadata, downloadAccountMetadata } from './core/account_arweave.js';
 import { deriveAndStoreSymmetricKey, hexToBytes, storeSessionEncryptedSeed, getSessionEncryptedSeed, clearSessionEncryptedSeed, importAesKey, bytesToBase64, base64ToBytes } from './core/crypto_core.js';
@@ -976,6 +976,7 @@ function showCreationFullSuccess(displayName, email) {
     closeAccountModal();
     const banner = document.getElementById('accountBanner');
     if (banner) banner.style.display = 'none';
+    markInitialSyncDone();
     uiStatusManager.refresh();
     if(window.bookishApp?.render) window.bookishApp.render();
     startSync();
@@ -1015,6 +1016,7 @@ function showCreationFallbackSuccess(displayName, email) {
     closeAccountModal();
     const banner = document.getElementById('accountBanner');
     if (banner) banner.style.display = 'none';
+    markInitialSyncDone();
     uiStatusManager.refresh();
     if(window.bookishApp?.render) window.bookishApp.render();
     startSync();

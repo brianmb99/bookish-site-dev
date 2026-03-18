@@ -402,6 +402,14 @@ export function triggerPersistenceCheck() {
 /**
  * Reset auto-persistence trigger (for testing)
  */
+/**
+ * Mark initial sync as already done (e.g. brand-new account with no books).
+ * Prevents the "Syncing your books…" empty state for new accounts.
+ */
+export function markInitialSyncDone() {
+  initialSynced = true;
+}
+
 export function resetAutoPersistenceTrigger() {
   autoPersistenceTriggered = false;
   previousFundingState = false;
