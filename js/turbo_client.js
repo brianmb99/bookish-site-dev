@@ -2,7 +2,8 @@
 // Creates client-signed ANS-104 data items and sends them through the proxy to Turbo.
 
 import { Wallet, JsonRpcProvider, parseUnits } from 'https://esm.sh/ethers@6.13.0';
-import { createData, EthereumSigner } from 'https://esm.sh/@dha-team/arbundles@1.0.4';
+import arbundles from 'https://esm.sh/@dha-team/arbundles@1.0.4';
+const { createData, EthereumSigner } = arbundles;
 import { append as logAppend } from './core/log_local.js';
 
 const UPLOAD_PROXY = window.BOOKISH_UPLOAD_PROXY || 'https://bookish-upload-proxy.bookish.workers.dev';
