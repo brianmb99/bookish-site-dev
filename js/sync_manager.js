@@ -267,11 +267,13 @@ async function checkBalanceAndAutoPersist() {
   try {
     const accountState = getAccountPersistenceState();
 
-    // Balance throttle: skip RPC when confirmed and recently checked
+    // Balance throttle: skip RPC when confirmed, funded, and recently checked.
+    // Never throttle zero-balance accounts — faucet tx may be confirming.
     const now = Date.now();
+    const hasBalance = currentBalanceETH !== null && parseFloat(currentBalanceETH) > 0;
     const canThrottle = accountState === 'confirmed'
       && !forceBalanceCheck
-      && currentBalanceETH !== null
+      && hasBalance
       && (now - lastBalanceCheckAt) < BALANCE_THROTTLE_MS;
 
     if (canThrottle) {
