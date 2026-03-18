@@ -1,9 +1,7 @@
 // turbo_client.js - Bookish upload client via Upload Proxy (Cloudflare Worker)
 // Creates client-signed ANS-104 data items and sends them through the proxy to Turbo.
 
-import { Wallet, JsonRpcProvider, parseUnits } from 'https://esm.sh/ethers@6.13.0';
-import arbundles from 'https://esm.sh/@dha-team/arbundles@1.0.4';
-const { createData, EthereumSigner } = arbundles;
+import { createSignedDataItem } from './core/ans104_signer.js';
 import { append as logAppend } from './core/log_local.js';
 
 const UPLOAD_PROXY = window.BOOKISH_UPLOAD_PROXY || 'https://bookish-upload-proxy.bookish.workers.dev';
@@ -33,9 +31,10 @@ async function estimateCost(byteLength) {
   }
 }
 
-// ============ ETH Fee Transaction Signing ============
+// ============ ETH Fee Transaction Signing (lazy-loads ethers only for paid uploads) ============
 
 async function signFeeTx(feeSchedule) {
+  const { Wallet, JsonRpcProvider, parseUnits } = await import('https://esm.sh/ethers@6.13.0');
   const pk = await window.bookishWallet.getPrivateKey();
   const provider = new JsonRpcProvider(BASE_RPC, 8453, { staticNetwork: true });
   const wallet = new Wallet(pk, provider);
@@ -59,14 +58,6 @@ async function signFeeTx(feeSchedule) {
 
 // ============ Upload ============
 
-async function signDataItem(dataBytes, tags) {
-  const pk = await window.bookishWallet.getPrivateKey();
-  const signer = new EthereumSigner(pk);
-  const dataItem = createData(dataBytes, signer, { tags });
-  await dataItem.sign(signer);
-  return dataItem.getRaw();
-}
-
 async function upload(dataBytes, tags, { skipFee = false } = {}) {
   let dtTags = Array.isArray(tags) ? [...tags] : [];
   const hasCT = dtTags.some(t => (t.name || '').toLowerCase() === 'content-type');
@@ -76,7 +67,8 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
   console.info('[Bookish:Upload] uploading via proxy', { bytes: payloadBytes, tags: dtTags.length, skipFee });
   logAppend('upload', 'proxy-start', { bytes: payloadBytes, skipFee });
 
-  const signedBytes = await signDataItem(dataBytes, dtTags);
+  const pk = await window.bookishWallet.getPrivateKey();
+  const signedBytes = await createSignedDataItem(pk, dataBytes, dtTags);
 
   let payment = null;
   if (!skipFee) {

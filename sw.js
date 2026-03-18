@@ -1,5 +1,5 @@
 // sw.js - basic PWA service worker
-const VERSION='v102';
+const VERSION='v103';
 const CACHE_NAME='bookish-precache-'+VERSION;
 const PRECACHE=[
   '/',
@@ -28,7 +28,7 @@ const PRECACHE=[
   '/js/core/wallet_core.js',
   '/js/core/id_core.js',
   '/js/core/storage_constants.js',
-  '/js/shim/crypto_hash.js',
+  '/js/core/ans104_signer.js',
   '/manifest.json'
 ];
 self.addEventListener('install',e=>{
