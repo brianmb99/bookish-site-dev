@@ -6,6 +6,14 @@ import { WALLET_STORAGE_KEY } from './storage_constants.js';
 
 const BASE_MAINNET_RPC = 'https://base.llamarpc.com';
 
+let _provider = null;
+function getProvider() {
+  if (!_provider) {
+    _provider = new ethers.JsonRpcProvider(BASE_MAINNET_RPC, 8453, { staticNetwork: true });
+  }
+  return _provider;
+}
+
 /**
  * Derive Ethereum wallet from BIP39 mnemonic seed
  * Uses standard BIP44 path: m/44'/60'/0'/0/0 (Ethereum)
@@ -14,13 +22,8 @@ const BASE_MAINNET_RPC = 'https://base.llamarpc.com';
  */
 export async function deriveWalletFromSeed(mnemonic) {
   try {
-    // Derive HD wallet from mnemonic (standard Ethereum path)
     const wallet = ethers.Wallet.fromPhrase(mnemonic);
-
-    return {
-      address: wallet.address,
-      wallet,
-    };
+    return { address: wallet.address, wallet };
   } catch (error) {
     console.error('Wallet derivation failed:', error);
     throw new Error(`Failed to derive wallet: ${error.message}`);
@@ -28,20 +31,25 @@ export async function deriveWalletFromSeed(mnemonic) {
 }
 
 /**
- * Get Base mainnet native ETH balance
+ * Get Base mainnet native ETH balance (retries once on transient RPC failure)
  * @param {string} address - Ethereum address
  * @returns {Promise<{balanceETH: string}>} balanceETH is a decimal ETH string (e.g. "0.000050")
  */
 export async function getWalletBalance(address) {
-  try {
-    const provider = new ethers.JsonRpcProvider(BASE_MAINNET_RPC, 8453, { staticNetwork: true });
-    const raw = await provider.getBalance(address);
-    const balanceETH = ethers.formatEther(raw);
-    return { balanceETH };
-  } catch (error) {
-    console.error('Balance fetch failed:', error);
-    return { balanceETH: '0' };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const raw = await getProvider().getBalance(address);
+      return { balanceETH: ethers.formatEther(raw) };
+    } catch (error) {
+      if (attempt === 0) {
+        _provider = null; // discard stale connection, retry with fresh provider
+        continue;
+      }
+      console.warn('Balance fetch failed (non-fatal):', error.message || error);
+      return { balanceETH: '0' };
+    }
   }
+  return { balanceETH: '0' };
 }
 
 /**
