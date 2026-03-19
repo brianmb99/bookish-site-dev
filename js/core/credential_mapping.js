@@ -3,11 +3,7 @@
 
 import { bytesToBase64, base64ToBytes, encryptJsonToBytes, decryptBytesToJson } from './crypto_core.js';
 import { registerPendingTxByKey, fetchPendingTxIdsByKey } from './pending_tx_bridge.js';
-
-// Gateway configuration
-const ARWEAVE_GRAPHQL = 'https://arweave.net/graphql';
-const ARWEAVE_GATEWAY = 'https://arweave.net';
-const TURBO_GATEWAY = 'https://turbo-gateway.com';
+import { queryGraphQL, ARWEAVE_GATEWAY, TURBO_GATEWAY } from './arweave_query.js';
 
 /**
  * Validate that a lookup key is a 64-char hex string (SHA-256 output)
@@ -122,29 +118,19 @@ async function findCredentialMappingTx(lookupKey) {
     }
   }`;
 
-  try {
-    const response = await fetch(ARWEAVE_GRAPHQL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
-    });
-    if (!response.ok) {
-      console.warn(`[Bookish:CredentialMapping] Arweave query returned ${response.status}`);
-      return null;
-    }
-    const result = await response.json();
-    const edges = result.data?.transactions?.edges || [];
-    if (edges.length > 0) {
-      const txId = edges[0].node.id;
-      console.log(`[Bookish:CredentialMapping] Found mapping: ${txId}`);
-      cacheTxId(lookupKey, txId);
-      return txId;
-    }
-    return null;
-  } catch (err) {
-    console.warn('[Bookish:CredentialMapping] Arweave query failed:', err.message);
+  const { data, error } = await queryGraphQL(query);
+  if (error) {
+    console.warn('[Bookish:CredentialMapping] Arweave query failed:', error);
     return null;
   }
+  const edges = data?.transactions?.edges || [];
+  if (edges.length > 0) {
+    const txId = edges[0].node.id;
+    console.log(`[Bookish:CredentialMapping] Found mapping: ${txId}`);
+    cacheTxId(lookupKey, txId);
+    return txId;
+  }
+  return null;
 }
 
 /**

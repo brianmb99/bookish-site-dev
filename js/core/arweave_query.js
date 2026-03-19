@@ -1,4 +1,4 @@
-// arweave_query.js - Pure Arweave book entry query and filtering
+// arweave_query.js - Pure Arweave query primitives and book entry search
 // No DOM, no IndexedDB, no window globals — safe to bundle into any context
 //
 // Uploads go through ArDrive Turbo, which caches data on turbo-gateway.com
@@ -9,7 +9,49 @@ export const ARWEAVE_GATEWAY = 'https://arweave.net';
 export const TURBO_GATEWAY = 'https://turbo-gateway.com';
 
 /**
+ * Resilient Arweave GraphQL query.  Returns structured results — never
+ * throws for HTTP errors, non-200 status, or JSON parse failures.
+ *
+ * Every call site that hits arweave.net/graphql should use this instead
+ * of raw fetch so error handling is consistent across the codebase.
+ *
+ * @param {string} query  - GraphQL query string
+ * @param {Object} [variables] - GraphQL variables
+ * @returns {Promise<{data: Object|null, error: string|null}>}
+ */
+export async function queryGraphQL(query, variables) {
+  try {
+    const response = await fetch(ARWEAVE_GRAPHQL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(variables ? { query, variables } : { query })
+    });
+
+    if (!response.ok) {
+      console.warn('[Bookish] Arweave GraphQL HTTP', response.status);
+      return { data: null, error: `http_${response.status}` };
+    }
+
+    const json = await response.json();
+
+    if (json.errors?.length) {
+      console.warn('[Bookish] Arweave GraphQL error:', json.errors[0].message);
+      return { data: null, error: json.errors[0].message };
+    }
+
+    return { data: json.data, error: null };
+  } catch (err) {
+    console.warn('[Bookish] Arweave GraphQL failed:', err.message);
+    return { data: null, error: err.message };
+  }
+}
+
+/**
  * Search for book entries on Arweave (single page).
+ *
+ * Returns edges + pageInfo + an error field.  When the GraphQL endpoint
+ * is unreachable the function returns empty results with a non-null error
+ * string — it never throws.  Callers decide how to degrade.
  *
  * @param {string} address - EVM wallet address (used for Pub-Addr tag)
  * @param {Object} [options]
@@ -17,7 +59,7 @@ export const TURBO_GATEWAY = 'https://turbo-gateway.com';
  * @param {number} [options.limit=100] - Page size
  * @param {string} [options.cursor] - Pagination cursor from previous page
  * @param {string} [options.appName='bookish'] - App-Name tag value
- * @returns {Promise<{edges: Array, pageInfo: {hasNextPage: boolean}}>}
+ * @returns {Promise<{edges: Array, pageInfo: {hasNextPage: boolean}, error: string|null}>}
  */
 export async function searchBookEntries(address, { owner = null, limit = 100, cursor = null, appName = 'bookish' } = {}) {
   const pub = address?.toLowerCase();
@@ -42,37 +84,24 @@ export async function searchBookEntries(address, { owner = null, limit = 100, cu
 
   console.log('[Bookish] searchBookEntries address:', pub, 'tags:', tags.length);
 
-  const arJson = await fetch(ARWEAVE_GRAPHQL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: q, variables })
-  })
-    .then(r => {
-      if (!r.ok) console.warn('[Bookish] Arweave HTTP', r.status);
-      return r.json();
-    })
-    .catch(err => { console.warn('[Bookish] Arweave book search failed:', err.message); return null; });
+  const { data, error } = await queryGraphQL(q, variables);
 
   const seen = new Set();
   const merged = [];
   let hasNext = false;
 
-  if (arJson?.data) {
-    const edges1 = arJson.data.t1?.edges || [];
-    const edges2 = arJson.data.t2?.edges || [];
+  if (data) {
+    const edges1 = data.t1?.edges || [];
+    const edges2 = data.t2?.edges || [];
     for (const e of [...edges1, ...edges2]) {
       if (!seen.has(e.node.id)) { seen.add(e.node.id); merged.push(e); }
     }
-    hasNext = !!(arJson.data.t1?.pageInfo?.hasNextPage || arJson.data.t2?.pageInfo?.hasNextPage);
+    hasNext = !!(data.t1?.pageInfo?.hasNextPage || data.t2?.pageInfo?.hasNextPage);
   }
 
   console.log(`[Bookish] Book query: ${merged.length} entries`);
 
-  if (merged.length === 0 && !arJson?.data) {
-    throw new Error('graphql');
-  }
-
-  return { edges: merged, pageInfo: { hasNextPage: hasNext } };
+  return { edges: merged, pageInfo: { hasNextPage: hasNext }, error };
 }
 
 // --- Tombstone/superseded filtering ---

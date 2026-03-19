@@ -4,6 +4,7 @@
 
 import { encryptJsonToBytes, decryptBytesToJson, hexToBytes } from './crypto_core.js';
 import { registerPendingTxByKey, fetchPendingTxIdsByKey } from './pending_tx_bridge.js';
+import { queryGraphQL } from './arweave_query.js';
 
 const TX_CACHE_PREFIX = 'bookish.txcache.acct.';
 
@@ -139,32 +140,18 @@ export async function downloadAccountMetadata(walletAddress, symKey) {
       } catch { /* bridge unavailable — fall through to GraphQL */ }
     }
     if (!txId) {
-      try {
-        const response = await fetch('https://arweave.net/graphql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query })
-        });
-
-        if (!response.ok) {
-          console.warn(`[Bookish:AccountArweave] GraphQL returned ${response.status}`);
-          return null;
-        }
-
-        const result = await response.json();
-        const edges = result.data?.transactions?.edges || [];
-
-        if (edges.length === 0) {
-          console.log('[Bookish:AccountArweave] No account metadata found');
-          return null;
-        }
-
-        txId = edges[0].node.id;
-        cacheTxId(hashedLookupKey, txId);
-      } catch (gqlErr) {
-        console.warn('[Bookish:AccountArweave] GraphQL query failed:', gqlErr.message);
+      const { data, error } = await queryGraphQL(query);
+      if (error) {
+        console.warn('[Bookish:AccountArweave] GraphQL unavailable:', error);
         return null;
       }
+      const edges = data?.transactions?.edges || [];
+      if (edges.length === 0) {
+        console.log('[Bookish:AccountArweave] No account metadata found');
+        return null;
+      }
+      txId = edges[0].node.id;
+      cacheTxId(hashedLookupKey, txId);
     }
     console.log(`[Bookish:AccountArweave] Found metadata: ${txId}`);
 
@@ -209,7 +196,6 @@ export async function downloadAccountMetadata(walletAddress, symKey) {
  */
 export async function accountMetadataExists(walletAddress) {
   try {
-    // Generate lookup key
     const lookupInput = walletAddress.toLowerCase() + 'bookish';
     const lookupHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(lookupInput));
     const hashedLookupKey = Array.from(new Uint8Array(lookupHash))
@@ -225,22 +211,13 @@ export async function accountMetadataExists(walletAddress) {
         ],
         first: 1
       ) {
-        edges {
-          node {
-            id
-          }
-        }
+        edges { node { id } }
       }
     }`;
 
-    const response = await fetch('https://arweave.net/graphql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
-    });
-
-    const result = await response.json();
-    return (result.data?.transactions?.edges || []).length > 0;
+    const { data, error } = await queryGraphQL(query);
+    if (error) return false;
+    return (data?.transactions?.edges || []).length > 0;
   } catch (error) {
     console.error('[Bookish:AccountPersistence] Existence check failed:', error);
     return false;

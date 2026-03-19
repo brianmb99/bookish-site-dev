@@ -1074,62 +1074,64 @@ async function ensureKeys(){
 }
 
 // --- Arweave queries ---
-async function serverlessFetchEntries(){
-  if(!browserClient) return { entries:[], tombstones:[] };
+// --- Book sync: data resolution pipeline ---
+// Each step returns structured results; no step throws for service errors.
+// The orchestrator (serverlessFetchEntries) merges results from all sources
+// and indicates whether results are partial via the `partial` flag.
 
-  // Step 0: Fetch pending tx IDs from bridge (accelerates cross-device discovery)
-  let bridgeEntries = [];
+async function fetchBridgeEntries() {
   try {
     const addr = await window.bookishWallet?.getAddress?.();
-    if (addr) {
-      const pendingIds = await fetchPendingTxIds(addr);
-      if (pendingIds.length > 0) {
-        const cached = window.bookishCache ? await window.bookishCache.listAllRaw() : [];
-        const knownTxids = new Set(cached.filter(e => e.txid).map(e => e.txid));
-        const newIds = pendingIds.filter(id => !knownTxids.has(id));
-        if (newIds.length > 0) {
-          console.log('[Bookish] Bridge: fetching', newIds.length, 'pending tx IDs from Turbo');
-          for (const txid of newIds) {
-            try {
-              const dec = await browserClient.decryptTx(txid);
-              bridgeEntries.push({ txid, ...dec, block: null });
-            } catch { /* skip undecryptable entries (tombstones, other wallets, etc) */ }
-          }
-          console.log('[Bookish] Bridge: decrypted', bridgeEntries.length, 'of', newIds.length, 'entries');
-        }
-      }
-    }
-  } catch { /* bridge unavailable — continue with GraphQL only */ }
+    if (!addr) return [];
+    const pendingIds = await fetchPendingTxIds(addr);
+    if (pendingIds.length === 0) return [];
 
-  // Step 1: Query GraphQL for all transactions (non-fatal if bridge has results)
-  const owner=null; let allEdges=[]; let cursor=undefined; let safety=0; const PAGE=50;
-  let graphqlFailed = false;
+    const cached = window.bookishCache ? await window.bookishCache.listAllRaw() : [];
+    const knownTxids = new Set(cached.filter(e => e.txid).map(e => e.txid));
+    const newIds = pendingIds.filter(id => !knownTxids.has(id));
+    if (newIds.length === 0) return [];
+
+    console.log('[Bookish] Bridge: fetching', newIds.length, 'pending tx IDs from Turbo');
+    const results = [];
+    for (const txid of newIds) {
+      try {
+        const dec = await browserClient.decryptTx(txid);
+        results.push({ txid, ...dec, block: null });
+      } catch { /* skip undecryptable entries (tombstones, other wallets, etc) */ }
+    }
+    console.log('[Bookish] Bridge: decrypted', results.length, 'of', newIds.length, 'entries');
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+async function fetchGraphQLPages() {
+  const owner = null;
+  const allEdges = [];
+  let cursor, safety = 0;
+  const PAGE = 50;
+
   console.log('[Bookish] Querying Arweave GraphQL for book entries...');
-  const queryStart = Date.now();
-  try {
-    for(;;){
-      const { edges, pageInfo } = await browserClient.searchByOwner(owner,{limit:PAGE,cursor});
-      allEdges.push(...edges);
-      if(!pageInfo.hasNextPage) break;
-      cursor=edges[edges.length-1]?.cursor;
-      if(++safety>40) break;
+  const t0 = Date.now();
+
+  for (;;) {
+    const { edges, pageInfo, error } = await browserClient.searchByOwner(owner, { limit: PAGE, cursor });
+    if (error) {
+      console.warn('[Bookish] GraphQL unavailable:', error);
+      return { edges: allEdges, error };
     }
-    console.log('[Bookish] GraphQL query completed in', Date.now() - queryStart, 'ms, found', allEdges.length, 'transactions');
-  } catch (gqlErr) {
-    console.warn('[Bookish] GraphQL query failed:', gqlErr.message);
-    graphqlFailed = true;
-    if (bridgeEntries.length === 0) throw gqlErr;
-    console.log('[Bookish] Continuing with', bridgeEntries.length, 'bridge-discovered entries');
+    allEdges.push(...edges);
+    if (!pageInfo.hasNextPage) break;
+    cursor = edges[edges.length - 1]?.cursor;
+    if (++safety > 40) break;
   }
 
-  let liveEdges = [], tombstones = [];
-  if (!graphqlFailed) {
-    ({ liveEdges, tombstones } = browserClient.computeLiveSets(allEdges));
-    console.log('[Bookish] After filtering:', liveEdges.length, 'live entries,', tombstones.length, 'tombstones');
-  }
+  console.log('[Bookish] GraphQL completed in', Date.now() - t0, 'ms, found', allEdges.length, 'transactions');
+  return { edges: allEdges, error: null };
+}
 
-  // Step 2: Check which txids we already have cached with seenRemote flag
-  const cachedEntries = window.bookishCache ? await window.bookishCache.listAllRaw() : [];
+function hydrateGraphQLEdges(liveEdges, cachedEntries) {
   const confirmedTxids = new Set(
     cachedEntries
       .filter(e => e.txid && e.seenRemote && e.status === 'confirmed')
@@ -1137,83 +1139,108 @@ async function serverlessFetchEntries(){
   );
   const needsDecrypt = liveEdges.filter(e => !confirmedTxids.has(e.node.id));
   const alreadySynced = liveEdges.filter(e => confirmedTxids.has(e.node.id));
+  return { needsDecrypt, alreadySynced };
+}
 
-  console.log('[Bookish] Cache check:', alreadySynced.length, 'already synced,', needsDecrypt.length, 'need decrypt');
-  // Track cache hits for geek panel
-  window.bookishNet = window.bookishNet || { reads:{ arweave:0, turbo:0, errors:0 }, cacheHits:0 };
-  window.bookishNet.cacheHits = (window.bookishNet.cacheHits || 0) + alreadySynced.length;
+const prevTag = (edge) => edge.node.tags?.find(t => t.name === 'Prev')?.value;
 
-  // Step 3: Decrypt entries that aren't fully synced in cache
-  const hydrated = [];
-  const decryptStart = Date.now();
-  const prevTag = (edge) => edge.node.tags?.find(t => t.name === 'Prev')?.value;
-  for(const e of needsDecrypt){
-    try{
+async function decryptEdges(edges) {
+  const t0 = Date.now();
+  const results = [];
+  for (const e of edges) {
+    try {
       const dec = await browserClient.decryptTx(e.node.id);
       const prevTxid = prevTag(e);
-      hydrated.push({ txid:e.node.id, ...dec, block:e.node.block, ...(prevTxid && { prevTxid }) });
-    }catch(err){
+      results.push({ txid: e.node.id, ...dec, block: e.node.block, ...(prevTxid && { prevTxid }) });
+    } catch (err) {
       console.warn('[Bookish] Failed to decrypt', e.node.id, err);
     }
   }
+  console.log('[Bookish] Decrypted', edges.length, 'entries in', Date.now() - t0, 'ms');
+  return results;
+}
 
-  // Step 4: For already-synced entries, use cached data with updated block info
-  for(const e of alreadySynced) {
+function restoreFromCache(edges, cachedEntries) {
+  const results = [];
+  for (const e of edges) {
     const cached = cachedEntries.find(c => c.txid === e.node.id);
     if (cached) {
-      const prevTxid = prevTag(e);
-      hydrated.push({
-        ...cached,
-        block: e.node.block,
-        ...(prevTxid && { prevTxid })
-      });
+      results.push({ ...cached, block: e.node.block, ...(prevTag(e) && { prevTxid: prevTag(e) }) });
     }
   }
+  return results;
+}
 
-  console.log('[Bookish] Decrypted', needsDecrypt.length, 'entries in', Date.now() - decryptStart, 'ms');
-
-  // Step 4b: Merge bridge-discovered entries (deduplicate by txid)
+function mergeAndDeduplicate(hydrated, bridgeEntries) {
+  // Merge bridge entries that aren't already in the hydrated set
   if (bridgeEntries.length > 0) {
-    const hydratedTxids = new Set(hydrated.map(e => e.txid));
+    const txids = new Set(hydrated.map(e => e.txid));
     let added = 0;
     for (const be of bridgeEntries) {
-      if (!hydratedTxids.has(be.txid)) { hydrated.push(be); added++; }
+      if (!txids.has(be.txid)) { hydrated.push(be); added++; }
     }
     if (added > 0) console.log('[Bookish] Bridge: merged', added, 'new entries into sync results');
   }
-  
-  // Step 5: Deduplicate by bookId (safety net if Prev chain is broken)
-  // Keep newest version of each book (no block = most recent)
+
+  // Deduplicate by bookId — keep newest version of each book
   const byBookId = new Map();
-  const entryScore = (e) => {
-    // Higher score = keep this one
-    // No block = not yet in an Arweave block = most recent
-    // Otherwise, higher block height = more recent
-    if (!e.block || !e.block.height) return Infinity;
-    return e.block.height;
-  };
+  const score = (e) => (!e.block?.height) ? Infinity : e.block.height;
+
   for (const entry of hydrated) {
     if (!entry.bookId) continue;
     const existing = byBookId.get(entry.bookId);
-    if (!existing) {
-      byBookId.set(entry.bookId, entry);
-    } else {
-      // Keep the one with higher score (more recent)
-      if (entryScore(entry) > entryScore(existing)) {
-        console.log('[Bookish] Dedup by bookId: keeping', entry.txid?.slice(0,8), 'over', existing.txid?.slice(0,8), 'for book', entry.bookId?.slice(0,8));
-        byBookId.set(entry.bookId, entry);
+    if (!existing || score(entry) > score(existing)) {
+      if (existing) {
+        console.log('[Bookish] Dedup by bookId: keeping', entry.txid?.slice(0, 8), 'over', existing.txid?.slice(0, 8));
       }
+      byBookId.set(entry.bookId, entry);
     }
   }
-  // Include entries without bookId (shouldn't happen but be safe)
-  const dedupedHydrated = [...byBookId.values(), ...hydrated.filter(e => !e.bookId)];
-  
-  if (dedupedHydrated.length < hydrated.length) {
-    console.warn('[Bookish] Removed', hydrated.length - dedupedHydrated.length, 'duplicate entries by bookId');
+
+  const deduped = [...byBookId.values(), ...hydrated.filter(e => !e.bookId)];
+  if (deduped.length < hydrated.length) {
+    console.warn('[Bookish] Removed', hydrated.length - deduped.length, 'duplicate entries by bookId');
   }
-  
-  dedupedHydrated.sort((a,b)=>{ const da=a.dateRead||'0000-00-00'; const db=b.dateRead||'0000-00-00'; if(da!==db) return db.localeCompare(da); const ha=(a.block&&a.block.height)||0; const hb=(b.block&&b.block.height)||0; return hb-ha; });
-  return { entries:dedupedHydrated, tombstones };
+
+  deduped.sort((a, b) => {
+    const da = a.dateRead || '0000-00-00', db = b.dateRead || '0000-00-00';
+    if (da !== db) return db.localeCompare(da);
+    return ((b.block?.height) || 0) - ((a.block?.height) || 0);
+  });
+
+  return deduped;
+}
+
+async function serverlessFetchEntries() {
+  if (!browserClient) return { entries: [], tombstones: [], partial: false };
+
+  const bridgeEntries = await fetchBridgeEntries();
+  const { edges: allEdges, error: gqlError } = await fetchGraphQLPages();
+
+  let liveEdges = [], tombstones = [];
+  if (allEdges.length > 0) {
+    ({ liveEdges, tombstones } = browserClient.computeLiveSets(allEdges));
+    console.log('[Bookish] After filtering:', liveEdges.length, 'live entries,', tombstones.length, 'tombstones');
+  }
+
+  const cachedEntries = window.bookishCache ? await window.bookishCache.listAllRaw() : [];
+  const { needsDecrypt, alreadySynced } = hydrateGraphQLEdges(liveEdges, cachedEntries);
+
+  console.log('[Bookish] Cache check:', alreadySynced.length, 'already synced,', needsDecrypt.length, 'need decrypt');
+  window.bookishNet = window.bookishNet || { reads: { arweave: 0, turbo: 0, errors: 0 }, cacheHits: 0 };
+  window.bookishNet.cacheHits = (window.bookishNet.cacheHits || 0) + alreadySynced.length;
+
+  const decrypted = await decryptEdges(needsDecrypt);
+  const restored = restoreFromCache(alreadySynced, cachedEntries);
+  const hydrated = [...decrypted, ...restored];
+  const entries = mergeAndDeduplicate(hydrated, bridgeEntries);
+
+  const partial = !!gqlError;
+  if (partial && bridgeEntries.length > 0) {
+    console.log('[Bookish] Partial sync: GraphQL unavailable, returning', entries.length, 'bridge-discovered entries');
+  }
+
+  return { entries, tombstones, partial };
 }
 
 // --- Ops replay ---
@@ -1293,9 +1320,9 @@ async function syncBooksFromArweave(){
   }
 
   console.log('[Bookish] Starting book sync from Arweave...');
-  const { entries: remoteEntries, tombstones } = await serverlessFetchEntries();
-  console.log('[Bookish] Fetched', remoteEntries.length, 'remote entries,', tombstones.length, 'tombstones');
-  if (window.BOOKISH_DEBUG) console.debug('[Bookish] fetched remote entries:', remoteEntries.length, 'tombstones:', tombstones.length);
+  const { entries: remoteEntries, tombstones, partial } = await serverlessFetchEntries();
+  console.log('[Bookish] Fetched', remoteEntries.length, 'remote entries,', tombstones.length, 'tombstones', partial ? '(partial — GraphQL unavailable)' : '');
+  if (window.BOOKISH_DEBUG) console.debug('[Bookish] fetched remote entries:', remoteEntries.length, 'tombstones:', tombstones.length, 'partial:', partial);
 
   const remote = remoteEntries.map(e => ({ ...e, status: 'confirmed', id: e.txid }));
   entries = await window.bookishCache.applyRemote(remote, tombstones);
