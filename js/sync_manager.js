@@ -218,10 +218,12 @@ async function runSyncCycle() {
       }
     }
 
-    // Step 3: Mark sync as completed (only if no errors)
+    // Step 3: Mark initial sync as attempted (even on error) so the
+    // "Syncing your books..." loading state doesn't persist forever.
+    initialSynced = true;
+    transientSyncState.isRefreshing = false;
+
     if (!transientSyncState.error) {
-      initialSynced = true;
-      transientSyncState.isRefreshing = false;
       transientSyncState.justCompleted = true;
       transientSyncState.completedTime = Date.now();
 
@@ -230,8 +232,6 @@ async function runSyncCycle() {
         transientSyncState.justCompleted = false;
         if (statusCallback) statusCallback();
       }, 2000);
-    } else {
-      transientSyncState.isRefreshing = false;
     }
 
   } catch (error) {

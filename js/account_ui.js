@@ -891,6 +891,7 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
 
       // Show full success (Frame A6)
       showCreationFullSuccess(displayName, email);
+      startSync();
 
     } catch (uploadError) {
       console.error('[Bookish:AccountUI] Arweave upload failed:', uploadError);
@@ -911,9 +912,11 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
         localStorage.removeItem(PENDING_CREDENTIAL_MAPPING_KEY);
 
         showCreationFullSuccess(displayName, email);
+        startSync();
       } catch (retryErr) {
         console.error('[Bookish:AccountUI] Retry failed:', retryErr);
         showCreationFallbackSuccess(displayName, email);
+        startSync();
       }
     }
 
