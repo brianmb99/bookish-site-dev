@@ -1,8 +1,9 @@
-// pending_tx_bridge.js — Accelerates cross-device book discovery
+// pending_tx_bridge.js — Accelerates cross-device discovery
 //
-// After a book upload, registers the tx ID with a lightweight bridge service.
-// On another device, the sync loop queries the bridge to discover recent tx IDs
-// before Arweave GraphQL indexing catches up (10+ min typical delay).
+// After uploads (books, credential mappings, etc.), registers the tx ID with
+// a lightweight bridge service. On another device, the sync/sign-in flow
+// queries the bridge to discover recent tx IDs before Arweave GraphQL
+// indexing catches up (10+ min typical delay).
 //
 // All operations are best-effort. If the bridge is unavailable, the app falls
 // back to GraphQL-only discovery with no user-visible impact.
@@ -28,19 +29,18 @@ export async function deriveLookupKey(walletAddress) {
 }
 
 /**
- * Register one or more pending tx IDs with the bridge.
+ * Register pending tx IDs using a pre-derived lookup key.
  * Fire-and-forget: never throws, never blocks the caller.
  *
- * @param {string} walletAddress - EVM wallet address
+ * @param {string} lookupKey - 64-char hex lookup key
  * @param {string|string[]} txIds - One or more Arweave transaction IDs
  */
-export async function registerPendingTx(walletAddress, txIds) {
+export async function registerPendingTxByKey(lookupKey, txIds) {
   try {
-    if (!walletAddress || !txIds) return;
+    if (!lookupKey || !txIds) return;
     const ids = Array.isArray(txIds) ? txIds : [txIds];
     if (ids.length === 0) return;
 
-    const lookupKey = await deriveLookupKey(walletAddress);
     const url = getBridgeUrl();
 
     await fetch(`${url}/register`, {
@@ -55,17 +55,16 @@ export async function registerPendingTx(walletAddress, txIds) {
 }
 
 /**
- * Fetch pending tx IDs from the bridge for a wallet address.
+ * Fetch pending tx IDs using a pre-derived lookup key.
  * Returns an empty array on any error or timeout.
  *
- * @param {string} walletAddress - EVM wallet address
+ * @param {string} lookupKey - 64-char hex lookup key
  * @returns {Promise<string[]>} Array of pending Arweave transaction IDs
  */
-export async function fetchPendingTxIds(walletAddress) {
+export async function fetchPendingTxIdsByKey(lookupKey) {
   try {
-    if (!walletAddress) return [];
+    if (!lookupKey) return [];
 
-    const lookupKey = await deriveLookupKey(walletAddress);
     const url = getBridgeUrl();
 
     const r = await fetch(`${url}/pending?key=${lookupKey}`, {
@@ -76,6 +75,42 @@ export async function fetchPendingTxIds(walletAddress) {
 
     const data = await r.json();
     return Array.isArray(data?.txIds) ? data.txIds : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Register one or more pending tx IDs with the bridge.
+ * Convenience wrapper that derives the key from a wallet address.
+ * Fire-and-forget: never throws, never blocks the caller.
+ *
+ * @param {string} walletAddress - EVM wallet address
+ * @param {string|string[]} txIds - One or more Arweave transaction IDs
+ */
+export async function registerPendingTx(walletAddress, txIds) {
+  try {
+    if (!walletAddress || !txIds) return;
+    const lookupKey = await deriveLookupKey(walletAddress);
+    await registerPendingTxByKey(lookupKey, txIds);
+  } catch {
+    // Silently ignore
+  }
+}
+
+/**
+ * Fetch pending tx IDs from the bridge for a wallet address.
+ * Convenience wrapper that derives the key from a wallet address.
+ * Returns an empty array on any error or timeout.
+ *
+ * @param {string} walletAddress - EVM wallet address
+ * @returns {Promise<string[]>} Array of pending Arweave transaction IDs
+ */
+export async function fetchPendingTxIds(walletAddress) {
+  try {
+    if (!walletAddress) return [];
+    const lookupKey = await deriveLookupKey(walletAddress);
+    return await fetchPendingTxIdsByKey(lookupKey);
   } catch {
     return [];
   }

@@ -3,6 +3,7 @@
 // Separated from account_ui.js for cleaner architecture
 
 import { encryptJsonToBytes, decryptBytesToJson, hexToBytes } from './crypto_core.js';
+import { registerPendingTxByKey, fetchPendingTxIdsByKey } from './pending_tx_bridge.js';
 
 const TX_CACHE_PREFIX = 'bookish.txcache.acct.';
 
@@ -69,6 +70,7 @@ export async function uploadAccountMetadata({ address, displayName, symKey, crea
 
   console.log('[Bookish:AccountArweave] Account metadata uploaded:', txId);
   cacheTxId(hashedLookupKey, txId);
+  registerPendingTxByKey(hashedLookupKey, txId).catch(() => {});
   return txId;
 }
 
@@ -115,7 +117,18 @@ export async function downloadAccountMetadata(walletAddress, symKey) {
     let txId = getCachedTxId(hashedLookupKey);
     if (txId) {
       console.log(`[Bookish:AccountArweave] Using cached tx: ${txId}`);
-    } else {
+    }
+    if (!txId) {
+      try {
+        const bridgeIds = await fetchPendingTxIdsByKey(hashedLookupKey);
+        if (bridgeIds.length > 0) {
+          txId = bridgeIds[bridgeIds.length - 1];
+          console.log(`[Bookish:AccountArweave] Found via bridge: ${txId}`);
+          cacheTxId(hashedLookupKey, txId);
+        }
+      } catch { /* bridge unavailable — fall through to GraphQL */ }
+    }
+    if (!txId) {
       const response = await fetch('https://arweave.net/graphql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

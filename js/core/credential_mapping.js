@@ -2,6 +2,7 @@
 // Handles upload/download of credential-mapping entries on Arweave
 
 import { bytesToBase64, base64ToBytes, encryptJsonToBytes, decryptBytesToJson } from './crypto_core.js';
+import { registerPendingTxByKey, fetchPendingTxIdsByKey } from './pending_tx_bridge.js';
 
 // Gateway configuration
 const ARWEAVE_GRAPHQL = 'https://arweave.net/graphql';
@@ -73,6 +74,7 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
 
     console.log(`[Bookish:CredentialMapping] Mapping uploaded: ${result.id}`);
     cacheTxId(lookupKey, result.id);
+    registerPendingTxByKey(lookupKey, result.id).catch(() => {});
     return result.id;
   } catch (error) {
     console.error('[Bookish:CredentialMapping] Upload failed:', error);
@@ -92,6 +94,17 @@ async function findCredentialMappingTx(lookupKey) {
     console.log(`[Bookish:CredentialMapping] Using cached tx: ${cached}`);
     return cached;
   }
+
+  // Check bridge for recently uploaded mappings (before Arweave indexes them)
+  try {
+    const bridgeIds = await fetchPendingTxIdsByKey(lookupKey);
+    if (bridgeIds.length > 0) {
+      const txId = bridgeIds[bridgeIds.length - 1]; // newest
+      console.log(`[Bookish:CredentialMapping] Found via bridge: ${txId}`);
+      cacheTxId(lookupKey, txId);
+      return txId;
+    }
+  } catch { /* bridge unavailable — fall through to GraphQL */ }
 
   const query = `query {
     transactions(
