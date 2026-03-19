@@ -1330,7 +1330,8 @@ async function createServerless(payload){ if(window.bookishCache){ const dup=awa
     // Ensure browser client is initialized
     const haveKeys = await ensureKeys();
     if (!haveKeys) {
-      // Not logged in — book saved locally, upload deferred until account exists
+      // Not logged in — queue for upload after account creation
+      if (window.bookishCache) await window.bookishCache.queueOp({ type: 'create', localId: rec.id, payload });
       return;
     }
 
