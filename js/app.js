@@ -706,9 +706,9 @@ function render(){
 
   if(wtrCounter){
     if(wantList.length > 0){
-      wtrCounter.innerHTML = `To Read <span class="wtr-count">${wantList.length}</span>`;
+      wtrCounter.innerHTML = `My Reading List <span class="wtr-count">${wantList.length}</span>`;
     } else {
-      wtrCounter.textContent = 'To Read';
+      wtrCounter.textContent = 'My Reading List';
     }
   }
 
