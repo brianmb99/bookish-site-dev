@@ -15,9 +15,7 @@
   <h1>Bookish</h1>
   <div style="display:flex;align-items:center;gap:10px;font-size:.65rem">
     <div id="status" style="display:none"></div>
-    <button id="wtrTrigger" class="wtr-trigger" style="display:none" title="Want to Read list"></button>
     <button id="installBtn" class="refresh-link" style="display:none" title="Install">Install</button>
-    <button id="syncNowBtn" class="refresh-link" title="Sync now" style="display:none">Sync</button>
     <button id="accountBtn" class="refresh-link account-link" title="Account">Account</button>
     <button id="geekBtn" class="refresh-link" title="Tech Details" aria-controls="geekPanel">⚙︎</button>
   </div>
@@ -30,9 +28,11 @@
     <button id="geekClose" class="geek-close" title="Turn off developer mode">&times;</button>
   </div>
   <div id="geekStatusLine" class="geek-status-line"></div>
+  <button id="syncNowBtn" class="geek-sync-btn" title="Sync now">Sync Now</button>
 </div>
-<div style="display:flex;gap:8px;margin:4px 0 12px">
-  <button id="newBtn" class="new-compact" title="Add new">＋ New</button>
+<div class="action-bar">
+  <button id="newBtn" class="new-compact" title="Add a book to read">+ To Read</button>
+  <button id="wtrCounter" class="wtr-counter" title="Your to-read list">To Read</button>
 </div>
 <div id="accountBanner" class="account-banner" role="button" tabindex="0" style="display:none;"></div>
 <div id="accountNudgeBanner" class="nudge-banner" style="display:none;">
@@ -87,7 +87,7 @@
   <span class="toast-icon">🎉</span>
   <span class="toast-message">First book added! You're on your way.</span>
 </div>
-<footer>Bookish • Alpha • v0.2.13 • <a href="/forever.html">Data export</a></footer>
+<footer>Bookish • Alpha • v0.2.14 • <a href="/forever.html">Data export</a></footer>
 </div>
 
 <!-- Notes expand overlay -->

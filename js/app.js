@@ -79,7 +79,7 @@ const OPTIONAL_FIELDS = ['notes','rating','owned','tags'];
 
 // --- Reading status ---
 const READING_STATUS = { WANT_TO_READ: 'want_to_read', READING: 'reading', READ: 'read' };
-const wtrTrigger = document.getElementById('wtrTrigger');
+const wtrCounter = document.getElementById('wtrCounter');
 const wtrOverlay = document.getElementById('wtrOverlay');
 const wtrBackdrop = document.getElementById('wtrBackdrop');
 const wtrDrawer = document.getElementById('wtrDrawer');
@@ -649,7 +649,9 @@ function buildCardHTML(e){
   const coverDataUrl = e.coverImage ? `data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}` : '';
   const rs = normalizeReadingStatus(e);
   const isReading = rs === READING_STATUS.READING;
+  const cardKey = e.txid || e.id || '';
   const readingLabel = isReading ? '<div class="card-reading-label">◐ Reading</div>' : '';
+  const doneLink = isReading ? `<button type="button" class="card-done-link" data-done-key="${escapeHtml(cardKey)}">Finished ✓</button>` : '';
   const showDate = !isReading && dateDisp;
   return `
       <div class="status-dot ${dotClass}" data-tip="${dotTitle}"></div>
@@ -658,7 +660,7 @@ function buildCardHTML(e){
         <p class="title">${e.title||'<i>Untitled</i>'}</p>
         <p class="author">${e.author||''}</p>
         ${metaStrip}
-        <div class="details">${readingLabel}${showDate ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
+        <div class="details">${readingLabel}${doneLink}${showDate ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
         ${notesSnippet}
       </div>`;
 }
@@ -702,13 +704,11 @@ function render(){
   // Main grid shows: reading first, then read
   const shelfEntries = [...readingList, ...readList];
 
-  // Update WTR trigger count
-  if(wtrTrigger){
+  if(wtrCounter){
     if(wantList.length > 0){
-      wtrTrigger.textContent = `${wantList.length} to read ↗`;
-      wtrTrigger.style.display = 'inline-flex';
+      wtrCounter.innerHTML = `To Read <span class="wtr-count">${wantList.length}</span>`;
     } else {
-      wtrTrigger.style.display = 'none';
+      wtrCounter.textContent = 'To Read';
     }
   }
 
@@ -942,7 +942,7 @@ function renderWtrDrawer(wantList){
   }).join('');
 }
 
-wtrTrigger?.addEventListener('click', openWtrDrawer);
+wtrCounter?.addEventListener('click', openWtrDrawer);
 wtrBackdrop?.addEventListener('click', closeWtrDrawer);
 wtrClose?.addEventListener('click', closeWtrDrawer);
 wtrAddBtn?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
@@ -962,6 +962,17 @@ wtrListEl?.addEventListener('click', (ev)=>{
     const key = row.dataset.key;
     const entry = entries.find(e => (e.txid||e.id) === key);
     if(entry){ closeWtrDrawer(); openModal(entry); }
+  }
+});
+
+// "Done" / "Finished" link on Currently Reading cards
+cardsEl?.addEventListener('click', (ev)=>{
+  const doneBtn = ev.target.closest('.card-done-link');
+  if(doneBtn){
+    ev.stopPropagation();
+    ev.preventDefault();
+    const key = doneBtn.dataset.doneKey;
+    if(key) changeReadingStatus(key, READING_STATUS.READ);
   }
 });
 
@@ -1481,7 +1492,7 @@ deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value
 
 // header refresh removed; app auto-syncs
 
-newBtn?.addEventListener('click', ()=>openModal(null));
+newBtn?.addEventListener('click', ()=>openModal(null, READING_STATUS.WANT_TO_READ));
 
 // Phase 2: First-run experience event handlers
 emptyAddBookBtn?.addEventListener('click', ()=>openModal(null));
@@ -1674,20 +1685,19 @@ if(geekBtn && geekPanel && geekClose){
   if(isSuperuser()) openSuperuser();
 }
 
-// --- Sync Now button (superuser-only) ---
+// --- Sync Now button (inside geek panel) ---
 const syncNowBtn = document.getElementById('syncNowBtn');
 if (syncNowBtn) {
   syncNowBtn.addEventListener('click', async () => {
     syncNowBtn.disabled = true;
     syncNowBtn.textContent = 'Syncing\u2026';
-    resetProbeBackoff(); // Clear all probe backoff counters
+    resetProbeBackoff();
     try {
       await triggerSyncNow();
     } catch (e) {
       console.error('[Bookish] Sync Now error:', e);
     } finally {
-      syncNowBtn.textContent = 'Sync';
-      // Prevent button spam — re-enable after 2s
+      syncNowBtn.textContent = 'Sync Now';
       setTimeout(() => { syncNowBtn.disabled = false; }, 2000);
     }
   });
