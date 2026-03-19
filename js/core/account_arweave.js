@@ -7,6 +7,15 @@ import { registerPendingTxByKey, fetchPendingTxIdsByKey } from './pending_tx_bri
 
 const TX_CACHE_PREFIX = 'bookish.txcache.acct.';
 
+// Derive a bridge key that won't collide with the book sync bridge key.
+// Books use SHA-256(wallet + 'bookish'); we namespace account metadata
+// so its tx IDs don't appear in book sync results.
+async function acctBridgeKey(hashedLookupKey) {
+  const input = hashedLookupKey + 'acctmeta';
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function cacheTxId(hashedLookupKey, txId) {
   try { localStorage.setItem(TX_CACHE_PREFIX + hashedLookupKey, txId); } catch {}
 }
@@ -70,7 +79,7 @@ export async function uploadAccountMetadata({ address, displayName, symKey, crea
 
   console.log('[Bookish:AccountArweave] Account metadata uploaded:', txId);
   cacheTxId(hashedLookupKey, txId);
-  registerPendingTxByKey(hashedLookupKey, txId).catch(() => {});
+  acctBridgeKey(hashedLookupKey).then(bk => registerPendingTxByKey(bk, txId)).catch(() => {});
   return txId;
 }
 
@@ -120,7 +129,8 @@ export async function downloadAccountMetadata(walletAddress, symKey) {
     }
     if (!txId) {
       try {
-        const bridgeIds = await fetchPendingTxIdsByKey(hashedLookupKey);
+        const bk = await acctBridgeKey(hashedLookupKey);
+        const bridgeIds = await fetchPendingTxIdsByKey(bk);
         if (bridgeIds.length > 0) {
           txId = bridgeIds[bridgeIds.length - 1];
           console.log(`[Bookish:AccountArweave] Found via bridge: ${txId}`);
