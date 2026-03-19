@@ -26,6 +26,8 @@ const statusEl = document.getElementById('status');
 // status banner removed; we now write a single status line into the geek panel
 const cardsEl = document.getElementById('cards');
 const emptyEl = document.getElementById('empty');
+const shelfEmptyEl = document.getElementById('shelfEmpty');
+const actionBarEl = document.querySelector('.action-bar');
 const geekBtn = document.getElementById('geekBtn');
 const geekPanel = document.getElementById('geekPanel');
 const geekClose = document.getElementById('geekClose');
@@ -715,6 +717,8 @@ function render(){
   // Update WTR drawer if open
   if(wtrOverlay && wtrOverlay.style.display !== 'none') renderWtrDrawer(wantList);
 
+  const accountBannerEl = document.getElementById('accountBanner');
+
   if(!shelfEntries.length && !wantList.length){
     const syncStatus = getSyncStatusForUI();
     const isLoading = storageManager.isLoggedIn() && !syncStatus.initialSynced;
@@ -741,29 +745,26 @@ function render(){
 
     if(cardsEl.children.length > 0) cardsEl.replaceChildren();
     emptyEl.style.display='block';
+    if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
+    if(actionBarEl) actionBarEl.style.display = 'none';
+    if(accountBannerEl) accountBannerEl.style.display = 'none';
     hideAccountNudge();
     return;
   }
 
-  // If only WTR books exist but no shelf books, show a special empty state for the shelf
   if(!shelfEntries.length && wantList.length){
     if(cardsEl.children.length > 0) cardsEl.replaceChildren();
-    emptyEl.style.display='block';
-    const headline = emptyEl.querySelector('.empty-headline');
-    const subtext = emptyEl.querySelector('.empty-subtext');
-    const addBtn = emptyEl.querySelector('.empty-cta');
-    const signInDiv = document.getElementById('emptySignIn');
-    const illustration = emptyEl.querySelector('.empty-illustration');
-    if(headline) headline.textContent = 'Your shelf is empty';
-    if(subtext) subtext.textContent = 'You haven\'t finished any books yet. Open your Want to Read list to start one!';
-    if(addBtn) addBtn.style.display = '';
-    if(signInDiv) signInDiv.style.display = 'none';
-    if(illustration) illustration.textContent = '\uD83D\uDCDA';
-    if(storageManager.isLoggedIn()) hideAccountNudge(); else showAccountNudge();
+    emptyEl.style.display='none';
+    if(shelfEmptyEl) shelfEmptyEl.style.display = 'block';
+    if(actionBarEl) actionBarEl.style.display = '';
+    if(accountBannerEl) accountBannerEl.style.display = 'none';
+    hideAccountNudge();
     return;
   }
 
   emptyEl.style.display='none';
+  if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
+  if(actionBarEl) actionBarEl.style.display = '';
   if(storageManager.isLoggedIn()) hideAccountNudge(); else showAccountNudge();
 
   // --- Keyed DOM reconciliation ---
@@ -947,6 +948,7 @@ wtrBackdrop?.addEventListener('click', closeWtrDrawer);
 wtrClose?.addEventListener('click', closeWtrDrawer);
 wtrAddBtn?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
 wtrFooterAdd?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
+document.getElementById('shelfEmptyBrowse')?.addEventListener('click', openWtrDrawer);
 
 // WTR drawer event delegation: "Start Reading" + row tap
 wtrListEl?.addEventListener('click', (ev)=>{

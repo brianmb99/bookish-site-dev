@@ -366,6 +366,35 @@ button.secondary:hover, .btn.secondary:hover{
 .empty-signin .link-btn{background:none;border:none;color:var(--color-text-secondary);font-size:inherit;font-family:inherit;cursor:pointer;padding:0;text-decoration:none;transition:color .2s}
 .empty-signin .link-btn:hover{color:var(--color-text-primary);text-decoration:underline;text-underline-offset:2px}
 
+/* Shelf-empty state (has WTR books but no shelf books) */
+.shelf-empty{
+  text-align:center;
+  padding:40px 20px;
+  color:var(--color-text-muted);
+}
+.shelf-empty-text{
+  font-size:.9rem;
+  line-height:1.5;
+  margin:0 0 12px;
+}
+.shelf-empty-link{
+  background:transparent!important;
+  border:none!important;
+  color:var(--color-text-secondary)!important;
+  font-size:.85rem!important;
+  font-weight:500!important;
+  cursor:pointer;
+  padding:8px 12px!important;
+  border-radius:6px!important;
+  transition:color .2s,background .2s;
+  font-family:var(--font-body);
+  box-shadow:none!important;
+}
+.shelf-empty-link:hover{
+  color:var(--color-primary)!important;
+  background:var(--color-bg-surface)!important;
+}
+
 /* --- Reading Status: shelf-first, queue-behind --- */
 
 /* Reading card accent — always-on spine glow */
