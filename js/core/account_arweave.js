@@ -139,22 +139,32 @@ export async function downloadAccountMetadata(walletAddress, symKey) {
       } catch { /* bridge unavailable — fall through to GraphQL */ }
     }
     if (!txId) {
-      const response = await fetch('https://arweave.net/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-      });
+      try {
+        const response = await fetch('https://arweave.net/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
 
-      const result = await response.json();
-      const edges = result.data?.transactions?.edges || [];
+        if (!response.ok) {
+          console.warn(`[Bookish:AccountArweave] GraphQL returned ${response.status}`);
+          return null;
+        }
 
-      if (edges.length === 0) {
-        console.log('[Bookish:AccountArweave] No account metadata found');
+        const result = await response.json();
+        const edges = result.data?.transactions?.edges || [];
+
+        if (edges.length === 0) {
+          console.log('[Bookish:AccountArweave] No account metadata found');
+          return null;
+        }
+
+        txId = edges[0].node.id;
+        cacheTxId(hashedLookupKey, txId);
+      } catch (gqlErr) {
+        console.warn('[Bookish:AccountArweave] GraphQL query failed:', gqlErr.message);
         return null;
       }
-
-      txId = edges[0].node.id;
-      cacheTxId(hashedLookupKey, txId);
     }
     console.log(`[Bookish:AccountArweave] Found metadata: ${txId}`);
 

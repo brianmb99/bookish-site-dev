@@ -1101,21 +1101,32 @@ async function serverlessFetchEntries(){
     }
   } catch { /* bridge unavailable — continue with GraphQL only */ }
 
-  // Step 1: Query GraphQL for all transactions
+  // Step 1: Query GraphQL for all transactions (non-fatal if bridge has results)
   const owner=null; let allEdges=[]; let cursor=undefined; let safety=0; const PAGE=50;
+  let graphqlFailed = false;
   console.log('[Bookish] Querying Arweave GraphQL for book entries...');
   const queryStart = Date.now();
-  for(;;){
-    const { edges, pageInfo } = await browserClient.searchByOwner(owner,{limit:PAGE,cursor});
-    allEdges.push(...edges);
-    if(!pageInfo.hasNextPage) break;
-    cursor=edges[edges.length-1]?.cursor;
-    if(++safety>40) break;
+  try {
+    for(;;){
+      const { edges, pageInfo } = await browserClient.searchByOwner(owner,{limit:PAGE,cursor});
+      allEdges.push(...edges);
+      if(!pageInfo.hasNextPage) break;
+      cursor=edges[edges.length-1]?.cursor;
+      if(++safety>40) break;
+    }
+    console.log('[Bookish] GraphQL query completed in', Date.now() - queryStart, 'ms, found', allEdges.length, 'transactions');
+  } catch (gqlErr) {
+    console.warn('[Bookish] GraphQL query failed:', gqlErr.message);
+    graphqlFailed = true;
+    if (bridgeEntries.length === 0) throw gqlErr;
+    console.log('[Bookish] Continuing with', bridgeEntries.length, 'bridge-discovered entries');
   }
-  console.log('[Bookish] GraphQL query completed in', Date.now() - queryStart, 'ms, found', allEdges.length, 'transactions');
 
-  const { liveEdges, tombstones } = browserClient.computeLiveSets(allEdges);
-  console.log('[Bookish] After filtering:', liveEdges.length, 'live entries,', tombstones.length, 'tombstones');
+  let liveEdges = [], tombstones = [];
+  if (!graphqlFailed) {
+    ({ liveEdges, tombstones } = browserClient.computeLiveSets(allEdges));
+    console.log('[Bookish] After filtering:', liveEdges.length, 'live entries,', tombstones.length, 'tombstones');
+  }
 
   // Step 2: Check which txids we already have cached with seenRemote flag
   const cachedEntries = window.bookishCache ? await window.bookishCache.listAllRaw() : [];
@@ -1153,7 +1164,7 @@ async function serverlessFetchEntries(){
       const prevTxid = prevTag(e);
       hydrated.push({
         ...cached,
-        block: e.node.block, // Update block info if changed
+        block: e.node.block,
         ...(prevTxid && { prevTxid })
       });
     }
