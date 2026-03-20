@@ -1100,7 +1100,20 @@ async function fetchBridgeEntries() {
       } catch { /* skip undecryptable entries (tombstones, other wallets, etc) */ }
     }
     console.log('[Bookish] Bridge: decrypted', results.length, 'of', newIds.length, 'entries');
-    return results;
+
+    // Dedup by bookId — bridge returns in registration order (oldest first),
+    // so the last entry per bookId is the most recent version.
+    const byBookId = new Map();
+    const noBookId = [];
+    for (const entry of results) {
+      if (entry.bookId) byBookId.set(entry.bookId, entry);
+      else noBookId.push(entry);
+    }
+    const deduped = [...byBookId.values(), ...noBookId];
+    if (deduped.length < results.length) {
+      console.log('[Bookish] Bridge: deduped', results.length - deduped.length, 'superseded entries by bookId');
+    }
+    return deduped;
   } catch {
     return [];
   }
