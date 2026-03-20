@@ -1,6 +1,6 @@
 // book_search.js
 // Lightweight module to search OpenLibrary and populate the entry form
-import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary as coreMerge, enrichWithYear, enrichItunesWithYear, scoreDocument as coreScoreDocument, passesFilter as corePassesFilter, filterAndSort as coreFilterAndSort, deduplicateByDisplay as coreDedup, detectISBN, parseAuthorTitle } from './core/search_core.js';
+import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary as coreMerge, enrichWithYear, enrichItunesWithYear, scoreDocument as coreScoreDocument, filterAndSort as coreFilterAndSort, deduplicateByDisplay as coreDedup, deduplicateItunesByDisplay as coreDedupItunes, filterOlSupersededByItunes as coreOlMinusItunes, detectISBN, parseAuthorTitle } from './core/search_core.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
@@ -106,8 +106,10 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   function highlight(text){ if(!queryTokens.length) return text; let html=text; queryTokens.forEach(t=>{ const re=new RegExp('('+t.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')+')','ig'); html=html.replace(re,'<mark>$1</mark>'); }); return html; }
   function sorted(){ enrich(); return coreFilterAndSort({ olDocs, itunesItems, activeFilter, sortMode, strictActive }); }
   function renderCombined(flags){ const failTitle=flags&&flags.failTitle; const failBroad=flags&&flags.failBroad; const partial=flags&&flags.partial; const {ol,it}=sorted();
-    // Deduplicate OL results by display representation (title+author)
-    const dedupOL=coreDedup(ol); const total=dedupOL.length+it.length;
+    const dedupIt=coreDedupItunes(it);
+    const dedupOL=coreDedup(ol);
+    const olFiltered=coreOlMinusItunes(dedupOL, dedupIt);
+    const total=dedupIt.length+olFiltered.length;
     // Still loading and no results yet — keep skeleton visible
     if(partial && !total) return;
     const rows=[]; if(failTitle && failBroad){ rows.push('<div style="opacity:.55;font-size:.7rem;padding:2px 4px;color:#f87171">OpenLibrary unavailable (showing audio only / cached broader results if any).</div>'); }
@@ -116,8 +118,8 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     if(!strictActive && queryTokens.length){ rows.push('<div style="opacity:.55;font-size:.7rem;padding:2px 4px">No exact title match; showing broader results.</div>'); }
     if(failTitle && !failBroad){ rows.push('<div style="opacity:.45;font-size:.6rem;padding:2px 4px">Exact title search failed (fallback used).</div>'); }
     if(!failTitle && failBroad){ rows.push('<div style="opacity:.45;font-size:.6rem;padding:2px 4px">Broad search unavailable (exact only).</div>'); }
-    dedupOL.forEach(d=>{ const title=(d.title||''); const sub=d.subtitle?(': '+d.subtitle):''; const safe=(title).replace(/</g,'&lt;'); const safeSub=sub.replace(/</g,'&lt;'); const combined=highlight(safe+safeSub); const author=(d.author_name&&d.author_name[0])?d.author_name[0]:''; const safeAuthor=highlight(author.replace(/</g,'&lt;')); const yr=d._yearComputed?` <span style="opacity:.45">${d._yearComputed}</span>`:''; const broadBadge = d._src==='broad' ? '<span class="src" style="background:#555">B</span>' : (d._src==='both' ? '<span class="src" style="background:#444">M</span>' : ''); const metaTitle=(d.title||'')+ (d.subtitle?(': '+d.subtitle):''); rows.push(`<div class="res" data-src="ol" data-work='${d.key}' data-cover='${d.cover_i||''}' data-json='${encodeURIComponent(JSON.stringify({title:metaTitle,author,cover_i:d.cover_i||'',work_key:d.key}))}'>${combined} <span style="opacity:.6">${safeAuthor}</span>${yr}<span class="src src-ol">OL</span>${broadBadge}</div>`); });
-    it.forEach(item=>{ const title=(item.collectionName||item.trackName||''); const safe=highlight(title.replace(/</g,'&lt;')); const author=(item.artistName||'').replace(/</g,'&lt;'); const safeAuthor=highlight(author); const year=item._yearComputed||''; const payload={ title, author, year: year?String(year):'', artwork:item.artworkUrl100||'', narrator: author, rawNarrators: author }; rows.push(`<div class="res" data-src="it" data-json='${encodeURIComponent(JSON.stringify(payload))}'>${safe} <span style="opacity:.6">${safeAuthor}${year?(' • '+year):''}</span><span class="src src-it">IT</span></div>`); }); if(!rows.length){ resultsEl.innerHTML='<div style="opacity:.5">No results</div>'; return; } resultsEl.innerHTML=rows.slice(0,60).join(''); }
+    dedupIt.forEach(item=>{ const title=(item.collectionName||item.trackName||''); const safe=highlight(title.replace(/</g,'&lt;')); const author=(item.artistName||'').replace(/</g,'&lt;'); const safeAuthor=highlight(author); const year=item._yearComputed||''; const payload={ title, author, year: year?String(year):'', artwork:item.artworkUrl100||'', narrator: author, rawNarrators: author }; rows.push(`<div class="res res-itunes" data-src="it" data-json='${encodeURIComponent(JSON.stringify(payload))}'>${safe} <span style="opacity:.6">${safeAuthor}${year?(' • '+year):''}</span></div>`); });
+    olFiltered.forEach(d=>{ const title=(d.title||''); const sub=d.subtitle?(': '+d.subtitle):''; const safe=(title).replace(/</g,'&lt;'); const safeSub=sub.replace(/</g,'&lt;'); const combined=highlight(safe+safeSub); const author=(d.author_name&&d.author_name[0])?d.author_name[0]:''; const safeAuthor=highlight(author.replace(/</g,'&lt;')); const yr=d._yearComputed?` <span style="opacity:.45">${d._yearComputed}</span>`:''; const metaTitle=(d.title||'')+ (d.subtitle?(': '+d.subtitle):''); rows.push(`<div class="res" data-src="ol" data-work='${d.key}' data-cover='${d.cover_i||''}' data-json='${encodeURIComponent(JSON.stringify({title:metaTitle,author,cover_i:d.cover_i||'',work_key:d.key}))}'>${combined} <span style="opacity:.6">${safeAuthor}</span>${yr}</div>`); }); if(!rows.length){ resultsEl.innerHTML='<div style="opacity:.5">No results</div>'; return; } resultsEl.innerHTML=rows.slice(0,60).join(''); }
   function selectWork(meta){ currentAudio=null; currentWork=meta; editions=[]; editionIndex=0; editionNav.style.display='none';
     // Clear cover immediately when selecting new work
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
@@ -139,7 +141,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     // Always set fields (not just when empty)
     form.title.value = payload.title || '';
     form.author.value = payload.author || '';
-    form.format.value='audio';
+    form.format.value=activeFilter==='audiobook'?'audio':'print';
     markDirty();
     if(payload.artwork){ const hi=payload.artwork.replace(/100x100/,'600x600');
       const ph = document.getElementById('coverPlaceholder');

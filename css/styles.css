@@ -1245,10 +1245,8 @@ body:not([data-superuser]) .card .status-dot{display:none}
 .date-picker td.today{outline:1px solid #2563eb}
 .date-picker td:hover{background:#2a323a}
 .date-picker td.selected{background:#2563eb;color:#fff}
-/* Source badges for search results */
-#bookSearchResults .src{display:inline-block;font-size:.5rem;padding:2px 4px;border-radius:4px;margin-left:4px;background:#2b333b;letter-spacing:.05em;font-weight:600}
-#bookSearchResults .src-it{background:#4b2e83}
-#bookSearchResults .src-ol{background:#374151}
+/* iTunes-sourced hits (shown first): subtle emphasis */
+#bookSearchResults .res-itunes{font-weight:600}
 #searchSortToggle .sort-btn{background:#2b333b;border:1px solid #374151;color:#9da6af;font-size:.55rem;padding:4px 6px;border-radius:4px;cursor:pointer;letter-spacing:.04em}
 #searchSortToggle .sort-btn.active{background:#2563eb;border-color:#2563eb;color:#fff}
 #searchSortToggle{justify-content:flex-end}

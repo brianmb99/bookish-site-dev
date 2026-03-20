@@ -124,13 +124,46 @@ export function passesFilter(item, activeFilter) {
 export function deduplicateByDisplay(docs) {
   const seen = new Set();
   return docs.filter(d => {
-    const title = (d.title || '').toLowerCase().trim();
-    const author = ((d.author_name && d.author_name[0]) || '').toLowerCase().trim();
-    const key = `${title}|${author}`;
+    const key = displayKeyOpenLibrary(d);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+/** Normalized title|author key for an OpenLibrary work (matches deduplicateByDisplay). */
+export function displayKeyOpenLibrary(doc) {
+  const title = (doc.title || '').toLowerCase().trim();
+  const author = ((doc.author_name && doc.author_name[0]) || '').toLowerCase().trim();
+  return `${title}|${author}`;
+}
+
+/** Normalized title|author key for an iTunes search hit. */
+export function displayKeyItunes(item) {
+  const title = (item.collectionName || item.trackName || '').toLowerCase().trim();
+  const author = (item.artistName || '').toLowerCase().trim();
+  return `${title}|${author}`;
+}
+
+/** Dedupe iTunes rows by the same display key as OpenLibrary (first wins). */
+export function deduplicateItunesByDisplay(items) {
+  const seen = new Set();
+  return (items || []).filter(i => {
+    const key = displayKeyItunes(i);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Drop OpenLibrary works that match any iTunes result on title+author (exact normalized key).
+ * iTunes wins — used so one canonical row appears first with OL editions below.
+ */
+export function filterOlSupersededByItunes(olDocs, itunesItems) {
+  const keys = new Set();
+  (itunesItems || []).forEach(i => keys.add(displayKeyItunes(i)));
+  return (olDocs || []).filter(d => !keys.has(displayKeyOpenLibrary(d)));
 }
 
 // Detect if query is an ISBN (10 or 13 digits, with optional hyphens/spaces)
