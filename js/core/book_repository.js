@@ -654,7 +654,7 @@ export class BookRepository {
     deduped.sort((a, b) => {
       const da = a.dateRead || '0000-00-00', db = b.dateRead || '0000-00-00';
       if (da !== db) return db.localeCompare(da);
-      return ((b.block?.height) || 0) - ((a.block?.height) || 0);
+      return (b.createdAt || 0) - (a.createdAt || 0);
     });
 
     return deduped;

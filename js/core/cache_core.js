@@ -105,7 +105,7 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
         txid: r.txid,
         bookId: r.bookId || null,
         contentHash,
-        createdAt: Date.now(),
+        createdAt: r.createdAt || Date.now(),
         status: 'confirmed',
         seenRemote: true,
         onArweave: false
