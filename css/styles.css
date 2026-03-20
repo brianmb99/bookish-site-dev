@@ -537,15 +537,15 @@ button.secondary:hover, .btn.secondary:hover{
 .celebration-toast{background:linear-gradient(135deg,#1e3a5f 0%,#1e293b 100%)}
 
 /* Account nudge banner */
-.nudge-banner{background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);border-radius:10px;padding:20px 24px;margin:16px 0;display:flex;align-items:center;justify-content:center;gap:16px;animation:fadeIn .3s ease-out}
+.nudge-banner{background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);border-radius:10px;padding:14px 20px;margin:16px 0;display:flex;align-items:center;justify-content:center;gap:12px;animation:fadeIn .3s ease-out}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
-.nudge-content{display:flex;align-items:center;gap:12px}
-.nudge-icon{font-size:1.5rem}
-.nudge-text{display:flex;flex-direction:column;gap:4px}
+.nudge-content{display:flex;align-items:center;gap:10px}
+.nudge-icon{font-size:1.25rem;line-height:1}
+.nudge-text{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
 .nudge-headline{font-size:.875rem;font-weight:500;color:#e2e8f0}
-.nudge-cta{font-size:.8rem;color:#60a5fa;text-decoration:none;background:none;border:none;padding:0;cursor:pointer}
+.nudge-cta{font-size:.875rem;color:#60a5fa;text-decoration:none;background:none;border:none;padding:0;cursor:pointer;white-space:nowrap}
 .nudge-cta:hover{color:#93c5fd;text-decoration:underline}
-.nudge-dismiss{background:transparent;border:none;color:#64748b;font-size:1.2rem;cursor:pointer;padding:4px 8px;border-radius:4px}
+.nudge-dismiss{background:transparent;border:none;color:#64748b;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:4px;line-height:1}
 .nudge-dismiss:hover{color:#94a3b8;background:#334155}
 /* Account modal styles */
 .modal-overlay{
