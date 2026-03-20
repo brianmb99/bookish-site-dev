@@ -1085,6 +1085,8 @@ async function initCacheLayer(){
       orderEntries();
       render();
       uiStatusManager.refresh();
+      // Show account nudge when 3+ books and logged out (on load or after add)
+      showAccountNudge();
     });
     bookRepo.on('error', ({ code, message, pendingOp }) => {
       if (code) { walletError = message; if (pendingOp) lastPendingOp = pendingOp; }
@@ -1098,6 +1100,8 @@ async function initCacheLayer(){
     // Load cached books immediately for instant display
     await bookRepo.loadFromCache();
     console.log('[Bookish] Loaded', entries.length, 'books from cache');
+    // Show account nudge on load if 3+ books and logged out (per FIRST_RUN_EXPERIENCE.md)
+    showAccountNudge();
 
     // Initialize sync manager
     initSyncManager({
