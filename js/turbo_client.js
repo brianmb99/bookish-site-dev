@@ -8,6 +8,7 @@ const UPLOAD_PROXY = window.BOOKISH_UPLOAD_PROXY || 'https://bookish-upload-prox
 const BASE_RPC = window.BOOKISH_BASE_RPC || 'https://base.llamarpc.com';
 
 let _feeSchedule = null;
+let _pendingNonce = null;
 
 async function getFeeSchedule(forceRefresh = false) {
   if (_feeSchedule && !forceRefresh) return _feeSchedule;
@@ -20,6 +21,7 @@ async function getFeeSchedule(forceRefresh = false) {
 
 function reset() {
   _feeSchedule = null;
+  _pendingNonce = null;
 }
 
 async function estimateCost(byteLength) {
@@ -40,7 +42,11 @@ async function signFeeTx(feeSchedule) {
   const wallet = new Wallet(pk, provider);
 
   const feeWei = BigInt(feeSchedule.fee);
-  const nonce = await provider.getTransactionCount(wallet.address, 'latest');
+  const chainNonce = await provider.getTransactionCount(wallet.address, 'latest');
+  const nonce = (_pendingNonce !== null && _pendingNonce >= chainNonce)
+    ? _pendingNonce
+    : chainNonce;
+  _pendingNonce = nonce + 1;
 
   const tx = await wallet.signTransaction({
     to: feeSchedule.address,
@@ -89,6 +95,7 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
   }
 
   if (!response.ok) {
+    _pendingNonce = null;
     const errBody = await response.json().catch(() => ({}));
     const err = new Error(errBody.error || `Upload proxy returned ${response.status}`);
     err.code = errBody.code || `proxy-${response.status}`;
@@ -100,8 +107,13 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
   const id = result.id;
   if (!id) throw new Error('missing-id');
 
+  if (!skipFee && !result.feeTxHash) {
+    _pendingNonce = null;
+    console.warn('[Bookish:Upload] Fee broadcast may have failed (feeTxHash missing)', { feeError: result.feeError });
+  }
+
   console.info('[Bookish:Upload] upload success', { id, feeTxHash: result.feeTxHash });
-  logAppend('upload', 'proxy-success', { id, feeTxHash: result.feeTxHash });
+  logAppend('upload', 'proxy-success', { id, feeTxHash: result.feeTxHash, feeError: result.feeError || null });
   return { id };
 }
 
