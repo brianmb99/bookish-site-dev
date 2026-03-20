@@ -511,12 +511,15 @@ export class BookRepository {
     const client = this._getBrowserClient();
     if (!client) return { entries: [], tombstones: [], partial: false };
 
-    const bridgeEntries = await this._fetchBridgeEntries();
+    const { entries: bridgeEntries, tombstones: bridgeTombstones } = await this._fetchBridgeEntries();
     const { edges: allEdges, error: gqlError } = await this._fetchGraphQLPages();
 
     let liveEdges = [], tombstones = [];
     if (allEdges.length > 0) {
       ({ liveEdges, tombstones } = client.computeLiveSets(allEdges));
+    }
+    if (bridgeTombstones.length > 0) {
+      tombstones = [...tombstones, ...bridgeTombstones];
     }
 
     const cachedEntries = this._cache ? await this._cache.listAllRaw() : [];
@@ -542,25 +545,30 @@ export class BookRepository {
   async _fetchBridgeEntries() {
     try {
       const addr = await this._getWalletAddress();
-      if (!addr) return [];
+      if (!addr) return { entries: [], tombstones: [] };
       const pendingIds = await fetchPendingTxIds(addr);
-      if (pendingIds.length === 0) return [];
+      if (pendingIds.length === 0) return { entries: [], tombstones: [] };
 
       const cached = this._cache ? await this._cache.listAllRaw() : [];
       const knownTxids = new Set(cached.filter(e => e.txid).map(e => e.txid));
       const newIds = pendingIds.filter(id => !knownTxids.has(id));
-      if (newIds.length === 0) return [];
+      if (newIds.length === 0) return { entries: [], tombstones: [] };
 
       console.log('[BookRepository] Bridge: fetching', newIds.length, 'pending tx IDs from Turbo');
       const client = this._getBrowserClient();
       const results = [];
+      const bridgeTombstones = [];
       for (const txid of newIds) {
         try {
           const dec = await client.decryptTx(txid);
-          results.push({ txid, ...dec, block: null });
+          if (dec.op === 'tombstone' && dec.ref) {
+            bridgeTombstones.push({ txid, ref: dec.ref });
+          } else {
+            results.push({ txid, ...dec, block: null });
+          }
         } catch { /* skip undecryptable */ }
       }
-      console.log('[BookRepository] Bridge: decrypted', results.length, 'of', newIds.length, 'entries');
+      console.log('[BookRepository] Bridge: decrypted', results.length, 'entries,', bridgeTombstones.length, 'tombstones of', newIds.length, 'txids');
 
       const byBookId = new Map();
       const noBookId = [];
@@ -572,9 +580,9 @@ export class BookRepository {
       if (deduped.length < results.length) {
         console.log('[BookRepository] Bridge: deduped', results.length - deduped.length, 'superseded entries');
       }
-      return deduped;
+      return { entries: deduped, tombstones: bridgeTombstones };
     } catch {
-      return [];
+      return { entries: [], tombstones: [] };
     }
   }
 
