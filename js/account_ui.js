@@ -29,7 +29,7 @@ const transientState = {
   faucetSkipped: false
 };
 
-const BANNER_DISMISSED_KEY = 'bookish_account_banner_dismissed';
+
 
 /**
  * Get account status for UI status manager
@@ -55,13 +55,17 @@ export function getAccountStatus() {
 export async function initAccountUI() {
   console.log('[Bookish:AccountUI] Initializing...');
 
+  // If user is currently logged in, mark that they've had an account
+  // (persists across logout to suppress first-timer nudges)
+  if (storageManager.isLoggedIn()) {
+    localStorage.setItem('bookish.hasHadAccount', 'true');
+  }
+
   // Coinbase Pay requires no configuration - always available via direct link
 
   // Setup modal event listeners
   setupAccountModalListeners();
 
-  // Show account banner if needed
-  showAccountBannerIfNeeded();
 }
 
 /**
@@ -365,67 +369,6 @@ function setupAccountModalListeners() {
   document.addEventListener('keydown', escHandler);
 }
 
-/**
- * Show account banner for first-time visitors (when not logged in)
- */
-function showAccountBannerIfNeeded() {
-  const banner = document.getElementById('accountBanner');
-  if (!banner) return;
-
-  // Don't show if logged in
-  if (storageManager.isLoggedIn()) {
-    banner.style.display = 'none';
-    return;
-  }
-
-  // Don't show if previously dismissed
-  if (localStorage.getItem(BANNER_DISMISSED_KEY) === 'true') {
-    banner.style.display = 'none';
-    return;
-  }
-
-  // Don't show if the nudge banner is already visible (avoid duplicates)
-  const nudgeBanner = document.getElementById('accountNudgeBanner');
-  if (nudgeBanner && nudgeBanner.style.display !== 'none') {
-    banner.style.display = 'none';
-    return;
-  }
-
-  // Show banner
-  banner.style.display = 'flex';
-  banner.innerHTML = `
-    <div class="account-banner-content">
-      <span>💡</span>
-      <span>Create an account to access your books from any device</span>
-    </div>
-    <button class="account-banner-dismiss" id="dismissBannerBtn" aria-label="Dismiss">×</button>
-  `;
-
-  document.getElementById('dismissBannerBtn').addEventListener('click', (e) => {
-    e.stopPropagation(); // Prevent triggering banner click
-    localStorage.setItem(BANNER_DISMISSED_KEY, 'true');
-    banner.style.display = 'none';
-    // Also suppress the nudge banner so it doesn't reappear
-    localStorage.setItem('bookish.accountNudgeDismissed', 'true');
-    const nudge = document.getElementById('accountNudgeBanner');
-    if (nudge) nudge.style.display = 'none';
-  });
-
-  // Add click handler to banner itself
-  banner.addEventListener('click', (e) => {
-    // Don't trigger if clicking dismiss button
-    if (e.target.closest('.account-banner-dismiss')) return;
-    openAccountModal();
-  });
-
-  // Keyboard support
-  banner.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      openAccountModal();
-    }
-  });
-}
 
 /**
  * Update account section UI based on state
@@ -761,10 +704,6 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
     };
     localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(accountData));
 
-    // Hide the "Create an account" banner immediately — user is now logged in
-    const banner = document.getElementById('accountBanner');
-    if (banner) banner.style.display = 'none';
-
     // Store credential metadata
     localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify({
       lookupKey,
@@ -977,8 +916,6 @@ function showCreationFullSuccess(displayName, email) {
   document.getElementById('startBooksBtn').onclick = () => {
     closeHelperModal();
     closeAccountModal();
-    const banner = document.getElementById('accountBanner');
-    if (banner) banner.style.display = 'none';
     markInitialSyncDone();
     uiStatusManager.refresh();
     if(window.bookishApp?.render) window.bookishApp.render();
@@ -1017,8 +954,6 @@ function showCreationFallbackSuccess(displayName, email) {
   document.getElementById('startBooksBtn').onclick = () => {
     closeHelperModal();
     closeAccountModal();
-    const banner = document.getElementById('accountBanner');
-    if (banner) banner.style.display = 'none';
     markInitialSyncDone();
     uiStatusManager.refresh();
     if(window.bookishApp?.render) window.bookishApp.render();
@@ -1323,10 +1258,6 @@ async function runSignInFlow(email, password) {
   closeHelperModal();
   closeAccountModal();
 
-  // Hide banner
-  const banner = document.getElementById('accountBanner');
-  if (banner) banner.style.display = 'none';
-
   // Show welcome toast
   showToast(`✓ Welcome back, ${displayName}!`);
 
@@ -1628,9 +1559,6 @@ function handleManualSeedLogin() {
 
       setTimeout(() => {
         closeAccountModal();
-        // Hide banner after login
-        const banner = document.getElementById('accountBanner');
-        if (banner) banner.style.display = 'none';
       }, 1000);
 
     } catch (error) {
@@ -1760,6 +1688,9 @@ async function performLogout() {
   // Reset key state
   resetKeyState();
 
+  // Remember that this user has had an account (survives logout)
+  localStorage.setItem('bookish.hasHadAccount', 'true');
+
   // Clear all session data using centralized storage manager
   storageManager.clearSession();
 
@@ -1773,9 +1704,6 @@ async function performLogout() {
 
   // Refresh UI to logged-out state
   initAccountUI();
-
-  // Show banner after logout (if not dismissed)
-  showAccountBannerIfNeeded();
 
   console.log('[Bookish:AccountUI] Logged out');
 }
