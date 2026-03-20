@@ -79,7 +79,7 @@
   <span class="toast-icon">🎉</span>
   <span class="toast-message">First book added! You're on your way.</span>
 </div>
-<footer>Bookish • Alpha • v0.2.25 • <a href="/forever.html">Data export</a></footer>
+<footer>Bookish • Alpha • v0.2.26 • <a href="/forever.html">Data export</a></footer>
 </div>
 
 <!-- Notes expand overlay -->
@@ -129,18 +129,18 @@
     </div>
     <form id="entryForm" class="inline" novalidate>
       <div class="form-as-tile">
+        <div class="fields-cluster">
+          <div class="field-block"><label>Title</label><input name="title" required placeholder="Title"></div>
+          <div class="field-block"><label>Author</label><input name="author" required placeholder="Author"></div>
+          <div class="field-block"><label>Format</label><select name="format"><option value="print">Print</option><option value="ebook">Ebook</option><option value="audio">Audio</option></select></div>
+          <div class="field-block"><label>Date Read</label><div class="date-input-wrap"><input name="dateRead" type="date"><button type="button" class="cal-btn" id="openCalendarBtn" title="Pick date">📅</button></div></div>
+        </div>
         <div class="tile-cover" id="tileCoverClick">
           <img class="preview" id="coverPreview" style="display:none"/>
           <div class="placeholder" id="coverPlaceholder"><div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Click to upload cover</span></div></div>
           <div class="cover-hover-hint" id="coverHoverHint">Click to change cover</div>
           <button type="button" class="cover-remove-btn" id="coverRemoveBtn" title="Remove cover" style="display:none">×</button>
           <input type="file" name="coverFile" accept="image/*" style="display:none" id="hiddenCoverInput"/>
-        </div>
-        <div class="fields-cluster">
-          <div class="field-block"><label>Title</label><input name="title" required placeholder="Title"></div>
-          <div class="field-block"><label>Author</label><input name="author" required placeholder="Author"></div>
-          <div class="field-block"><label>Format</label><select name="format"><option value="print">Print</option><option value="ebook">Ebook</option><option value="audio">Audio</option></select></div>
-          <div class="field-block"><label>Date Read</label><div class="date-input-wrap"><input name="dateRead" type="date"><button type="button" class="cal-btn" id="openCalendarBtn" title="Pick date">📅</button></div></div>
         </div>
       </div>
       <div class="optional-fields-zone" id="optionalFieldsZone">
