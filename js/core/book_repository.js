@@ -11,6 +11,7 @@
 //   await repo.loadFromCache();
 
 import { registerPendingTx, fetchPendingTxIds } from './pending_tx_bridge.js';
+import { pickWinner } from './cache_core.js';
 
 export const READING_STATUS = {
   WANT_TO_READ: 'want_to_read',
@@ -157,7 +158,7 @@ export class BookRepository {
       this._emitProgress(['Publishing to Arweave...', 'If funding is needed, you\'ll be prompted']);
 
       const client = this._getBrowserClient();
-      const res = await client.uploadEntry(payload, {});
+      const res = await client.uploadEntry(buildPayloadFromEntry(rec), {});
       const addr = await this._getWalletAddress();
       registerPendingTx(addr, res.txid).catch(() => {});
 
@@ -210,12 +211,12 @@ export class BookRepository {
 
     if (queueEntry?.uploading) {
       console.log('[BookRepository] Edit queued - will upload after current edit completes');
-      queueEntry.pendingPayload = { ...payload, bookId: old.bookId };
+      queueEntry.hasPendingEdit = true;
       return;
     }
 
-    this._editQueue.set(entryKey, { uploading: true, pendingPayload: null });
-    await this._doEditUpload(entryKey, old, id, { ...payload, bookId: old.bookId }, snapshot);
+    this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
+    await this._doEditUpload(entryKey, old, id, snapshot);
   }
 
   async delete(id) {
@@ -283,16 +284,15 @@ export class BookRepository {
       : 'Moved to Want to Read';
 
     if (entry.txid) {
-      const payload = buildPayloadFromEntry(entry);
       const entryKey = entry.bookId || entry.id;
       const queueEntry = this._editQueue.get(entryKey);
 
       if (queueEntry?.uploading) {
-        queueEntry.pendingPayload = payload;
+        queueEntry.hasPendingEdit = true;
       } else {
-        this._editQueue.set(entryKey, { uploading: true, pendingPayload: null });
+        this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
         const snapshot = { ...entry };
-        this._doEditUpload(entryKey, entry, entry.txid, payload, snapshot).catch(() => {
+        this._doEditUpload(entryKey, entry, entry.txid, snapshot).catch(() => {
           this._emitError('status-update-failed', 'Status update failed');
         });
       }
@@ -327,16 +327,15 @@ export class BookRepository {
     this._emitChange();
 
     if (entry.txid) {
-      const payload = buildPayloadFromEntry(entry);
       const entryKey = entry.bookId || entry.id;
       const queueEntry = this._editQueue.get(entryKey);
 
       if (queueEntry?.uploading) {
-        queueEntry.pendingPayload = payload;
+        queueEntry.hasPendingEdit = true;
       } else {
-        this._editQueue.set(entryKey, { uploading: true, pendingPayload: null });
+        this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
         const snapshotEntry = { ...entry };
-        this._doEditUpload(entryKey, entry, entry.txid, payload, snapshotEntry).catch(() => {
+        this._doEditUpload(entryKey, entry, entry.txid, snapshotEntry).catch(() => {
           this._emitError('status-update-failed', 'Status update failed');
         });
       }
@@ -435,7 +434,7 @@ export class BookRepository {
 
   // --- Internal: edit upload chain ---
 
-  async _doEditUpload(entryKey, entry, prevTxid, payload, snapshot) {
+  async _doEditUpload(entryKey, entry, prevTxid, snapshot) {
     if (!entry.txid && !prevTxid) {
       this._editQueue.delete(entryKey);
       return;
@@ -444,6 +443,8 @@ export class BookRepository {
     try {
       const haveKeys = await this._ensureKeys();
       if (!haveKeys) throw new Error('Cannot upload: encryption keys not available');
+
+      const payload = buildPayloadFromEntry(entry);
 
       this._emitProgress(['Saving to Arweave\u2026']);
       const client = this._getBrowserClient();
@@ -458,8 +459,8 @@ export class BookRepository {
         ? await this._cache.findByTxid(prevTxid) : true;
       if (!prevStillExists) {
         const queueEntry = this._editQueue.get(entryKey);
-        if (queueEntry?.pendingPayload) {
-          await this._cache.queueOp({ type: 'edit', priorTxid: res.txid, payload: queueEntry.pendingPayload });
+        if (queueEntry?.hasPendingEdit) {
+          await this._cache.queueOp({ type: 'edit', priorTxid: res.txid });
         }
         this._editQueue.delete(entryKey);
         this._emitProgress(null);
@@ -472,11 +473,10 @@ export class BookRepository {
       this._emitProgress(null);
 
       const queueEntry = this._editQueue.get(entryKey);
-      if (queueEntry?.pendingPayload) {
+      if (queueEntry?.hasPendingEdit) {
         console.log('[BookRepository] Processing queued edit with new Prev:', res.txid.slice(0, 8));
-        const nextPayload = queueEntry.pendingPayload;
-        queueEntry.pendingPayload = null;
-        await this._doEditUpload(entryKey, entry, res.txid, nextPayload, snapshot);
+        queueEntry.hasPendingEdit = false;
+        await this._doEditUpload(entryKey, entry, res.txid, snapshot);
       } else {
         this._editQueue.delete(entryKey);
       }
@@ -486,7 +486,7 @@ export class BookRepository {
       if (this._cache) await this._cache.putEntry(entry);
       this._emitChange();
 
-      const pending = { type: 'edit', priorTxid: prevTxid, payload };
+      const pending = { type: 'edit', priorTxid: prevTxid };
       if (this._cache) await this._cache.queueOp(pending);
 
       if (e?.code === 'upload-required') {
@@ -569,21 +569,7 @@ export class BookRepository {
         } catch { /* skip undecryptable */ }
       }
       console.log('[BookRepository] Bridge: decrypted', results.length, 'entries,', bridgeTombstones.length, 'tombstones of', newIds.length, 'txids');
-
-      const byBookId = new Map();
-      const noBookId = [];
-      for (const entry of results) {
-        if (!entry.bookId) { noBookId.push(entry); continue; }
-        const existing = byBookId.get(entry.bookId);
-        if (!existing || (entry.modifiedAt || 0) > (existing.modifiedAt || 0)) {
-          byBookId.set(entry.bookId, entry);
-        }
-      }
-      const deduped = [...byBookId.values(), ...noBookId];
-      if (deduped.length < results.length) {
-        console.log('[BookRepository] Bridge: deduped', results.length - deduped.length, 'superseded entries');
-      }
-      return { entries: deduped, tombstones: bridgeTombstones };
+      return { entries: results, tombstones: bridgeTombstones };
     } catch {
       return { entries: [], tombstones: [] };
     }
@@ -664,12 +650,10 @@ export class BookRepository {
     }
 
     const byBookId = new Map();
-    const score = (e) => (e.modifiedAt || 0);
-
     for (const entry of hydrated) {
       if (!entry.bookId) continue;
       const existing = byBookId.get(entry.bookId);
-      if (!existing || score(entry) > score(existing)) {
+      if (!existing || pickWinner(entry, existing) === entry) {
         byBookId.set(entry.bookId, entry);
       }
     }

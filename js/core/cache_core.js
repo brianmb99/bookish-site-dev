@@ -15,6 +15,22 @@ export async function computeContentHash(entry) {
 }
 
 /**
+ * Deterministic winner selection for conflict resolution.
+ * Single source of truth — used by all dedup/merge layers.
+ * @param {Object} a
+ * @param {Object} b
+ * @returns {Object} the winning entry
+ */
+export function pickWinner(a, b) {
+  const aTime = a.modifiedAt || 0;
+  const bTime = b.modifiedAt || 0;
+  if (aTime !== bTime) return aTime > bTime ? a : b;
+  if (a.status === 'confirmed' && b.status !== 'confirmed') return a;
+  if (b.status === 'confirmed' && a.status !== 'confirmed') return b;
+  return a;
+}
+
+/**
  * Detect if an entry is a duplicate of existing entries
  * @param {Object} payload - Entry to check for duplication
  * @param {Array<Object>} existingEntries - Local entries to check against
@@ -51,7 +67,10 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
   const localByBookId = new Map();
   for (const e of localEntries) {
     if (e.bookId && e.status !== 'tombstoned') {
-      localByBookId.set(e.bookId, e);
+      const existing = localByBookId.get(e.bookId);
+      if (!existing || pickWinner(e, existing) === e) {
+        localByBookId.set(e.bookId, e);
+      }
     }
   }
 
@@ -122,10 +141,9 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
           localPendingByHash.delete(contentHash);
         } else if (r.bookId && localByBookId.has(r.bookId)) {
           const localMatch = localByBookId.get(r.bookId);
-          const remoteTime = newEntry.modifiedAt || r.modifiedAt || 0;
-          const localTime = localMatch.modifiedAt || 0;
-          console.log('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), 'bookId-match remote:', remoteTime, 'local:', localTime, '→', remoteTime > localTime ? 'REPLACE' : 'skip');
-          if (remoteTime > localTime) {
+          const wins = pickWinner(localMatch, newEntry) === newEntry;
+          console.log('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), 'bookId-match remote:', (newEntry.modifiedAt || 0), 'local:', (localMatch.modifiedAt || 0), '→', wins ? 'REPLACE' : 'skip');
+          if (wins) {
             toReplace.push({ prevId: localMatch.id, entry: newEntry });
           }
         } else {
@@ -210,7 +228,6 @@ export function compactDuplicates(entries) {
   }
 
   // Handle same-bookId duplicates (race condition from quick edits)
-  // Keep the one with highest block height, or if no block, prefer seenRemote
   const byBookId = new Map();
   for (const e of entries) {
     if (!e.bookId || e.status === 'tombstoned' || toDelete.includes(e.id)) continue;
@@ -218,14 +235,8 @@ export function compactDuplicates(entries) {
     if (!existing) {
       byBookId.set(e.bookId, e);
     } else {
-      // Determine which to keep: prefer confirmed, then higher block, then seenRemote
-      let keep = existing, drop = e;
-      const eScore = (e.status === 'confirmed' ? 1000 : 0) + (e.block?.height || 0) + (e.seenRemote ? 1 : 0);
-      const existScore = (existing.status === 'confirmed' ? 1000 : 0) + (existing.block?.height || 0) + (existing.seenRemote ? 1 : 0);
-      if (eScore > existScore || (eScore === existScore && (e.modifiedAt || 0) > (existing.modifiedAt || 0))) {
-        keep = e;
-        drop = existing;
-      }
+      const keep = pickWinner(existing, e);
+      const drop = keep === existing ? e : existing;
       byBookId.set(e.bookId, keep);
       if (!toDelete.includes(drop.id)) {
         toDelete.push(drop.id);
