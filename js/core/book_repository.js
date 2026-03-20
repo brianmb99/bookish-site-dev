@@ -384,6 +384,16 @@ export class BookRepository {
       const ops = await this._cache.listOps();
       if (!ops.length) return;
 
+      try {
+        const addr = await this._getWalletAddress();
+        const { getWalletBalance } = await import('./wallet_core.js');
+        const { balanceETH } = await getWalletBalance(addr);
+        if (parseFloat(balanceETH) <= 0) {
+          console.log('[BookRepository] Replay deferred - wallet unfunded');
+          return;
+        }
+      } catch { /* balance check failed, proceed anyway */ }
+
       this._emitProgress(['Replaying pending changes...']);
       const client = this._getBrowserClient();
 

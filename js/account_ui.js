@@ -741,21 +741,23 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
       });
     }
 
-    // Step 2: Faucet funding (non-blocking — runs in background while uploads proceed)
+    // Step 2: Faucet funding (runs in parallel with fee-exempt uploads, awaited before sync)
     const address = await window.bookishWallet?.getAddress?.();
 
-    if (address) {
-      requestFaucetFunding(address, null, 3)
-        .then(r => {
-          transientState.faucetResult = r.success ? 'funded' : 'failed';
-          transientState.faucetTxHash = r.txHash || null;
-          console.log('[Bookish:AccountUI] Faucet completed in background:', r.success ? 'funded' : 'failed');
-        })
-        .catch(e => {
-          transientState.faucetResult = 'failed';
-          console.warn('[Bookish:AccountUI] Faucet failed in background (non-fatal):', e.message);
-        });
-    }
+    const faucetPromise = address
+      ? requestFaucetFunding(address, null, 3)
+          .then(r => {
+            transientState.faucetResult = r.success ? 'funded' : 'failed';
+            transientState.faucetTxHash = r.txHash || null;
+            console.log('[Bookish:AccountUI] Faucet completed:', r.success ? 'funded' : 'failed');
+            return r;
+          })
+          .catch(e => {
+            transientState.faucetResult = 'failed';
+            console.warn('[Bookish:AccountUI] Faucet failed (non-fatal):', e.message);
+            return { success: false };
+          })
+      : Promise.resolve({ success: false });
 
     // Step 3: Upload to Arweave (fee-exempt for account creation — no faucet dependency)
     updateProgressStep('createStep2', 'complete', '✓', 'Cloud storage activated');
@@ -827,6 +829,28 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
 
       // Clean up pending mappings from localStorage
       localStorage.removeItem(PENDING_CREDENTIAL_MAPPING_KEY);
+
+      // Await faucet confirmation before starting sync (fees require funded wallet)
+      try {
+        const faucetResult = await Promise.race([
+          faucetPromise,
+          new Promise(resolve => setTimeout(() => resolve({ success: false, timeout: true }), 15000))
+        ]);
+
+        if (faucetResult.success && faucetResult.txHash) {
+          const { getWalletBalance } = await import('./core/wallet_core.js');
+          for (let i = 0; i < 10; i++) {
+            const { balanceETH } = await getWalletBalance(address);
+            if (parseFloat(balanceETH) > 0) {
+              console.log('[Bookish:AccountUI] Faucet confirmed, balance:', balanceETH);
+              break;
+            }
+            await new Promise(r => setTimeout(r, 2000));
+          }
+        }
+      } catch (e) {
+        console.warn('[Bookish:AccountUI] Faucet await failed (non-fatal):', e.message);
+      }
 
       // Show full success (Frame A6)
       showCreationFullSuccess(displayName, email);
