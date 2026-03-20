@@ -573,8 +573,11 @@ export class BookRepository {
       const byBookId = new Map();
       const noBookId = [];
       for (const entry of results) {
-        if (entry.bookId) byBookId.set(entry.bookId, entry);
-        else noBookId.push(entry);
+        if (!entry.bookId) { noBookId.push(entry); continue; }
+        const existing = byBookId.get(entry.bookId);
+        if (!existing || (entry.modifiedAt || 0) > (existing.modifiedAt || 0)) {
+          byBookId.set(entry.bookId, entry);
+        }
       }
       const deduped = [...byBookId.values(), ...noBookId];
       if (deduped.length < results.length) {
@@ -661,7 +664,7 @@ export class BookRepository {
     }
 
     const byBookId = new Map();
-    const score = (e) => (!e.block?.height) ? Infinity : e.block.height;
+    const score = (e) => (e.modifiedAt || 0);
 
     for (const entry of hydrated) {
       if (!entry.bookId) continue;
