@@ -112,22 +112,24 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
       };
 
       if (supersededLocal) {
-        // Edit race: sync saw new txid before replaceProvisional ran
+        console.log('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), '→ replace-prev');
         toReplace.push({ prevId: supersededLocal.id, entry: newEntry });
       } else {
-        // Create race: sync saw confirmed txid while local still has provisional "local-xxx"
         const provisionalMatch = localPendingByHash.get(contentHash);
         if (provisionalMatch) {
+          console.log('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), '→ replace-provisional');
           toReplace.push({ prevId: provisionalMatch.id, entry: newEntry });
-          localPendingByHash.delete(contentHash); // consume so we don't match twice
+          localPendingByHash.delete(contentHash);
         } else if (r.bookId && localByBookId.has(r.bookId)) {
           const localMatch = localByBookId.get(r.bookId);
           const remoteTime = newEntry.modifiedAt || r.modifiedAt || 0;
           const localTime = localMatch.modifiedAt || 0;
+          console.log('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), 'bookId-match remote:', remoteTime, 'local:', localTime, '→', remoteTime > localTime ? 'REPLACE' : 'skip');
           if (remoteTime > localTime) {
             toReplace.push({ prevId: localMatch.id, entry: newEntry });
           }
         } else {
+          console.log('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), '→ add-new (bookId:', (r.bookId?.slice(0,8) || 'NONE'), ')');
           toAdd.push(newEntry);
         }
       }

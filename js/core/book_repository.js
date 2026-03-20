@@ -674,7 +674,10 @@ export class BookRepository {
       }
     }
 
-    const deduped = [...byBookId.values(), ...hydrated.filter(e => !e.bookId)];
+    const noBookId = hydrated.filter(e => !e.bookId);
+    if (noBookId.length > 0) console.log('[BookRepository] WARNING: entries without bookId:', noBookId.map(e => e.txid?.slice(0,8)));
+    const deduped = [...byBookId.values(), ...noBookId];
+    console.log('[BookRepository] _mergeAndDeduplicate →', deduped.map(e => ({ tx: e.txid?.slice(0,8), bid: e.bookId?.slice(0,8) || 'NONE', mod: e.modifiedAt || 0 })));
     deduped.sort((a, b) => {
       const da = a.dateRead || '0000-00-00', db = b.dateRead || '0000-00-00';
       if (da !== db) return db.localeCompare(da);
