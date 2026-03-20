@@ -113,7 +113,6 @@ export function startSync() {
   async function syncLoop() {
     await runSyncCycle();
     const delay = computeSyncInterval();
-    // Expose next-sync time for geek panel countdown
     window.bookishNextSyncAt = Date.now() + delay;
     syncInterval = setTimeout(syncLoop, delay);
   }
@@ -242,15 +241,8 @@ async function runSyncCycle() {
     isSyncing = false;
     if (statusCallback) statusCallback();
 
-    // Update book status dots and geek panel after sync completes
     if (typeof window.updateBookDots === 'function') {
       window.updateBookDots();
-    }
-    if (typeof window.updateGeekPanel === 'function') {
-      const geekPanel = document.getElementById('geekPanel');
-      if (geekPanel && geekPanel.style.display !== 'none') {
-        window.updateGeekPanel();
-      }
     }
   }
 }

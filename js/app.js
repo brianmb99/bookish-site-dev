@@ -1,6 +1,6 @@
 // Bookish app.js (pure serverless variant)
 
-import { initSyncManager, startSync, stopSync, getSyncStatusForUI, triggerPersistenceCheck, markDirty, triggerSyncNow } from './sync_manager.js';
+import { initSyncManager, startSync, stopSync, getSyncStatusForUI, triggerPersistenceCheck, markDirty } from './sync_manager.js';
 import * as storageManager from './core/storage_manager.js';
 import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
@@ -23,16 +23,10 @@ import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/b
 
 // --- DOM refs ---
 const statusEl = document.getElementById('status');
-// status banner removed; we now write a single status line into the geek panel
 const cardsEl = document.getElementById('cards');
 const emptyEl = document.getElementById('empty');
 const shelfEmptyEl = document.getElementById('shelfEmpty');
 const actionBarEl = document.querySelector('.action-bar');
-const geekBtn = document.getElementById('geekBtn');
-const geekPanel = document.getElementById('geekPanel');
-const geekClose = document.getElementById('geekClose');
-const geekBody = document.getElementById('geekBody');
-const geekStatusLine = document.getElementById('geekStatusLine');
 const modal = document.getElementById('modal');
 // Funding modal refs
 const fundModal = document.getElementById('fundingModal');
@@ -254,23 +248,6 @@ export function resetKeyState() {
 }
 let walletError = null; // Track wallet errors for UI status manager
 window.BOOKISH_DEBUG=true; function dbg(...a){ if(window.BOOKISH_DEBUG) console.debug('[Bookish]',...a); }
-
-// --- Superuser mode ---
-const SU_KEY = 'bookish_superuser';
-function isSuperuser(){ return document.body.hasAttribute('data-superuser'); }
-function setSuperuser(on){
-  if(on){
-    document.body.setAttribute('data-superuser','');
-    localStorage.setItem(SU_KEY,'true');
-    if(geekBtn) geekBtn.classList.add('superuser-active');
-  } else {
-    document.body.removeAttribute('data-superuser');
-    localStorage.removeItem(SU_KEY);
-    if(geekBtn) geekBtn.classList.remove('superuser-active');
-  }
-}
-// Restore superuser state on load
-if(localStorage.getItem(SU_KEY)==='true') setSuperuser(true);
 
 /**
  * Get balance status for UI status manager
@@ -629,8 +606,6 @@ function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false
 
 /** Build inner HTML for a single book card */
 function buildCardHTML(e){
-  const dotClass = (!e.txid) ? 'local' : (e.onArweave ? 'arweave' : 'syncing');
-  const dotTitle = (!e.txid) ? 'Local only' : (e.onArweave ? 'Saved to Arweave' : 'Uploaded \u2014 settling to Arweave\u2026');
   const dateDisp=formatDisplayDate(e.dateRead);
   const notesSnippet = e.notes ? `<p class="card-notes">${escapeHtml(e.notes)}</p>` : '';
   const metaStrip = buildCardMetadata(e);
@@ -642,7 +617,6 @@ function buildCardHTML(e){
   const doneLink = isReading ? `<button type="button" class="card-done-link" data-done-key="${escapeHtml(cardKey)}">Finished ✓</button>` : '';
   const showDate = !isReading && dateDisp;
   return `
-      <div class="status-dot ${dotClass}" data-tip="${dotTitle}"></div>
       <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
       <div class="meta">
         <p class="title">${e.title||'<i>Untitled</i>'}</p>
@@ -805,38 +779,23 @@ function render(){
     }
   }
 
-  setTimeout(updateBookDots, 0);
+  setTimeout(probePendingArweaveConfirmations, 0);
+}
+
+let _probeRenderScheduled = false;
+function scheduleRenderAfterProbe(){
+  if(_probeRenderScheduled) return;
+  _probeRenderScheduled = true;
+  queueMicrotask(() => { _probeRenderScheduled = false; render(); });
 }
 
 /**
- * Update book status dots with smart probing
- * Only probes entries that have txid but aren't confirmed on Arweave yet
+ * Probe Arweave for entries uploaded but not yet confirmed (no UI; updates cache + display).
  */
-async function updateBookDots(){
+function probePendingArweaveConfirmations(){
   for(const e of entries){
-    const card = cardsEl.querySelector(`.card[data-txid="${e.txid||e.id||''}"]`);
-    if(!card) continue;
-    const dot = card.querySelector('.status-dot');
-    if(!dot) continue;
-
-    // Set color based on current state
-    dot.classList.remove('local','syncing','arweave');
-
-    if(!e.txid) {
-      // Local only - not uploaded
-      dot.classList.add('local');
-      dot.dataset.tip = 'Local only';
-    } else if(e.onArweave) {
-      // Final state - on Arweave, stop checking
-      dot.classList.add('arweave');
-      dot.dataset.tip = 'Saved to Arweave';
-    } else {
-      dot.classList.add('syncing');
-      dot.dataset.tip = 'Uploaded \u2014 settling to Arweave\u2026';
-
-      // Probe in background (only for entries needing it)
-      probeAndUpdateDot(e, dot);
-    }
+    if(!e.txid || e.onArweave) continue;
+    probeAndUpdateEntry(e);
   }
 }
 
@@ -848,42 +807,34 @@ const probeBackoff = new Map(); // txid → { fails: number, lastAttempt: number
 const PROBE_BASE_MS = 60000;   // 60s base backoff
 const PROBE_MAX_MS  = 900000;  // 15 min max backoff
 
-/** Reset all probe backoff counters (called on Sync Now) */
-function resetProbeBackoff() { probeBackoff.clear(); }
-
 /**
  * Probe Arweave availability and update entry state
  * Uses exponential backoff per entry to avoid continuous error traffic
  */
-async function probeAndUpdateDot(entry, dot) {
+async function probeAndUpdateEntry(entry) {
   const txid = entry.txid;
   const state = probeBackoff.get(txid);
   if (state) {
     const backoff = Math.min(PROBE_BASE_MS * Math.pow(2, state.fails), PROBE_MAX_MS);
     if (Date.now() - state.lastAttempt < backoff) {
-      return; // Still in backoff window
+      return;
     }
   }
 
   try {
     const rec = await window.bookishNet?.probeAvailability?.(txid);
     if(rec?.arweave) {
-      // Reached Arweave - persist this flag so we stop probing
       entry.onArweave = true;
-      probeBackoff.delete(txid); // Success — clear backoff
+      probeBackoff.delete(txid);
       if(window.bookishCache) {
         await window.bookishCache.putEntry(entry);
       }
-      dot.classList.remove('syncing');
-      dot.classList.add('arweave');
-      dot.dataset.tip = 'Saved to Arweave';
+      scheduleRenderAfterProbe();
     } else {
-      // Not on Arweave yet — increment backoff
       const prev = probeBackoff.get(txid) || { fails: 0, lastAttempt: 0 };
       probeBackoff.set(txid, { fails: prev.fails + 1, lastAttempt: Date.now() });
     }
   } catch(err) {
-    // Probe failed — increment backoff
     const prev = probeBackoff.get(txid) || { fails: 0, lastAttempt: 0 };
     probeBackoff.set(txid, { fails: prev.fails + 1, lastAttempt: Date.now() });
     console.debug('[Bookish] Arweave probe failed for', txid, err);
@@ -982,43 +933,6 @@ async function changeReadingStatus(key, newStatus){
   if (result?.toastMessage) showStatusToast(result.toastMessage);
 }
 
-// --- Diagnostics status line (inside geek panel) ---
-let diagItems=[]; let diagTimer=null; let diagIdx=0;
-let diagTickTimer=null; let diagIdle=true;
-function diagRender(){
-  if(!geekStatusLine) return;
-  if(!diagItems.length){ geekStatusLine.textContent=''; return; }
-  geekStatusLine.textContent = String(diagItems[diagIdx % diagItems.length]);
-}
-function diagSet(items){
-  diagItems = Array.isArray(items) ? items.filter(Boolean) : (items?[String(items)]:[]);
-  diagIdx=0; diagRender();
-  if(diagTimer) clearInterval(diagTimer);
-  if(diagItems.length>1){ diagTimer=setInterval(()=>{ diagIdx=(diagIdx+1)%diagItems.length; diagRender(); }, 2500); }
-  diagIdle=false;
-}
-function diagClear(){ diagItems=[]; if(diagTimer) clearInterval(diagTimer); diagTimer=null; diagRender(); diagIdle=true; }
-function diagMaybeSet(items){ diagSet(items); }
-function diagMaybeClear(){ diagClear(); }
-
-function fmtCountdown(ms){ if(ms<=0) return 'now'; const s=Math.ceil(ms/1000); return s+'s'; }
-function diagIdleSeed(){
-  // If nothing active, show countdowns for next sync and next probe
-  const now=Date.now();
-  const nextSyncAt = (window.bookishNextSyncAt||0);
-  const syncIn = Math.max(0, nextSyncAt - now);
-  const nextProbeAt = (window.bookishNet?.nextProbeAt)||0;
-  const probeIn = Math.max(0, nextProbeAt - now);
-  const inflightAr = (window.bookishNet?.arweaveInFlight)||0;
-  const probePart = inflightAr>0 ? 'Probing Arweave now...' : (probeIn<=0 ? 'Probing Arweave now...' : `Next Arweave probe in ${fmtCountdown(probeIn)}`);
-  const syncStatus = window.bookishSyncManager?.getSyncStatus?.();
-  const isSyncing = syncStatus?.isSyncing;
-  const syncPart = isSyncing ? 'Syncing...' : `Next sync in ${fmtCountdown(syncIn)}`;
-  const line = `${syncPart}; ${probePart}`;
-  // Do not flip to active; keep idle mode and recompute every tick
-  diagItems=[line]; diagRender();
-}
-
 // --- Key handling ---
 async function ensureKeys(){
   if(keyState.loaded) return true;
@@ -1033,7 +947,7 @@ async function ensureKeys(){
 async function syncBooksFromArweave() {
   if (!bookRepo) return;
   await bookRepo.sync();
-  setTimeout(updateBookDots, 50);
+  setTimeout(probePendingArweaveConfirmations, 50);
 }
 
 async function createServerless(payload) {
@@ -1127,7 +1041,7 @@ async function initCacheLayer(){
       uiStatusManager.refresh();
     });
     bookRepo.on('progress', (items) => {
-      if (items) diagMaybeSet(items); else diagMaybeClear();
+      if (items) dbg('sync progress:', items);
     });
 
     // Load cached books immediately for instant display
@@ -1180,11 +1094,6 @@ async function initCacheLayer(){
     console.error('[Bookish] IndexedDB failed to initialize:', err);
     // Fail fast with clear error message
     walletError='Storage Error: IndexedDB unavailable'; uiStatusManager.refresh();
-    diagMaybeSet([
-      'IndexedDB Error - Cannot start app',
-      'Try: Clear browser data, use private mode, or different browser',
-      'Error: ' + (err.message || 'Internal error opening backing store')
-    ]);
     // Show error in UI
     if(emptyEl) {
       emptyEl.style.display='block';
@@ -1223,8 +1132,6 @@ async function initCacheLayer(){
 async function loadStatus(){ const have=await ensureKeys(); if(!have){ uiStatusManager.refresh(); return; } try { const owner=await browserClient.address(); uiStatusManager.refresh(); } catch{ walletError='Key error'; uiStatusManager.refresh(); } }
 
 // --- Init ---
-window.bookishNextSyncAt = Date.now() + 60000;
-
 // Ensure modal is closed on page load
 if(modal) {
   modal.classList.remove('active');
@@ -1249,62 +1156,7 @@ window.addEventListener('online',()=>{ uiStatusManager.refresh(); if(bookRepo) b
 // Expose sync manager methods for account UI
 window.bookishSyncManager = { getSyncStatus: getSyncStatusForUI, triggerPersistenceCheck };
 
-// --- Geek panel wiring (superuser toggle) ---
-function updateGeekPanel(){
-  if(!geekBody) return;
-  if(!storageManager.isLoggedIn()){
-    geekBody.textContent = 'Sign in to view sync status';
-    return;
-  }
-  const net = window.bookishNet || { reads:{ arweave:0, turbo:0, errors:0 }, cacheHits:0 };
-  const fetched = (net.reads.turbo||0) + (net.reads.arweave||0);
-  const cached = net.cacheHits || 0;
-  const errs = net.reads.errors || 0;
-  geekBody.textContent = `Fetched: ${fetched}  Cached: ${cached}  Err: ${errs}`;
-}
-window.updateGeekPanel = updateGeekPanel;
-
-function openSuperuser(){
-  setSuperuser(true);
-  if(geekPanel) geekPanel.style.display='block';
-  updateGeekPanel();
-  setTimeout(()=>{ if(typeof updateBookDots==='function') updateBookDots(); }, 10);
-  diagIdle=true; diagIdleSeed();
-  if(diagTickTimer) clearInterval(diagTickTimer);
-  diagTickTimer=setInterval(()=>{ if(diagIdle) diagIdleSeed(); else diagRender(); }, 1000);
-}
-function closeSuperuser(){
-  setSuperuser(false);
-  if(geekPanel) geekPanel.style.display='none';
-  diagClear(); if(diagTickTimer){ clearInterval(diagTickTimer); diagTickTimer=null; }
-  setTimeout(()=>{ if(typeof updateBookDots==='function') updateBookDots(); }, 10);
-}
-if(geekBtn && geekPanel && geekClose){
-  geekBtn.addEventListener('click',()=>{
-    if(isSuperuser()) closeSuperuser(); else openSuperuser();
-  });
-  geekClose.addEventListener('click',()=>{ closeSuperuser(); });
-  // Restore geek panel if superuser was already on
-  if(isSuperuser()) openSuperuser();
-}
-
-// --- Sync Now button (inside geek panel) ---
-const syncNowBtn = document.getElementById('syncNowBtn');
-if (syncNowBtn) {
-  syncNowBtn.addEventListener('click', async () => {
-    syncNowBtn.disabled = true;
-    syncNowBtn.textContent = 'Syncing\u2026';
-    resetProbeBackoff();
-    try {
-      await triggerSyncNow();
-    } catch (e) {
-      console.error('[Bookish] Sync Now error:', e);
-    } finally {
-      syncNowBtn.textContent = 'Sync Now';
-      setTimeout(() => { syncNowBtn.disabled = false; }, 2000);
-    }
-  });
-}
+window.updateBookDots = probePendingArweaveConfirmations;
 
 // --- Notes expand overlay ---
 const notesExpandBtn = document.getElementById('notesExpandBtn');

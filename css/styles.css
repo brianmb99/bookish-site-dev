@@ -744,13 +744,12 @@ form.inline label{
 .secondary{background:var(--color-bg-elevated);color:var(--color-text-secondary);border:1px solid var(--color-border-default)}
 #entryForm input[type=file]{padding:4px;font-size:.65rem}
 img.preview{max-width:100%;border-radius:8px;margin-top:8px}
+/* Inline / account persistence indicator (not on book cards) */
 .status-dot{
-  position:absolute;
-  top:8px;
-  right:8px;
   width:10px;
   height:10px;
   border-radius:50%;
+  flex-shrink:0;
   transition:background .3s ease,transform .3s ease,box-shadow .3s ease;
 }
 .status-dot.local{
@@ -768,61 +767,6 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .status-dot.arweave{
   background:#059669;
   box-shadow:0 0 8px 2px rgba(5,150,105,.35);
-}
-/* Status dot CSS tooltip */
-.status-dot[data-tip]{
-  cursor:help;
-}
-.status-dot[data-tip]::after{
-  content:attr(data-tip);
-  position:absolute;
-  bottom:calc(100% + 6px);
-  right:0;
-  background:var(--color-bg-elevated);
-  color:var(--color-text-secondary);
-  font-family:var(--font-body);
-  font-size:.75rem;
-  white-space:nowrap;
-  padding:4px 8px;
-  border-radius:6px;
-  border:1px solid var(--color-border-default);
-  box-shadow:0 2px 8px rgba(0,0,0,.3);
-  opacity:0;
-  pointer-events:none;
-  transition:opacity .15s ease;
-  z-index:10;
-}
-.status-dot[data-tip]:hover::after{
-  opacity:1;
-}
-/* Superuser mode: hide book status dots by default, show only in superuser mode */
-body:not([data-superuser]) .card .status-dot{display:none}
-/* Sync Now button inside geek panel */
-.geek-sync-btn{
-  background:var(--color-bg-surface)!important;
-  border:1px solid var(--color-border-default)!important;
-  color:var(--color-text-muted)!important;
-  font-size:.6rem!important;
-  font-weight:600!important;
-  padding:4px 10px!important;
-  border-radius:6px!important;
-  cursor:pointer;
-  min-height:auto!important;
-  font-family:var(--font-mono);
-  box-shadow:none!important;
-  margin-top:4px;
-}
-.geek-sync-btn:hover{
-  background:var(--color-bg-elevated)!important;
-  color:var(--color-text-secondary)!important;
-  border-color:var(--color-border-strong)!important;
-}
-.geek-sync-btn:disabled{opacity:.5;cursor:not-allowed}
-/* Gear icon active state when superuser mode is on */
-#geekBtn.superuser-active{
-  color:var(--color-accent)!important;
-  text-decoration:none!important;
-  text-shadow:0 0 8px rgba(245,158,11,.3);
 }
 .card.deleting{opacity:.35;filter:grayscale(.85)}
 /* book search UI */
@@ -1258,23 +1202,6 @@ body:not([data-superuser]) .card .status-dot{display:none}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 /* Search status message (progressive loading feedback) */
 .search-status{font-size:.6rem;padding:4px 8px;opacity:.5;border-bottom:1px solid #252d35;pointer-events:none}
-/* Compact geek panel */
-.geek-panel{margin:6px 0 10px;padding:6px 10px;border:1px solid var(--color-border-subtle);border-radius:8px;background:var(--color-bg-deep);color:var(--color-text-secondary);font-size:.7rem;font-family:var(--font-mono)}
-.geek-header{display:flex;align-items:center;gap:8px}
-.geek-title{font-family:var(--font-body);font-weight:600;font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;opacity:.5}
-.geek-stats{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.geek-close{background:transparent!important;border:none!important;color:var(--color-text-muted)!important;font-size:.85rem!important;padding:2px 6px!important;cursor:pointer;opacity:.5;min-height:auto!important}
-.geek-close:hover{opacity:1;color:var(--color-text-primary)!important}
-.geek-status-line{opacity:.55;margin-top:2px;min-height:1em;font-size:.6rem}
-/* Desktop: geek panel on one line */
-@media (min-width:600px){
-  .geek-panel{display:flex;align-items:center;gap:6px;padding:4px 10px;flex-wrap:wrap}
-  .geek-header{flex-shrink:0}
-  .geek-status-line{margin:0;min-height:auto;flex-shrink:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .geek-status-line::before{content:'|';margin-right:6px;opacity:.3}
-  .geek-sync-btn{margin-top:0;margin-left:auto}
-}
-
 /* Account modal styles */
 .modal-content{background:#1e242b;border:1px solid #2b333b;border-radius:16px;padding:20px;width:100%;max-width:420px;position:relative}
 /* Helper modal close button uses unified .modal-close-btn */
