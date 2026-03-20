@@ -220,7 +220,7 @@ export function compactDuplicates(entries) {
       let keep = existing, drop = e;
       const eScore = (e.status === 'confirmed' ? 1000 : 0) + (e.block?.height || 0) + (e.seenRemote ? 1 : 0);
       const existScore = (existing.status === 'confirmed' ? 1000 : 0) + (existing.block?.height || 0) + (existing.seenRemote ? 1 : 0);
-      if (eScore > existScore) {
+      if (eScore > existScore || (eScore === existScore && (e.modifiedAt || 0) > (existing.modifiedAt || 0))) {
         keep = e;
         drop = existing;
       }

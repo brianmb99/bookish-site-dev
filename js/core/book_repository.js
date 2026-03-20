@@ -453,6 +453,19 @@ export class BookRepository {
 
       entry.txid = res.txid; entry.id = res.txid;
       entry.pending = false; entry.status = 'confirmed'; entry.seenRemote = true;
+
+      const prevStillExists = prevTxid && this._cache
+        ? await this._cache.findByTxid(prevTxid) : true;
+      if (!prevStillExists) {
+        const queueEntry = this._editQueue.get(entryKey);
+        if (queueEntry?.pendingPayload) {
+          await this._cache.queueOp({ type: 'edit', priorTxid: res.txid, payload: queueEntry.pendingPayload });
+        }
+        this._editQueue.delete(entryKey);
+        this._emitProgress(null);
+        return;
+      }
+
       if (this._cache) await this._cache.replaceProvisional(prevTxid, entry);
       this._emitError(null, null);
       this._emitChange();
