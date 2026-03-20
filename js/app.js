@@ -606,7 +606,7 @@ export function showAccountNudge(){
   if(entries.length < 3) return;
 
   if(accountNudgeBanner){
-    accountNudgeBanner.style.display='flex';
+    accountNudgeBanner.style.display='inline-flex';
   }
 }
 
