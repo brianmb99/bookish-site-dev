@@ -98,6 +98,39 @@ function showStatusToast(msg) {
   setTimeout(() => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 300); }, 2000);
 }
 
+const MARK_READ_UNDO_MS = 5500;
+
+/** Toast after marking a currently-reading book as read; Undo restores prior fields via BookRepository. */
+function showMarkAsReadToastWithUndo(key, snapshot) {
+  const existing = document.getElementById('bookishStatusToast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = 'bookishStatusToast';
+  toast.className = 'toast status-toast status-toast-with-action';
+  toast.setAttribute('role', 'status');
+  toast.innerHTML = `<span class="toast-message">Marked as read</span><button type="button" class="toast-undo-btn">Undo</button>`;
+  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9001;';
+  document.body.appendChild(toast);
+
+  let cleared = false;
+  const remove = () => {
+    if (cleared) return;
+    cleared = true;
+    toast.classList.add('hiding');
+    setTimeout(() => toast.remove(), 300);
+  };
+  const timer = setTimeout(remove, MARK_READ_UNDO_MS);
+
+  toast.querySelector('.toast-undo-btn')?.addEventListener('click', async () => {
+    if (cleared || !bookRepo) return;
+    cleared = true;
+    clearTimeout(timer);
+    await bookRepo.applyReadingSnapshot(key, snapshot);
+    toast.classList.add('hiding');
+    setTimeout(() => toast.remove(), 300);
+  });
+}
+
 function getActiveFields(){ try{ return JSON.parse(localStorage.getItem(OPT_FIELDS_KEY))||[]; }catch{ return []; } }
 function setActiveFields(list){ localStorage.setItem(OPT_FIELDS_KEY, JSON.stringify(list)); }
 function activateField(name){
@@ -613,8 +646,9 @@ function buildCardHTML(e){
   const rs = normalizeReadingStatus(e);
   const isReading = rs === READING_STATUS.READING;
   const cardKey = e.txid || e.id || '';
-  const readingLabel = isReading ? '<div class="card-reading-label">◐ Reading</div>' : '';
-  const doneLink = isReading ? `<button type="button" class="card-done-link" data-done-key="${escapeHtml(cardKey)}">Finished ✓</button>` : '';
+  const readingRow = isReading
+    ? `<div class="card-reading-label"><span class="card-reading-text">◐ Reading</span><button type="button" class="card-done-check" data-done-key="${escapeHtml(cardKey)}" title="Mark as read" aria-label="Mark as read">✓</button></div>`
+    : '';
   const showDate = !isReading && dateDisp;
   return `
       <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
@@ -622,7 +656,7 @@ function buildCardHTML(e){
         <p class="title">${e.title||'<i>Untitled</i>'}</p>
         <p class="author">${e.author||''}</p>
         ${metaStrip}
-        <div class="details">${readingLabel}${doneLink}${showDate ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
+        <div class="details">${readingRow}${showDate ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
         ${notesSnippet}
       </div>`;
 }
@@ -900,14 +934,24 @@ wtrListEl?.addEventListener('click', (ev)=>{
   }
 });
 
-// "Done" / "Finished" link on Currently Reading cards
+// Mark as read (checkmark) on Currently Reading cards — toast with Undo
 cardsEl?.addEventListener('click', (ev)=>{
-  const doneBtn = ev.target.closest('.card-done-link');
+  const doneBtn = ev.target.closest('.card-done-check');
   if(doneBtn){
     ev.stopPropagation();
     ev.preventDefault();
     const key = doneBtn.dataset.doneKey;
-    if(key) changeReadingStatus(key, READING_STATUS.READ);
+    if(!key || !bookRepo) return;
+    const entry = bookRepo.getById(key);
+    if(!entry || normalizeReadingStatus(entry) !== READING_STATUS.READING) return;
+    const snapshot = {
+      readingStatus: READING_STATUS.READING,
+      dateRead: entry.dateRead || '',
+      readingStartedAt: entry.readingStartedAt
+    };
+    bookRepo.changeStatus(key, READING_STATUS.READ).then((result) => {
+      if (result) showMarkAsReadToastWithUndo(key, snapshot);
+    });
   }
 });
 

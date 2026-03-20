@@ -297,6 +297,50 @@ export class BookRepository {
     return { entry, previousStatus, toastMessage };
   }
 
+  /**
+   * Restore reading-related fields (e.g. undo after quick "mark as read" on a card).
+   * @param {string} key
+   * @param {{ readingStatus: string, dateRead?: string, readingStartedAt?: number }} snapshot
+   */
+  async applyReadingSnapshot(key, snapshot) {
+    const entry = this.getById(key);
+    if (!entry) return null;
+
+    entry.readingStatus = snapshot.readingStatus;
+    if (snapshot.dateRead) {
+      entry.dateRead = snapshot.dateRead;
+    } else {
+      delete entry.dateRead;
+    }
+    if (snapshot.readingStartedAt != null) {
+      entry.readingStartedAt = snapshot.readingStartedAt;
+    } else {
+      delete entry.readingStartedAt;
+    }
+
+    if (this._cache) await this._cache.putEntry(entry);
+    this._onDirty();
+    this._emitChange();
+
+    if (entry.txid) {
+      const payload = buildPayloadFromEntry(entry);
+      const entryKey = entry.bookId || entry.id;
+      const queueEntry = this._editQueue.get(entryKey);
+
+      if (queueEntry?.uploading) {
+        queueEntry.pendingPayload = payload;
+      } else {
+        this._editQueue.set(entryKey, { uploading: true, pendingPayload: null });
+        const snapshotEntry = { ...entry };
+        this._doEditUpload(entryKey, entry, entry.txid, payload, snapshotEntry).catch(() => {
+          this._emitError('status-update-failed', 'Status update failed');
+        });
+      }
+    }
+
+    return { entry };
+  }
+
   // --- Sync pipeline ---
 
   async sync() {
