@@ -40,6 +40,7 @@ function buildPayloadFromEntry(entry) {
   if (entry.tags) payload.tags = entry.tags;
   if (entry.readingStartedAt) payload.readingStartedAt = entry.readingStartedAt;
   if (entry.createdAt) payload.createdAt = entry.createdAt;
+  if (entry.modifiedAt) payload.modifiedAt = entry.modifiedAt;
   return payload;
 }
 
@@ -135,8 +136,9 @@ export class BookRepository {
       try { payload.bookId = await this._deriveBookId({ ...payload, createdAt }); } catch {}
     }
 
+    const modifiedAt = createdAt;
     const rec = {
-      id: localId, txid: null, ...payload, createdAt,
+      id: localId, txid: null, ...payload, createdAt, modifiedAt,
       status: 'pending', pending: true, seenRemote: false, onArweave: false, _committed: false
     };
     this._entries.push(rec);
@@ -197,6 +199,7 @@ export class BookRepository {
 
     const snapshot = { ...old };
     Object.assign(old, payload);
+    old.modifiedAt = Date.now();
     old.pending = true;
     old.status = 'pending';
     old.seenRemote = false;
@@ -263,6 +266,7 @@ export class BookRepository {
 
     const previousStatus = normalizeReadingStatus(entry);
     entry.readingStatus = newStatus;
+    entry.modifiedAt = Date.now();
     if (newStatus === READING_STATUS.READING && previousStatus !== READING_STATUS.READING) {
       entry.readingStartedAt = Date.now();
     }

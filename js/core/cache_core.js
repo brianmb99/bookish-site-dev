@@ -121,9 +121,12 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
           toReplace.push({ prevId: provisionalMatch.id, entry: newEntry });
           localPendingByHash.delete(contentHash); // consume so we don't match twice
         } else if (r.bookId && localByBookId.has(r.bookId)) {
-          // bookId match: local already has this book (likely a newer edit).
-          // The old Arweave txid reappeared before the new one was indexed.
-          // Skip — the local entry is authoritative.
+          const localMatch = localByBookId.get(r.bookId);
+          const remoteTime = newEntry.modifiedAt || r.modifiedAt || 0;
+          const localTime = localMatch.modifiedAt || 0;
+          if (remoteTime > localTime) {
+            toReplace.push({ prevId: localMatch.id, entry: newEntry });
+          }
         } else {
           toAdd.push(newEntry);
         }

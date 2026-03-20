@@ -799,7 +799,14 @@ function render(){
       card.dataset._fp=fp;
       if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
     }
-    card.onclick=()=>{ if(!e._deleting) openModal(e); };
+    card.onclick=(ev)=>{
+      if(e._deleting) return;
+      const path=typeof ev.composedPath==='function'?ev.composedPath():[];
+      for(const n of path){
+        if(n instanceof Element && n.classList?.contains('card-done-check')) return;
+      }
+      openModal(e);
+    };
     orderedCards.push(card);
   }
 
