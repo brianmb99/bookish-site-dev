@@ -838,6 +838,7 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
         ]);
 
         if (faucetResult.success && faucetResult.txHash) {
+          console.log('[Bookish:AccountUI] Polling for faucet balance...', { txHash: faucetResult.txHash });
           const { getWalletBalance } = await import('./core/wallet_core.js');
           for (let i = 0; i < 10; i++) {
             const { balanceETH } = await getWalletBalance(address);
@@ -845,8 +846,11 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
               console.log('[Bookish:AccountUI] Faucet confirmed, balance:', balanceETH);
               break;
             }
+            console.log(`[Bookish:AccountUI] Balance poll ${i + 1}/10: ${balanceETH}`);
             await new Promise(r => setTimeout(r, 2000));
           }
+        } else {
+          console.warn('[Bookish:AccountUI] Faucet await skipped:', faucetResult);
         }
       } catch (e) {
         console.warn('[Bookish:AccountUI] Faucet await failed (non-fatal):', e.message);

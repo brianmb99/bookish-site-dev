@@ -389,8 +389,7 @@ export class BookRepository {
         const { getWalletBalance } = await import('./wallet_core.js');
         const { balanceETH } = await getWalletBalance(addr);
         if (parseFloat(balanceETH) <= 0) {
-          console.log('[BookRepository] Replay deferred - wallet unfunded');
-          return;
+          console.warn('[BookRepository] Wallet appears unfunded, proceeding anyway (fee may fail)');
         }
       } catch { /* balance check failed, proceed anyway */ }
 
