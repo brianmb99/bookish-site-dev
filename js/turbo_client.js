@@ -5,7 +5,7 @@ import { createSignedDataItem } from './core/ans104_signer.js';
 import { append as logAppend } from './core/log_local.js';
 
 const UPLOAD_PROXY = window.BOOKISH_UPLOAD_PROXY || 'https://bookish-upload-proxy.bookish.workers.dev';
-const BASE_RPC = window.BOOKISH_BASE_RPC || 'https://base.llamarpc.com';
+const BASE_RPC = window.BOOKISH_BASE_RPC || 'https://mainnet.base.org';
 
 let _feeSchedule = null;
 let _pendingNonce = null;

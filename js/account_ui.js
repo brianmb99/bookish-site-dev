@@ -834,26 +834,28 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
       try {
         const faucetResult = await Promise.race([
           faucetPromise,
-          new Promise(resolve => setTimeout(() => resolve({ success: false, timeout: true }), 15000))
+          new Promise(resolve => setTimeout(() => resolve({ success: false, timeout: true }), 20000))
         ]);
 
-        if (faucetResult.success && faucetResult.txHash) {
-          console.log('[Bookish:AccountUI] Polling for faucet balance...', { txHash: faucetResult.txHash });
+        if (faucetResult.success && faucetResult.confirmed) {
+          console.log('[Bookish:AccountUI] Faucet confirmed on-chain, txHash:', faucetResult.txHash);
+        } else if (faucetResult.success) {
+          console.warn('[Bookish:AccountUI] Faucet sent but not confirmed, polling balance...');
           const { getWalletBalance } = await import('./core/wallet_core.js');
-          for (let i = 0; i < 10; i++) {
-            const { balanceETH } = await getWalletBalance(address);
-            if (parseFloat(balanceETH) > 0) {
-              console.log('[Bookish:AccountUI] Faucet confirmed, balance:', balanceETH);
+          for (let i = 0; i < 5; i++) {
+            const { balanceETH, ok } = await getWalletBalance(address);
+            if (ok && parseFloat(balanceETH) > 0) {
+              console.log('[Bookish:AccountUI] Faucet confirmed via balance:', balanceETH);
               break;
             }
-            console.log(`[Bookish:AccountUI] Balance poll ${i + 1}/10: ${balanceETH}`);
+            console.log(`[Bookish:AccountUI] Balance poll ${i + 1}/5: ${balanceETH} (ok=${ok})`);
             await new Promise(r => setTimeout(r, 2000));
           }
         } else {
-          console.warn('[Bookish:AccountUI] Faucet await skipped:', faucetResult);
+          console.warn('[Bookish:AccountUI] Faucet failed or timed out:', faucetResult);
         }
       } catch (e) {
-        console.warn('[Bookish:AccountUI] Faucet await failed (non-fatal):', e.message);
+        console.warn('[Bookish:AccountUI] Faucet await error (non-fatal):', e.message);
       }
 
       // Show full success (Frame A6)

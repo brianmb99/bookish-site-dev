@@ -4,12 +4,16 @@
 import { ethers } from 'https://esm.sh/ethers@6.13.0';
 import { WALLET_STORAGE_KEY } from './storage_constants.js';
 
-const BASE_MAINNET_RPC = 'https://base.llamarpc.com';
+const BASE_PRIMARY_RPC = 'https://mainnet.base.org';
+const BASE_FALLBACK_RPC = 'https://base.llamarpc.com';
 
 let _provider = null;
+let _usingFallback = false;
+
 function getProvider() {
   if (!_provider) {
-    _provider = new ethers.JsonRpcProvider(BASE_MAINNET_RPC, 8453, { staticNetwork: true });
+    const url = _usingFallback ? BASE_FALLBACK_RPC : BASE_PRIMARY_RPC;
+    _provider = new ethers.JsonRpcProvider(url, 8453, { staticNetwork: true });
   }
   return _provider;
 }
@@ -31,25 +35,29 @@ export async function deriveWalletFromSeed(mnemonic) {
 }
 
 /**
- * Get Base mainnet native ETH balance (retries once on transient RPC failure)
+ * Get Base mainnet native ETH balance with primary+fallback RPC
  * @param {string} address - Ethereum address
- * @returns {Promise<{balanceETH: string}>} balanceETH is a decimal ETH string (e.g. "0.000050")
+ * @returns {Promise<{balanceETH: string, ok: boolean}>} ok=true means RPC succeeded; ok=false means both RPCs failed
  */
 export async function getWalletBalance(address) {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const raw = await getProvider().getBalance(address);
-      return { balanceETH: ethers.formatEther(raw) };
+      return { balanceETH: ethers.formatEther(raw), ok: true };
     } catch (error) {
+      _provider = null;
       if (attempt === 0) {
-        _provider = null; // discard stale connection, retry with fresh provider
         continue;
       }
-      console.warn('Balance fetch failed (non-fatal):', error.message || error);
-      return { balanceETH: '0' };
+      if (attempt === 1 && !_usingFallback) {
+        _usingFallback = true;
+        continue;
+      }
+      console.warn('Balance fetch failed on both RPCs:', error.message || error);
+      return { balanceETH: '0', ok: false };
     }
   }
-  return { balanceETH: '0' };
+  return { balanceETH: '0', ok: false };
 }
 
 /**

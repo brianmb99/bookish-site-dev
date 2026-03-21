@@ -387,11 +387,15 @@ export class BookRepository {
       try {
         const addr = await this._getWalletAddress();
         const { getWalletBalance } = await import('./wallet_core.js');
-        const { balanceETH } = await getWalletBalance(addr);
-        if (parseFloat(balanceETH) <= 0) {
-          console.warn('[BookRepository] Wallet appears unfunded, proceeding anyway (fee may fail)');
+        const { balanceETH, ok } = await getWalletBalance(addr);
+        if (ok && parseFloat(balanceETH) <= 0) {
+          console.log('[BookRepository] Replay deferred - wallet confirmed unfunded');
+          return;
         }
-      } catch { /* balance check failed, proceed anyway */ }
+        if (!ok) {
+          console.warn('[BookRepository] Balance check failed (RPC), proceeding with replay');
+        }
+      } catch { /* balance check threw, proceed anyway */ }
 
       this._emitProgress(['Replaying pending changes...']);
       const client = this._getBrowserClient();
