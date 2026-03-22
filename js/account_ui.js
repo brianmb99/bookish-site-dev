@@ -257,7 +257,8 @@ async function renderAccountModalContent(container) {
       <div class="account-data-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #334155;">
         <h3 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #94a3b8;">Your Data</h3>
         <button id="exportBooksBtn" type="button" class="btn secondary" style="width: 100%; margin-bottom: 8px;">📥 Export my books</button>
-        <p style="font-size: 0.75rem; color: #64748b; margin: 8px 0 0 0; line-height: 1.5;">You own your books. Your data is under your control and can't be taken from you.</p>
+        <p style="font-size: 0.75rem; color: #64748b; margin: 4px 0 0 0; line-height: 1.5;">Export books from this device as CSV.</p>
+        <a href="/forever.html" target="_blank" rel="noopener" style="font-size: 0.75rem; color: #60a5fa; display: inline-block; margin-top: 6px;">Export from cloud →</a>
       </div>
     `;
 
@@ -299,7 +300,7 @@ async function renderAccountModalContent(container) {
       <div class="account-data-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #334155;">
         <h3 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #94a3b8;">Your Data</h3>
         <button id="exportBooksBtn" type="button" class="btn secondary" style="width: 100%; margin-bottom: 8px;">📥 Export my books</button>
-        <p style="font-size: 0.75rem; color: #64748b; margin: 8px 0 0 0; line-height: 1.5;">Export your local books as CSV. Works offline.</p>
+        <p style="font-size: 0.75rem; color: #64748b; margin: 4px 0 0 0; line-height: 1.5;">Export books from this device as CSV.</p>
       </div>
     `;
 
