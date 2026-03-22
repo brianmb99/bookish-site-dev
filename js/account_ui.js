@@ -243,7 +243,7 @@ async function renderAccountModalContent(container) {
       </div>
 
       <div class="account-actions" style="margin-top: 24px;">
-        ${!isFunded ? `<p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 12px 0; line-height: 1.5;">Back up your books permanently. A penny a book, no subscription. Free to get started.</p>` : ''}
+        ${!isFunded ? `<p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 12px 0; line-height: 1.5;">Back up your books permanently. A penny a book, no subscription.</p>` : ''}
         ${(() => {
           const buttonText = !isFunded ? 'Add Cloud Credit' : 'Add Credit';
           return `<button id="enableBackupBtn" class="btn primary" style="width: 100%; margin-bottom: 12px;">${buttonText}</button>`;
