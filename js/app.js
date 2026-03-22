@@ -1,6 +1,6 @@
 // Bookish app.js (pure serverless variant)
 
-import { initSyncManager, startSync, stopSync, getSyncStatusForUI, triggerPersistenceCheck, markDirty } from './sync_manager.js';
+import { initSyncManager, startSync, stopSync, getSyncStatusForUI, triggerPersistenceCheck, triggerSyncNow, markDirty } from './sync_manager.js';
 import * as storageManager from './core/storage_manager.js';
 import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
@@ -1208,8 +1208,8 @@ loadStatus(); initCacheLayer(); // wallet init + sync started in initCacheLayer
 (async function initAccount(){ try { const { initAccountUI } = await import('./account_ui.js'); await initAccountUI(); } catch(e){ console.error('Failed to init account UI:', e); } })();
 window.addEventListener('online',()=>{ uiStatusManager.refresh(); if(bookRepo) bookRepo.replayPending(); });
 
-// Expose sync manager methods for account UI
-window.bookishSyncManager = { getSyncStatus: getSyncStatusForUI, triggerPersistenceCheck };
+// Expose sync manager methods for account UI and release tests (triggerSyncNow)
+window.bookishSyncManager = { getSyncStatus: getSyncStatusForUI, triggerPersistenceCheck, triggerSyncNow };
 
 window.updateBookDots = probePendingArweaveConfirmations;
 

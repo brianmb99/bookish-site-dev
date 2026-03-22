@@ -541,12 +541,17 @@ button.secondary:hover, .btn.secondary:hover{
 @keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 .nudge-content{display:flex;align-items:center;gap:10px}
 .nudge-icon{font-size:1.25rem;line-height:1}
-.nudge-text{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.nudge-text{display:flex;flex-direction:column;gap:4px}
 .nudge-headline{font-size:.875rem;font-weight:500;color:#e2e8f0}
-.nudge-cta{font-size:.875rem;color:#60a5fa;text-decoration:none;background:none;border:none;padding:0;cursor:pointer;white-space:nowrap}
+.nudge-subtext{font-size:.75rem;color:#94a3b8;line-height:1.4}
+.nudge-cta{font-size:.875rem;color:#60a5fa;text-decoration:none;background:none;border:none;padding:0;cursor:pointer;white-space:nowrap;text-align:left}
 .nudge-cta:hover{color:#93c5fd;text-decoration:underline}
 .nudge-dismiss{background:transparent;border:none;color:#64748b;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:4px;line-height:1}
 .nudge-dismiss:hover{color:#94a3b8;background:#334155}
+.funding-faq-pair{margin-bottom:16px}
+.funding-faq-pair:last-child{margin-bottom:0}
+.funding-faq-q{font-weight:600;font-size:.8rem;margin:0;color:#e2e8f0}
+.funding-faq-a{font-size:.8rem;margin:4px 0 0 0;opacity:.85;line-height:1.5;color:#cbd5e1}
 /* Account modal styles */
 .modal-overlay{
   position:fixed;
