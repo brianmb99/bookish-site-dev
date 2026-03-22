@@ -932,10 +932,10 @@ function showCreationFullSuccess(displayName, email) {
       <div class="success-check-animated" style="margin-bottom:16px;">✓</div>
       <h3 style="margin:0 0 12px 0;">You're all set, ${displayName}!</h3>
       <p style="font-size:.875rem;line-height:1.6;color:var(--color-text-secondary);margin:0 0 16px 0;">
-        Your account is ready. Sign in on any device with your email and password.
+        Sign in on any device with your email and password.
       </p>
       <div class="success-status-list">
-        <div class="status-item"><span class="status-dot"></span> Your books are yours — private, encrypted, under your control</div>
+        <div class="status-item"><span class="status-dot"></span> Your data is private, encrypted, and belongs to you</div>
         <div class="status-item"><span class="status-dot"></span> Cloud backup: Active</div>
         <div class="status-item"><span class="status-dot"></span> Account recovery: On</div>
       </div>
@@ -967,7 +967,7 @@ function showCreationFallbackSuccess(displayName, email) {
       <div class="success-check-animated" style="margin-bottom:16px;">✓</div>
       <h3 style="margin:0 0 12px 0;">Account Created, ${displayName}!</h3>
       <p style="font-size:.875rem;line-height:1.6;color:var(--color-text-secondary);margin:0 0 16px 0;">
-        Your books are yours — private, encrypted, under your control.
+        Your data is private, encrypted, and belongs to you.
       </p>
       <div class="info-box">
         <div style="font-size:.875rem;line-height:1.5;">
