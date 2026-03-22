@@ -542,10 +542,10 @@ button.secondary:hover, .btn.secondary:hover{
 .nudge-content{display:flex;align-items:center;gap:10px}
 .nudge-icon{font-size:1.25rem;line-height:1}
 .nudge-text{display:flex;flex-direction:column;gap:2px}
-.nudge-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .nudge-headline{font-size:.8rem;font-weight:500;color:#e2e8f0}
 .nudge-subtext{font-size:.7rem;color:#64748b;line-height:1.4}
 .nudge-cta{font-size:.8rem;color:#60a5fa;background:none;border:none;padding:0;cursor:pointer;white-space:nowrap;text-decoration:none;outline:none}
+.nudge-cta:focus,.nudge-cta:focus-visible{outline:none;box-shadow:none}
 .nudge-cta:hover{color:#93c5fd;text-decoration:underline}
 .nudge-dismiss{background:transparent;border:none;color:#64748b;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:4px;line-height:1}
 .nudge-dismiss:hover{color:#94a3b8;background:#334155}
