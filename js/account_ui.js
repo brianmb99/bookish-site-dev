@@ -243,7 +243,7 @@ async function renderAccountModalContent(container) {
       </div>
 
       <div class="account-actions" style="margin-top: 24px;">
-        ${!isFunded ? `<p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 12px 0; line-height: 1.5;">Back up your books permanently. Less than a penny per book, no subscription.</p>` : ''}
+        ${!isFunded ? `<p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 12px 0; line-height: 1.5;">Back up your books permanently. A penny a book, no subscription. Free to get started.</p>` : ''}
         ${(() => {
           const buttonText = !isFunded ? 'Add Cloud Credit' : 'Add Credit';
           return `<button id="enableBackupBtn" class="btn primary" style="width: 100%; margin-bottom: 12px;">${buttonText}</button>`;
@@ -285,7 +285,7 @@ async function renderAccountModalContent(container) {
       <h2>Account</h2>
 
       <p style="margin: 0 0 24px 0; line-height: 1.6; opacity: 0.9;">
-        Your books, on any device.
+        Your books, your data, on any device.
       </p>
 
       <div class="account-actions">
@@ -1873,16 +1873,16 @@ function showFundingValueModal(address, isFunded = false) {
       </div>
       <div style="background:#1e3a5f;border:1px solid #2563eb;border-radius:8px;padding:12px 16px;margin:0 0 24px 0;">
         <div style="font-size:.85rem;line-height:1.5;">
-          <strong>$5 to start</strong><br>
-          <span style="opacity:.8;">less than a penny per book</span>
+          <strong>A penny a book</strong><br>
+          <span style="opacity:.8;">no subscription · free to get started</span>
         </div>
       </div>
       <div style="margin:0 0 16px 0;">
         <button id="toggleFaqBtn" class="btn-link" style="background:none;border:none;color:#94a3b8;font-size:.8rem;cursor:pointer;padding:0;">▸ Why is there a cost?</button>
       </div>
       <div id="faqSection" style="display:none;text-align:left;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px;margin:0 0 16px 0;">
-        <div class="funding-faq-pair"><p class="funding-faq-q">What am I paying for?</p><p class="funding-faq-a">Your own permanent, encrypted storage. Each book costs less than a penny — you only pay for what you use. No subscription, no monthly fee.</p></div>
-        <div class="funding-faq-pair"><p class="funding-faq-q">How far does $5 go?</p><p class="funding-faq-a">A very long way. Most readers could store a lifetime of books for a few dollars. If you're an avid reader and eventually use your credit up, you can top up anytime at the same low rate.</p></div>
+        <div class="funding-faq-pair"><p class="funding-faq-q">What am I paying for?</p><p class="funding-faq-a">Your own permanent, encrypted storage. It costs about a penny per book — you only pay for what you use. No subscription, no monthly fee. Your first books are free.</p></div>
+        <div class="funding-faq-pair"><p class="funding-faq-q">How far does $5 go?</p><p class="funding-faq-a">A very long way. At a penny a book, $5 covers hundreds of books — a lifetime for most readers. If you eventually use your credit up, top up anytime at the same rate.</p></div>
         <div class="funding-faq-pair"><p class="funding-faq-q">Why isn't it free?</p><p class="funding-faq-a">Because your books are yours — not ours. On most reading apps, the company owns your reading history and monetizes it. Here, we can't sell it or take it away. You pay a few dollars for storage instead of paying with your reading history.</p></div>
         <div class="funding-faq-pair"><p class="funding-faq-q">What if I don't pay?</p><p class="funding-faq-a">Bookish works fine without paying. Your books stay on this device for free, forever. Cloud backup just means they're also safe if you lose this device, and accessible from your other devices.</p></div>
         <div class="funding-faq-pair"><p class="funding-faq-q">Where does the money go?</p><p class="funding-faq-a">Most of it (~75%) goes directly to your storage credit. A small portion supports Bookish development.</p></div>
