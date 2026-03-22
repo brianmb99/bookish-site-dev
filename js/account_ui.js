@@ -285,7 +285,7 @@ async function renderAccountModalContent(container) {
       <h2>Account</h2>
 
       <p style="margin: 0 0 24px 0; line-height: 1.6; opacity: 0.9;">
-        Your books, on any device. Create an account to get started.
+        Your books, on any device.
       </p>
 
       <div class="account-actions">
