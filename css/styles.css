@@ -837,6 +837,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .cover-nav-prev{left:0;border-radius:0 6px 6px 0}
 .cover-nav-next{right:0;border-radius:6px 0 0 6px}
 .cover-nav-arrow:hover{background:rgba(0,0,0,.75)!important;opacity:1}
+.cover-nav-arrow:active{transform:translateY(-50%)!important;background:rgba(0,0,0,.8)!important}
 .cover-nav-arrow:disabled{opacity:.25;cursor:default}
 .cover-nav-counter{
   position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
@@ -880,7 +881,9 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   #newBtn{min-height:42px;padding:10px 16px;font-size:.85rem}
   .wtr-counter{min-height:42px!important;padding:10px 14px!important;font-size:.8rem!important}
   .cover-remove-btn{min-height:auto!important;padding:0!important}
-  .cover-nav-arrow{min-height:auto!important}
+  .cover-nav-arrow{min-height:auto!important;padding:0!important;width:28px!important;height:44px!important}
+  .cover-hover-hint{min-height:auto!important;padding:3px 10px!important}
+  .find-covers-btn{min-height:auto!important;padding:3px 10px!important}
   .notes-expand-btn{min-height:auto;padding:0;width:32px;height:32px}
   .modal-close-btn{width:36px;height:36px;font-size:16px;min-height:auto;padding:0}
   /* Mobile modal: anchor to top so tall content scrolls naturally */
@@ -988,11 +991,12 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   transition:opacity .2s ease;
   pointer-events:none;
   z-index:4;
+  min-height:auto!important;
 }
-.tile-cover.nav-active .cover-hover-hint{opacity:.55}
+.tile-cover.nav-active .cover-hover-hint{opacity:.55;pointer-events:auto;cursor:pointer}
 .tile-cover.nav-active:hover .cover-hover-hint{opacity:.85}
 .tile-cover:has(.placeholder[style*="block"]) .cover-hover-hint,
-.tile-cover:not(:has(img[style*="block"])) .cover-hover-hint{opacity:0!important}
+.tile-cover:not(:has(img[style*="block"])) .cover-hover-hint{opacity:0!important;pointer-events:none!important}
 /* Cover remove button */
 .cover-remove-btn{
   position:absolute;

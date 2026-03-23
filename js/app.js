@@ -247,7 +247,7 @@ optFieldsZone?.addEventListener('click',e=>{
   updateDirty();
 });
 
-if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn')) return; coverFileInput.click(); }); }
+if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn')) return; if(tileCoverClick.classList.contains('nav-active') && !e.target.closest('.cover-hover-hint')) return; coverFileInput.click(); }); }
 if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); updateDirty(); }); }
 
 // --- Helpers ---
