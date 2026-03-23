@@ -70,7 +70,7 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
   // Proxy limit is 102400. Keep encrypted payload under 95000 to be safe.
   const MAX_ENCRYPTED_BYTES = 95000;
 
-  async function uploadEntry(entry,{ extraTags=[] }={}){
+  async function uploadEntry(entry,{ extraTags=[], skipFee }={}){
     entry.schema='reading'; entry.version='0.1.0';
     if(!entry.bookId){ entry.bookId = await deriveBookId(entry); }
     if(entry.coverImage){
@@ -114,10 +114,13 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
     try{ const pubAddr = await (window.bookishWallet?.getAddress?.()); if(pubAddr) tags.push({ name:'Pub-Addr', value: String(pubAddr).toLowerCase() }); }catch{}
     extraTags.forEach(t=> tags.push({ name:t.name, value:t.value }));
 
+    const isEdit = extraTags.some(t => t.name === 'Prev' && t.value);
+    const shouldSkipFee = skipFee !== undefined ? skipFee : isEdit;
+
     if(!window.bookishUpload) try { await import('./turbo_client.js'); } catch {}
     if(!window.bookishUpload) { const e = new Error('Upload client required'); e.code='upload-required'; throw e; }
     try {
-      const res = await window.bookishUpload.upload(payload, tags);
+      const res = await window.bookishUpload.upload(payload, tags, { skipFee: shouldSkipFee });
       return { txid: res.id, status: 200 };
     } catch(err){ throw err; }
   }
@@ -194,7 +197,7 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
     try{ const pubAddr = await (window.bookishWallet?.getAddress?.()); if(pubAddr) tags.push({ name:'Pub-Addr', value: String(pubAddr).toLowerCase() }); }catch{}
     if(!window.bookishUpload) try { await import('./turbo_client.js'); } catch {}
     if(!window.bookishUpload) { const e = new Error('Upload client required'); e.code='upload-required'; throw e; }
-    const res = await window.bookishUpload.upload(content, tags);
+    const res = await window.bookishUpload.upload(content, tags, { skipFee: true });
     return { txid: res.id, status: 200 };
   }
 

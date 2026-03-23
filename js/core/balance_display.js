@@ -1,12 +1,12 @@
 // balance_display.js - User-friendly ETH balance formatting with USD estimates
 
-// Protocol fee per upload: 0.000001 ETH (~$0.002 at $2000/ETH)
-const COST_PER_BOOK_WEI = 1000000000000n; // 1e12 wei = 0.000001 ETH
+// Protocol fee per new book: ~$0.01 at ~$2100/ETH (snapshot 2026-03-23)
+const COST_PER_BOOK_WEI = 4700000000000n; // 4.7e12 wei = 0.0000047 ETH
 
 // Below half the fee there's not enough for anything useful
-const MIN_USEFUL_BALANCE_WEI = 500000000000n; // 5e11 wei
+const MIN_USEFUL_BALANCE_WEI = 2350000000000n; // ~half of COST_PER_BOOK_WEI
 
-const ASSUMED_ETH_PRICE_USD = 2000;
+const ASSUMED_ETH_PRICE_USD = 2100;
 
 /**
  * Parse an ETH balance into wei (BigInt).
