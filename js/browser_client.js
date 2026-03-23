@@ -4,6 +4,7 @@
 
 import { hexToBytes, base64ToBytes, bytesToBase64, importAesKey, encryptJsonToBytes, decryptBytesToJson } from './core/crypto_core.js';
 import { searchBookEntries, computeLiveSets as coreComputeLiveSets } from './core/arweave_query.js';
+import { resizeImage, blobToBase64 } from './core/image_utils.js';
 
 /**
  * Derive a stable bookId for a reading event.
@@ -80,9 +81,32 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
     }
     let payload = await encJson(entry);
     if(payload.byteLength > MAX_ENCRYPTED_BYTES && entry.coverImage){
-      console.warn('[Bookish:Upload] Payload too large (' + payload.byteLength + 'B), stripping cover image');
-      delete entry.coverImage; delete entry.mimeType;
-      payload = await encJson(entry);
+      console.warn('[Bookish:Upload] Payload too large (' + payload.byteLength + 'B), attempting cover re-compression');
+      const recompressSteps = [
+        { maxWidth: 300, maxHeight: 450, quality: 0.5 },
+        { maxWidth: 200, maxHeight: 300, quality: 0.35 },
+      ];
+      for(const opts of recompressSteps){
+        try {
+          const raw = base64ToBytes(entry.coverImage);
+          const blob = new Blob([raw], { type: entry.mimeType || 'image/jpeg' });
+          const { blob: smaller } = await resizeImage(blob, opts);
+          const dataUrl = await blobToBase64(smaller);
+          entry.coverImage = dataUrl.split(',')[1];
+          entry.mimeType = smaller.type || 'image/jpeg';
+          payload = await encJson(entry);
+          console.info('[Bookish:Upload] Re-compressed cover (' + payload.byteLength + 'B) with', opts);
+          if(payload.byteLength <= MAX_ENCRYPTED_BYTES) break;
+        } catch(e){
+          console.warn('[Bookish:Upload] Cover re-compression failed:', e?.message || e);
+          break;
+        }
+      }
+      if(payload.byteLength > MAX_ENCRYPTED_BYTES){
+        console.warn('[Bookish:Upload] Still too large after re-compression (' + payload.byteLength + 'B), stripping cover');
+        delete entry.coverImage; delete entry.mimeType;
+        payload = await encJson(entry);
+      }
     }
     const tags = [];
     // Build tags array in a portable form for proxy (and we also add to tx for direct path)
