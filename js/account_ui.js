@@ -1825,8 +1825,6 @@ function showSeedPhraseModal(seed) {
   document.getElementById('closeSeedBtn').onclick = closeHelperModal;
 }
 
-// handleAddPasskey removed — passkey no longer supported
-
 /**
  * Handle "Buy with Transak" button click - shows coming soon message
  */

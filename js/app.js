@@ -28,18 +28,6 @@ const emptyEl = document.getElementById('empty');
 const shelfEmptyEl = document.getElementById('shelfEmpty');
 const actionBarEl = document.querySelector('.action-bar');
 const modal = document.getElementById('modal');
-// Funding modal refs
-const fundModal = document.getElementById('fundingModal');
-const fundClose = document.getElementById('fundClose');
-const fundAddrEl = document.getElementById('fundAddr');
-const fundCopyBtn = document.getElementById('fundCopy');
-const fundL1El = document.getElementById('fundL1');
-const fundTurboEl = document.getElementById('fundTurbo');
-const fundCostEl = document.getElementById('fundCost');
-const fundMsgEl = document.getElementById('fundMsg');
-const fundRefreshBtn = document.getElementById('fundRefresh');
-const fundDoBtn = document.getElementById('fundDo');
-const fundRetryBtn = document.getElementById('fundRetry');
 // Account panel refs
 const accountBtn = document.getElementById('accountBtn');
 const accountPanel = document.getElementById('accountPanel');
@@ -356,6 +344,10 @@ function openModal(entry, forceIntent){
   snapshotOriginal();
   updateDirty();
   if(window.bookSearch) window.bookSearch.handleModalOpen(!!entry);
+  if(entry && window.bookSearch?.showFindCoversBtn){
+    const hasCover=!!(entry.coverImage);
+    window.bookSearch.showFindCoversBtn(hasCover);
+  }
   setTimeout(()=>{ if(notesInput){ notesInput.style.height='auto'; notesInput.style.height=Math.max(60,notesInput.scrollHeight)+'px'; }}, 0);
 }
 
@@ -465,58 +457,6 @@ coverFileInput.addEventListener('change', async ()=>{ const f=coverFileInput.fil
 const closeModalBtn = document.getElementById('closeModal');
 closeModalBtn?.addEventListener('click', closeModal);
 cancelBtn?.addEventListener('click', closeModal);
-
-// --- Funding UI logic ---
-let lastPendingOp=null;
-function openFundingModal(pending){
-  lastPendingOp = pending||lastPendingOp;
-  if(fundModal) fundModal.classList.add('active');
-  refreshFundingInfo().catch(()=>{});
-}
-function closeFundingModal(){ if(fundModal) fundModal.classList.remove('active'); }
-async function refreshFundingInfo(){
-  try{
-    await (window.bookishWallet?.ensure?.());
-    const addr = await (window.bookishWallet?.getAddress?.());
-    if(addr) fundAddrEl.textContent = addr;
-    // L1 balance
-    const balWei = await (window.bookishWallet?.getBalance?.());
-    if(balWei!=null){
-      const eth = Number(balWei)/1e18; fundL1El.textContent = eth.toFixed(6)+' ETH';
-    }
-    // Estimate current pending cost if payload present (protocol fee + Turbo storage)
-    if(lastPendingOp){
-      try{
-        const bytes = await (browserClient?.estimateEntryBytes?.(lastPendingOp.payload) || window.bookishEstimate?.entryBytes?.(lastPendingOp.payload));
-        if(bytes){
-          fundCostEl.textContent = `${bytes} bytes — protocol fee $0.005 per upload`;
-        }
-      }catch{}
-    }
-    fundMsgEl.textContent = '';
-  }catch(e){ fundMsgEl.textContent = 'Unable to refresh balances'; }
-}
-fundClose?.addEventListener('click', closeFundingModal);
-fundCopyBtn?.addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText(fundAddrEl.textContent||''); fundMsgEl.textContent='Address copied'; }catch{} });
-fundRefreshBtn?.addEventListener('click', ()=> refreshFundingInfo());
-fundDoBtn?.addEventListener('click', async ()=>{
-  fundDoBtn.disabled=true;
-  fundMsgEl.textContent='Turbo handles funding automatically during upload. Just retry publish.';
-  fundDoBtn.disabled=false;
-});
-fundRetryBtn?.addEventListener('click', async ()=>{
-  if(!lastPendingOp){ fundMsgEl.textContent='Nothing to retry.'; return; }
-  closeFundingModal();
-  uiStatusManager.refresh();
-  try{
-    if(lastPendingOp.type==='create'){
-      await createServerless(lastPendingOp.payload);
-    } else if(lastPendingOp.type==='edit'){
-      await editServerless(lastPendingOp.priorTxid, lastPendingOp.payload);
-    }
-    lastPendingOp=null;
-  }catch{ walletError='Retry failed'; uiStatusManager.refresh(); }
-});
 
 // --- Account modal logic ---
 // Account UI handles all updates via account_ui.js

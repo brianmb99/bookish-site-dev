@@ -1,5 +1,4 @@
 <!doctype html><html><head><meta charset="utf-8"/><title>Bookish</title><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<script src="https://cdn.jsdelivr.net/npm/eruda"></script><script>eruda.init();</script>
 <link rel="manifest" href="manifest.json"/>
 <meta name="theme-color" content="#2563eb"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -81,7 +80,7 @@
   <span class="toast-icon">🎉</span>
   <span class="toast-message">First book added! You're on your way.</span>
 </div>
-<footer>Bookish • Alpha • v0.2.60 • <a href="/forever.html" target="_blank" rel="noopener">Data export</a></footer>
+<footer>Bookish • Alpha • v0.2.62 • <a href="/forever.html" target="_blank" rel="noopener">Data export</a></footer>
 </div>
 
 <!-- Notes expand overlay -->
@@ -109,25 +108,7 @@
     <div id="bookSearchUI">
       <h3>Add Book</h3>
       <input id="bookSearchInput" placeholder="Search by title, author, or ISBN…" autocomplete="off"/>
-      <button type="button" id="filtersToggle" class="filters-toggle" style="display:none"><span class="filters-toggle-icon">▾</span> Filters<span id="filtersActiveIndicator" class="filters-active-dot" style="display:none"></span></button>
-      <div id="searchControls" class="search-controls" style="display:none">
-        <div class="filters">
-          <span class="tiny-label">Filter:</span>
-          <button type="button" class="filter-btn active" data-filter="all">Books</button>
-          <button type="button" class="filter-btn" data-filter="audiobook">Audiobooks</button>
-        </div>
-        <div class="sorters">
-          <span class="tiny-label">Sort:</span>
-          <button type="button" class="sort-btn active" data-mode="relevance" title="Original relevance order">Relevance</button>
-          <button type="button" class="sort-btn" data-mode="newest" title="Newest year first">Newest</button>
-        </div>
-      </div>
       <div id="bookSearchResults" style="display:none"></div>
-      <div id="editionNav">
-        <button type="button" id="prevEdition">◀</button>
-        <div id="editionInfo"></div>
-        <button type="button" id="nextEdition">▶</button>
-      </div>
     </div>
     <form id="entryForm" class="inline" novalidate>
       <div class="form-as-tile">
@@ -141,9 +122,13 @@
           <img class="preview" id="coverPreview" style="display:none"/>
           <div class="placeholder" id="coverPlaceholder"><div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Click to upload cover</span></div></div>
           <div class="cover-hover-hint" id="coverHoverHint">Click to change cover</div>
+          <button type="button" class="cover-nav-arrow cover-nav-prev" id="prevEdition" style="display:none" aria-label="Previous cover">‹</button>
+          <button type="button" class="cover-nav-arrow cover-nav-next" id="nextEdition" style="display:none" aria-label="Next cover">›</button>
+          <div class="cover-nav-counter" id="editionInfo" style="display:none"></div>
           <button type="button" class="cover-remove-btn" id="coverRemoveBtn" title="Remove cover" style="display:none">×</button>
           <input type="file" name="coverFile" accept="image/*" style="display:none" id="hiddenCoverInput"/>
         </div>
+        <button type="button" class="find-covers-btn" id="findCoversBtn" style="display:none">Find alt covers</button>
       </div>
       <div class="optional-fields-zone" id="optionalFieldsZone">
         <div class="field-chips" id="fieldChips">

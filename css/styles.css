@@ -824,36 +824,37 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 #bookSearchResults>div{padding:6px 8px;cursor:pointer;border-bottom:1px solid #252d35}
 #bookSearchResults>div:last-child{border-bottom:none}
 #bookSearchResults>div:hover{background:#1a2026}
-#editionNav{display:none;align-items:center;gap:6px;margin-top:8px;font-size:.65rem}
-#editionNav button{position:relative;background:#374151;padding:6px 10px;font-size:.6rem;border-radius:6px}
-#editionNav button::before{content:'';position:absolute;inset:-6px -4px;border-radius:10px}
-#editionInfo{opacity:.6}
-.search-controls{display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:8px;font-size:.65rem}
-.search-controls .filters,.search-controls .sorters{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.search-controls .tiny-label{opacity:.6;font-weight:600;letter-spacing:.05em}
-.search-controls button{position:relative;background:#2b333b;border:1px solid #374151;color:#9da6af;font-size:.65rem;padding:6px 10px;border-radius:5px;cursor:pointer;letter-spacing:.04em}
-.search-controls button::before{content:'';position:absolute;inset:-6px -4px;border-radius:8px}
-.search-controls button.active{background:#2563eb;border-color:#2563eb;color:#fff}
-.search-controls button:hover:not(.active){background:#323b44}
-.filters-toggle{
-  display:none;
-  background:var(--color-bg-surface);
-  border:1px solid var(--color-border-subtle);
-  color:var(--color-text-muted);
-  font-size:.6rem;
-  padding:4px 10px;
-  border-radius:12px;
-  cursor:pointer;
-  margin-top:6px;
-  align-items:center;
-  gap:4px;
-  min-height:auto;
-  letter-spacing:.04em;
+/* Cover navigation arrows overlaid on tile */
+.cover-nav-arrow{
+  position:absolute;top:50%;transform:translateY(-50%);
+  width:28px;height:44px;min-height:auto!important;
+  background:rgba(0,0,0,.55)!important;border:none!important;
+  color:rgba(255,255,255,.9)!important;font-size:20px!important;
+  padding:0!important;cursor:pointer;z-index:4;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s,opacity .15s;opacity:.85;
 }
-.filters-toggle:hover{color:var(--color-text-secondary)}
-.filters-toggle .filters-toggle-icon{transition:transform .2s}
-.filters-toggle.open .filters-toggle-icon{transform:rotate(180deg)}
-.filters-active-dot{width:6px;height:6px;border-radius:50%;background:var(--color-primary);display:inline-block;margin-left:2px}
+.cover-nav-prev{left:0;border-radius:0 6px 6px 0}
+.cover-nav-next{right:0;border-radius:6px 0 0 6px}
+.cover-nav-arrow:hover{background:rgba(0,0,0,.75)!important;opacity:1}
+.cover-nav-arrow:disabled{opacity:.25;cursor:default}
+.cover-nav-counter{
+  position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.6);color:rgba(255,255,255,.85);
+  font-size:.55rem;padding:2px 8px;border-radius:10px;z-index:4;
+  pointer-events:none;white-space:nowrap;letter-spacing:.02em;
+}
+/* "Find covers" link below tile */
+.find-covers-btn{
+  background:none!important;border:none!important;
+  color:var(--color-text-muted)!important;
+  font-size:.65rem!important;padding:4px 0!important;
+  cursor:pointer;text-decoration:underline;
+  text-underline-offset:2px;min-height:auto!important;
+  transition:color .15s;
+}
+.find-covers-btn:hover{color:var(--color-text-secondary)!important}
+.find-covers-btn.loading{text-decoration:none;opacity:.5;cursor:default;animation:pulse-opacity 1.5s ease-in-out infinite}
 .cards .title{transition:font-size .2s}
 .cards .author{transition:font-size .2s}
 .cards .details{transition:font-size .2s}
@@ -876,14 +877,10 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   .refresh-link{min-height:auto!important;padding:6px 12px!important}
   #newBtn{min-height:42px;padding:10px 16px;font-size:.85rem}
   .wtr-counter{min-height:42px!important;padding:10px 14px!important;font-size:.8rem!important}
-  .search-controls button{min-height:auto;padding:6px 10px;font-size:.6rem}
-  #editionNav button{min-height:auto;padding:6px 10px;font-size:.6rem}
   .cover-remove-btn{min-height:auto!important;padding:0!important}
+  .cover-nav-arrow{min-height:auto!important}
   .notes-expand-btn{min-height:auto;padding:0;width:32px;height:32px}
   .modal-close-btn{width:36px;height:36px;font-size:16px;min-height:auto;padding:0}
-  /* Filters collapsed on mobile */
-  .filters-toggle{display:inline-flex}
-  .search-controls:not(.expanded){display:none}
   /* Mobile modal: anchor to top so tall content scrolls naturally */
   .modal{align-items:flex-start;padding:12px 8px 24px}
   .modal-inner{
