@@ -24,8 +24,8 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   let abortController=null;
   function markDirty(){ try{ form.dispatchEvent(new Event('input',{bubbles:true})); }catch{} }
   function showUI(isEdit){ ui.style.display=isEdit?'none':'block'; if(isEdit) clearSearchState(); }
-  function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; }
-  function hideCoverNav(){ prevBtn.style.display='none'; nextBtn.style.display='none'; editionInfo.style.display='none'; }
+  function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; if(tileCoverClick) tileCoverClick.classList.add('nav-active'); }
+  function hideCoverNav(){ prevBtn.style.display='none'; nextBtn.style.display='none'; editionInfo.style.display='none'; if(tileCoverClick) tileCoverClick.classList.remove('nav-active'); }
   function clearSearchState(){ if(abortController){ abortController.abort(); abortController=null; } if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; } currentWork=null; currentAudio=null; editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null; olDocs=[]; itunesItems=[]; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; hideCoverNav(); lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all'; }
   function prepareQuery(q){ lastQuery=q.trim(); queryTokens=coreTokenize(lastQuery); }
   function showSkeletonCards(){
@@ -205,7 +205,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   async function findCoversForEntry(title, author){
     if(!title) return;
     editions=[]; editionIndex=0; coverOnlyMode=true; itunesCoverState=null;
-    if(findCoversBtn){ findCoversBtn.textContent='Searching\u2026'; findCoversBtn.classList.add('loading'); }
+    if(findCoversBtn){ findCoversBtn.textContent='Searching\u2026'; findCoversBtn.classList.add('loading'); findCoversBtn.style.display='block'; }
     const fields='key,title,author_key,author_name,cover_i,first_publish_year,publish_year,subtitle';
     const q=author?`${title} ${author}`:title;
     try{
@@ -248,12 +248,12 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       }
       if(!editions.length || (editions.length===1 && editions[0]._currentCover)){
         hideCoverNav();
-        if(findCoversBtn){ findCoversBtn.textContent='No covers found'; findCoversBtn.classList.remove('loading'); setTimeout(()=>{ findCoversBtn.textContent=currentCover?'Find alt covers':'Find a cover'; },2000); }
+        if(findCoversBtn){ findCoversBtn.textContent='No covers available'; findCoversBtn.classList.remove('loading'); setTimeout(()=>{ findCoversBtn.textContent=currentCover?'Browse other covers':'Browse covers'; },2000); }
         return;
       }
-      if(findCoversBtn) findCoversBtn.style.display='none';
+      if(findCoversBtn){ findCoversBtn.classList.remove('loading'); findCoversBtn.style.display='none'; }
     }catch(e){
-      if(findCoversBtn){ findCoversBtn.textContent='Search failed'; findCoversBtn.classList.remove('loading'); setTimeout(()=>{ findCoversBtn.textContent='Find alt covers'; },2000); }
+      if(findCoversBtn){ findCoversBtn.textContent='Search failed'; findCoversBtn.classList.remove('loading'); setTimeout(()=>{ findCoversBtn.textContent='Browse other covers'; },2000); }
     }
   }
 
@@ -301,9 +301,9 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     handleModalOpen(isEdit){ showUI(isEdit); hideCoverNav(); if(findCoversBtn) findCoversBtn.style.display='none'; },
     showFindCoversBtn(hasCover){
       if(findCoversBtn){
-        findCoversBtn.textContent=hasCover?'Find alt covers':'Find a cover';
+        findCoversBtn.textContent=hasCover?'Browse other covers':'Browse covers';
         findCoversBtn.classList.remove('loading');
-        findCoversBtn.style.display='inline-block';
+        findCoversBtn.style.display='block';
       }
     }
   };

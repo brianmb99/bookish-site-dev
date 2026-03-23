@@ -844,17 +844,19 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   font-size:.55rem;padding:2px 8px;border-radius:10px;z-index:4;
   pointer-events:none;white-space:nowrap;letter-spacing:.02em;
 }
-/* "Find covers" link below tile */
+/* "Browse other covers" pill overlaid at top center of tile */
 .find-covers-btn{
-  background:none!important;border:none!important;
-  color:var(--color-text-muted)!important;
-  font-size:.65rem!important;padding:4px 0!important;
-  cursor:pointer;text-decoration:underline;
-  text-underline-offset:2px;min-height:auto!important;
-  transition:color .15s;
+  position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.55)!important;border:none!important;
+  color:rgba(255,255,255,.85)!important;
+  font-size:.55rem!important;padding:3px 10px!important;
+  border-radius:10px;cursor:pointer;z-index:4;
+  min-height:auto!important;white-space:nowrap;
+  letter-spacing:.02em;
+  transition:background .15s,opacity .15s;opacity:.7;
 }
-.find-covers-btn:hover{color:var(--color-text-secondary)!important}
-.find-covers-btn.loading{text-decoration:none;opacity:.5;cursor:default;animation:pulse-opacity 1.5s ease-in-out infinite}
+.find-covers-btn:hover{background:rgba(0,0,0,.75)!important;opacity:1}
+.find-covers-btn.loading{opacity:.5;cursor:default;animation:pulse-opacity 1.5s ease-in-out infinite}
 .cards .title{transition:font-size .2s}
 .cards .author{transition:font-size .2s}
 .cards .details{transition:font-size .2s}
@@ -970,24 +972,25 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 /* Cover placeholder icon (SVG book + label) */
 .placeholder-icon{display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.7;color:var(--color-text-secondary)}
 .placeholder-icon span{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;font-weight:500}
-/* Cover hover hint (shown over image on hover) */
+/* "Upload my own" pill — centered at arrow height, visible only when nav arrows are active */
 .cover-hover-hint{
-  position:absolute;inset:0;
-  display:flex;align-items:center;justify-content:center;
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   background:rgba(0,0,0,.55);
   color:rgba(255,255,255,.85);
-  font-size:.6rem;
+  font-size:.55rem;
   font-weight:500;
   text-transform:uppercase;
   letter-spacing:.05em;
+  padding:3px 10px;
+  border-radius:10px;
+  white-space:nowrap;
   opacity:0;
   transition:opacity .2s ease;
   pointer-events:none;
-  z-index:2;
-  border-radius:12px;
+  z-index:4;
 }
-.tile-cover:hover .cover-hover-hint{opacity:1}
-/* Hide hint when placeholder is showing (no image loaded) */
+.tile-cover.nav-active .cover-hover-hint{opacity:.55}
+.tile-cover.nav-active:hover .cover-hover-hint{opacity:.85}
 .tile-cover:has(.placeholder[style*="block"]) .cover-hover-hint,
 .tile-cover:not(:has(img[style*="block"])) .cover-hover-hint{opacity:0!important}
 /* Cover remove button */
