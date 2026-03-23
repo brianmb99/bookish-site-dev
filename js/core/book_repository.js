@@ -200,6 +200,7 @@ export class BookRepository {
 
     const snapshot = { ...old };
     Object.assign(old, payload);
+    if (payload.coverImage === '') { delete old.coverImage; delete old.mimeType; }
     old.modifiedAt = Date.now();
     old.pending = true;
     old.status = 'pending';
