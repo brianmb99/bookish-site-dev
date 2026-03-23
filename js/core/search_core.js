@@ -119,40 +119,58 @@ export function passesFilter(item, activeFilter) {
   return true;
 }
 
-// Deduplicate documents by display representation (title + author)
-// Removes visually identical results even if they have different work keys
+// Deduplicate documents by normalized title+author key.
+// Groups variants, picks best display names, collects all covers/work keys.
 export function deduplicateByDisplay(docs) {
-  const seen = new Set();
-  return docs.filter(d => {
+  const groups = new Map();
+  docs.forEach(d => {
     const key = displayKeyOpenLibrary(d);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(d);
+  });
+  return Array.from(groups.values()).map(group => {
+    group.sort((a, b) => (b._score || 0) - (a._score || 0) || (b.cover_i ? 1 : 0) - (a.cover_i ? 1 : 0));
+    const rep = { ...group[0] };
+    const authors = group.map(d => (d.author_name && d.author_name[0]) || '').filter(Boolean);
+    if (authors.length) rep._bestAuthor = pickBestName(authors, 3);
+    const titles = group.map(d => cleanTitle(d.title || '')).filter(Boolean);
+    if (titles.length) rep._bestTitle = pickBestName(titles);
+    rep._allCovers = [...new Set(group.map(d => d.cover_i).filter(Boolean))];
+    rep._allWorkKeys = [...new Set(group.map(d => d.key).filter(Boolean))];
+    return rep;
   });
 }
 
-/** Normalized title|author key for an OpenLibrary work (matches deduplicateByDisplay). */
+/** Normalized title|author key for an OpenLibrary work. */
 export function displayKeyOpenLibrary(doc) {
-  const title = stripNoise(doc.title || '').toLowerCase().trim();
-  const author = ((doc.author_name && doc.author_name[0]) || '').toLowerCase().trim();
+  const title = normalizeTitleKey(doc.title || '');
+  const author = normalizeAuthorKey((doc.author_name && doc.author_name[0]) || '');
   return `${title}|${author}`;
 }
 
 /** Normalized title|author key for an iTunes search hit. */
 export function displayKeyItunes(item) {
-  const title = stripNoise(item.collectionName || item.trackName || '').toLowerCase().trim();
-  const author = (item.artistName || '').toLowerCase().trim();
+  const title = normalizeTitleKey(item.collectionName || item.trackName || '');
+  const author = normalizeAuthorKey(item.artistName || '');
   return `${title}|${author}`;
 }
 
-/** Dedupe iTunes rows by the same display key as OpenLibrary (first wins). */
+/** Dedupe iTunes rows by normalized key, picking best display names. */
 export function deduplicateItunesByDisplay(items) {
-  const seen = new Set();
-  return (items || []).filter(i => {
+  const groups = new Map();
+  (items || []).forEach(i => {
     const key = displayKeyItunes(i);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(i);
+  });
+  return Array.from(groups.values()).map(group => {
+    group.sort((a, b) => (b._score || 0) - (a._score || 0));
+    const rep = { ...group[0] };
+    const authors = group.map(i => i.artistName || '').filter(Boolean);
+    if (authors.length) rep._bestAuthor = pickBestName(authors, 3);
+    const titles = group.map(i => cleanTitle(i.collectionName || i.trackName || '')).filter(Boolean);
+    if (titles.length) rep._bestTitle = pickBestName(titles);
+    return rep;
   });
 }
 
@@ -166,11 +184,56 @@ export function filterOlSupersededByItunes(olDocs, itunesItems) {
   return (olDocs || []).filter(d => !keys.has(displayKeyOpenLibrary(d)));
 }
 
-// Strip noise words/markers from titles (Unabridged, Abridged, etc.)
+// Strip noise words/markers from titles (Unabridged, Abridged, trailing pub years)
 const NOISE_RE = /\s*[\(\[](un)?abridged[\)\]]\s*/gi;
 export function stripNoise(title) {
   if (!title) return '';
-  return title.replace(NOISE_RE, '').trim();
+  let cleaned = title.replace(NOISE_RE, '').trim();
+  const ym = cleaned.match(/^(.+?)\s+(1[89]\d{2}|20\d{2})\s*$/);
+  if (ym) cleaned = ym[1].trim();
+  return cleaned;
+}
+
+// Normalize author name for dedup keying: sorted initials + surname, all lowercase
+export function normalizeAuthorKey(name) {
+  if (!name) return '';
+  const parts = name.replace(/[.,]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  if (parts.length === 1) return parts[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const surname = parts[parts.length - 1].replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const initials = parts.slice(0, -1)
+    .map(p => (p.replace(/[^a-z0-9]/gi, '')[0] || '').toLowerCase())
+    .filter(Boolean)
+    .sort();
+  return initials.join('') + surname;
+}
+
+// Normalize title for dedup keying: strip noise then lowercase
+export function normalizeTitleKey(title) {
+  return stripNoise(title || '').toLowerCase().trim();
+}
+
+// Pick the best display name from a list of variants
+// For authors: maxWords=3 (prefer spelled-out, properly cased, ≤3 words)
+// For titles: omit maxWords
+export function pickBestName(variants, maxWords) {
+  if (!variants || !variants.length) return '';
+  const cleaned = [...new Set(variants.map(v => (v || '').trim()).filter(Boolean))];
+  if (!cleaned.length) return '';
+  if (cleaned.length === 1) return cleaned[0];
+  const limit = maxWords || Infinity;
+  return cleaned.slice().sort((a, b) => {
+    const aw = a.split(/\s+/), bw = b.split(/\s+/);
+    const aOk = aw.length <= limit ? 1 : 0, bOk = bw.length <= limit ? 1 : 0;
+    if (aOk !== bOk) return bOk - aOk;
+    const aC = (a !== a.toLowerCase() && a !== a.toUpperCase()) ? 1 : 0;
+    const bC = (b !== b.toLowerCase() && b !== b.toUpperCase()) ? 1 : 0;
+    if (aC !== bC) return bC - aC;
+    const aA = aw.filter(w => w.replace(/[^a-zA-Z]/g, '').length <= 1).length;
+    const bA = bw.filter(w => w.replace(/[^a-zA-Z]/g, '').length <= 1).length;
+    if ((aw.length - aA) !== (bw.length - bA)) return (bw.length - bA) - (aw.length - aA);
+    return b.length - a.length;
+  })[0];
 }
 
 // Title-case a string, but ONLY if it's ALL CAPS (preserves intentional mixed case)
