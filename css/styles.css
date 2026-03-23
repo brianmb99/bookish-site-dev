@@ -832,11 +832,11 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   color:rgba(255,255,255,.9)!important;font-size:20px!important;
   padding:0!important;cursor:pointer;z-index:4;
   display:flex;align-items:center;justify-content:center;
-  transition:background .15s,opacity .15s;opacity:.85;
+  transition:background .15s,opacity .15s;opacity:.9;
 }
 .cover-nav-prev{left:0;border-radius:0 6px 6px 0}
 .cover-nav-next{right:0;border-radius:6px 0 0 6px}
-.cover-nav-arrow:hover{background:rgba(0,0,0,.75)!important;opacity:1}
+.cover-nav-arrow:hover{background:rgba(0,0,0,.85)!important;opacity:1}
 .cover-nav-arrow:active{transform:translateY(-50%)!important;background:rgba(0,0,0,.8)!important}
 .cover-nav-arrow:disabled{opacity:.25;cursor:default}
 .cover-nav-counter{
@@ -993,8 +993,8 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   z-index:4;
   min-height:auto!important;
 }
-.tile-cover.nav-active .cover-hover-hint{opacity:.55;pointer-events:auto;cursor:pointer}
-.tile-cover.nav-active:hover .cover-hover-hint{opacity:.85}
+.tile-cover.nav-active .cover-hover-hint{opacity:.7;pointer-events:auto;cursor:pointer}
+.tile-cover.nav-active:hover .cover-hover-hint{opacity:.95}
 .tile-cover:has(.placeholder[style*="block"]) .cover-hover-hint,
 .tile-cover:not(:has(img[style*="block"])) .cover-hover-hint{opacity:0!important;pointer-events:none!important}
 /* Cover remove button */
