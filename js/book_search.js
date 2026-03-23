@@ -7,6 +7,8 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   const ui=document.getElementById('bookSearchUI'); const input=document.getElementById('bookSearchInput'); const resultsEl=document.getElementById('bookSearchResults');
   const prevBtn=document.getElementById('prevEdition'); const nextBtn=document.getElementById('nextEdition'); const editionInfo=document.getElementById('editionInfo');
   const findCoversBtn=document.getElementById('findCoversBtn');
+  const uploadCoverBtn=document.getElementById('uploadCoverBtn');
+  const coverFileInput=document.getElementById('hiddenCoverInput');
   // SVG book icon for cover placeholders (matches library card placeholder)
   const BOOK_SVG='<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
   function setCoverPlaceholder(ph,state){
@@ -24,8 +26,8 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   let abortController=null;
   function markDirty(){ try{ form.dispatchEvent(new Event('input',{bubbles:true})); }catch{} }
   function showUI(isEdit){ ui.style.display=isEdit?'none':'block'; if(isEdit) clearSearchState(); }
-  function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; if(tileCoverClick) tileCoverClick.classList.add('nav-active'); }
-  function hideCoverNav(){ prevBtn.style.display='none'; nextBtn.style.display='none'; editionInfo.style.display='none'; if(tileCoverClick) tileCoverClick.classList.remove('nav-active'); }
+  function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; }
+  function hideCoverNav(){ prevBtn.style.display='none'; nextBtn.style.display='none'; editionInfo.style.display='none'; }
   function clearSearchState(){ if(abortController){ abortController.abort(); abortController=null; } if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; } currentWork=null; currentAudio=null; editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null; olDocs=[]; itunesItems=[]; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; hideCoverNav(); lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all'; }
   function prepareQuery(q){ lastQuery=q.trim(); queryTokens=coreTokenize(lastQuery); }
   function showSkeletonCards(){
@@ -231,27 +233,23 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       if(bestDoc && bestDoc.key){
         await fetchEditions({work_key:bestDoc.key, title:title});
       }
-      // If we got editions, prepend current cover as option 0 (if we have one)
+      // Prepend current cover as option 0 so user can always go back
       if(editions.length && currentCover){
         editions.unshift({_currentCover:true});
-        editionIndex=0;
-        showCoverNav();
-        editionInfo.textContent=`Cover 1 of ${editions.length}`;
-        prevBtn.disabled=true; nextBtn.disabled=editions.length<=1;
       } else if(!editions.length && itunesCoverState){
-        // Only iTunes cover found, no OL editions with covers
         editions=[{_itunesArtwork:true}];
         if(currentCover) editions.unshift({_currentCover:true});
-        editionIndex=0; showCoverNav();
-        editionInfo.textContent=`Cover 1 of ${editions.length}`;
-        prevBtn.disabled=true; nextBtn.disabled=editions.length<=1;
       }
       if(!editions.length || (editions.length===1 && editions[0]._currentCover)){
         hideCoverNav();
         if(findCoversBtn){ findCoversBtn.textContent='No covers available'; findCoversBtn.classList.remove('loading'); setTimeout(()=>{ findCoversBtn.textContent=currentCover?'Browse other covers':'Browse covers'; },2000); }
         return;
       }
+      // Hide browse pill BEFORE showing nav to prevent overlap
       if(findCoversBtn){ findCoversBtn.classList.remove('loading'); findCoversBtn.style.display='none'; }
+      editionIndex=0; showCoverNav();
+      editionInfo.textContent=`Cover 1 of ${editions.length}`;
+      prevBtn.disabled=true; nextBtn.disabled=editions.length<=1;
     }catch(e){
       if(findCoversBtn){ findCoversBtn.textContent='Search failed'; findCoversBtn.classList.remove('loading'); setTimeout(()=>{ findCoversBtn.textContent='Browse other covers'; },2000); }
     }
@@ -285,7 +283,6 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   if(findCoversBtn){
     findCoversBtn.addEventListener('click',(e)=>{
       e.stopPropagation();
-      // Save current cover before browsing so we can restore it
       if(coverPreview.style.display==='block'){
         coverPreview.dataset._savedSrc=coverPreview.src;
         coverPreview.dataset._savedB64=coverPreview.dataset.b64||'';
@@ -296,15 +293,20 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       findCoversForEntry(title, author);
     });
   }
+  if(uploadCoverBtn && coverFileInput){
+    uploadCoverBtn.addEventListener('click',(e)=>{ e.stopPropagation(); coverFileInput.click(); });
+  }
 
   window.bookSearch={
-    handleModalOpen(isEdit){ showUI(isEdit); hideCoverNav(); if(findCoversBtn) findCoversBtn.style.display='none'; },
+    handleModalOpen(isEdit){ showUI(isEdit); hideCoverNav(); if(findCoversBtn) findCoversBtn.style.display='none'; if(uploadCoverBtn) uploadCoverBtn.style.display='none'; },
     showFindCoversBtn(hasCover){
       if(findCoversBtn){
         findCoversBtn.textContent=hasCover?'Browse other covers':'Browse covers';
         findCoversBtn.classList.remove('loading');
         findCoversBtn.style.display='block';
       }
-    }
+    },
+    showUploadBtn(){ if(uploadCoverBtn) uploadCoverBtn.style.display='block'; },
+    hideUploadBtn(){ if(uploadCoverBtn) uploadCoverBtn.style.display='none'; }
   };
 })();
