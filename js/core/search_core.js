@@ -175,13 +175,22 @@ export function deduplicateItunesByDisplay(items) {
 }
 
 /**
- * Drop OpenLibrary works that match any iTunes result on title+author (exact normalized key).
- * iTunes wins — used so one canonical row appears first with OL editions below.
+ * Drop OpenLibrary works that match any iTunes result.
+ * Full key match (title+author), or title-only match when OL has no author.
  */
 export function filterOlSupersededByItunes(olDocs, itunesItems) {
-  const keys = new Set();
-  (itunesItems || []).forEach(i => keys.add(displayKeyItunes(i)));
-  return (olDocs || []).filter(d => !keys.has(displayKeyOpenLibrary(d)));
+  const fullKeys = new Set();
+  const titleKeys = new Set();
+  (itunesItems || []).forEach(i => {
+    fullKeys.add(displayKeyItunes(i));
+    titleKeys.add(normalizeTitleKey(i.collectionName || i.trackName || ''));
+  });
+  return (olDocs || []).filter(d => {
+    if (fullKeys.has(displayKeyOpenLibrary(d))) return false;
+    const authorRaw = (d.author_name && d.author_name[0]) || '';
+    if (!authorRaw.trim() && titleKeys.has(normalizeTitleKey(d.title || ''))) return false;
+    return true;
+  });
 }
 
 // Strip noise words/markers from titles (Unabridged, Abridged, trailing pub years)
@@ -197,7 +206,7 @@ export function stripNoise(title) {
 // Normalize author name for dedup keying: sorted initials + surname, all lowercase
 export function normalizeAuthorKey(name) {
   if (!name) return '';
-  const parts = name.replace(/[.,-]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const parts = name.replace(/[.,\-\u2010-\u2015\u2212]/g, ' ').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '';
   if (parts.length === 1) return parts[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
   const surname = parts[parts.length - 1].replace(/[^a-z0-9]/gi, '').toLowerCase();
@@ -208,9 +217,9 @@ export function normalizeAuthorKey(name) {
   return initials.join('') + surname;
 }
 
-// Normalize title for dedup keying: strip noise, hyphens→spaces, collapse whitespace, lowercase
+// Normalize title for dedup keying: strip noise, all dashes→spaces, collapse whitespace, lowercase
 export function normalizeTitleKey(title) {
-  return stripNoise(title || '').replace(/-/g, ' ').replace(/\s+/g, ' ').toLowerCase().trim();
+  return stripNoise(title || '').replace(/[-\u2010-\u2015\u2212]/g, ' ').replace(/\s+/g, ' ').toLowerCase().trim();
 }
 
 // Pick the best display name from a list of variants
