@@ -40,12 +40,12 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   let lastQuery=''; let queryTokens=[]; let strictActive=false; // whether strict pass produced results
   // storage
   let olDocs=[]; let itunesItems=[]; // raw combined after merge
-  let debounceTimer=null; let currentWork=null; let currentAudio=null; let editions=[]; let editionIndex=0; let coverOnlyMode=false;
+  let debounceTimer=null; let currentWork=null; let currentAudio=null; let editions=[]; let editionIndex=0; let coverOnlyMode=false; let itunesCoverState=null;
   let searchCounter=0; // stale request detection for progressive loading
   let abortController=null; // cancels in-flight fetches on modal close or new search
   function markDirty(){ try{ form.dispatchEvent(new Event('input',{bubbles:true})); }catch{} }
   function showUI(isEdit){ ui.style.display=isEdit?'none':'block'; if(isEdit) clearSearchState(); }
-  function clearSearchState(){ if(abortController){ abortController.abort(); abortController=null; } if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; } currentWork=null; currentAudio=null; editions=[]; editionIndex=0; coverOnlyMode=false; olDocs=[]; itunesItems=[]; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; editionNav.style.display='none'; syncFiltersVisibility(false); if(controls) controls.classList.remove('expanded'); if(filtersToggle) filtersToggle.classList.remove('open'); lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all'; }
+  function clearSearchState(){ if(abortController){ abortController.abort(); abortController=null; } if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; } currentWork=null; currentAudio=null; editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null; olDocs=[]; itunesItems=[]; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; editionNav.style.display='none'; syncFiltersVisibility(false); if(controls) controls.classList.remove('expanded'); if(filtersToggle) filtersToggle.classList.remove('open'); lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all'; }
   function prepareQuery(q){ lastQuery=q.trim(); queryTokens=coreTokenize(lastQuery); }
   // Skeleton loading cards shown while APIs are in flight
   function showSkeletonCards(){
@@ -135,8 +135,11 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     return aCover-bCover;
   }
   async function fetchEditions(meta){ try{ const url='https://openlibrary.org'+meta.work_key+'/editions.json?limit=50'; const r=await fetch(url); const j=await r.json(); const all=(j.entries||j.editions||[]).filter(e=>e); const engOnly=all.filter(isEditionEnglishOrUnknown); editions=engOnly.length?engOnly:all; editions.sort(editionCoverSort);
-    if(coverOnlyMode){ editions=editions.filter(e=>e.covers&&e.covers.length); }
-    if(editions.length){ if(coverOnlyMode){ editionIndex=-1; editionNav.style.display='flex'; editionInfo.textContent=`${editions.length} cover${editions.length!==1?'s':''} available — use arrows to browse`; prevBtn.disabled=true; nextBtn.disabled=false; } else { editionIndex=0; editionNav.style.display='flex'; applyEdition(); } } }catch(e){} }
+    if(coverOnlyMode){
+      editions=editions.filter(e=>e.covers&&e.covers.length);
+      if(editions.length){ editions.unshift({_itunesArtwork:true}); editionIndex=0; editionNav.style.display='flex'; editionInfo.textContent=`Cover 1 of ${editions.length}`; prevBtn.disabled=true; nextBtn.disabled=editions.length<=1; }
+    } else if(editions.length){ editionIndex=0; editionNav.style.display='flex'; applyEdition(); }
+    }catch(e){} }
   async function selectItunes(payload){ currentWork=null; editions=[]; editionIndex=0; editionNav.style.display='none'; currentAudio=payload;
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
     form.title.value = cleanTitle(payload.title || '');
@@ -153,7 +156,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       try{ const resp=await fetch(hi); if(resp.ok){ const blob=await resp.blob();
         const { base64, mime, wasResized, dataUrl } = await resizeImageToBase64(blob);
         if(wasResized) console.info('[Bookish] iTunes cover resized for storage efficiency');
-        coverPreview.src=dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=base64; coverPreview.dataset.mime=mime; if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`); if(ph) ph.style.display='none'; if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded(); markDirty(); } else {
+        coverPreview.src=dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=base64; coverPreview.dataset.mime=mime; if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`); if(ph) ph.style.display='none'; if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded(); itunesCoverState={dataUrl,base64,mime}; markDirty(); } else {
           setCoverPlaceholder(ph,'no-cover');
         } }catch(e){
         setCoverPlaceholder(ph,'no-cover');
@@ -176,9 +179,11 @@ import { resizeImageToBase64 } from './core/image_utils.js';
 
   function applyEdition(){ if(!editions.length||editionIndex<0) return; const ed=editions[editionIndex];
     if(!coverOnlyMode){ let changed=false; if(ed.title){ form.title.value=cleanTitle(ed.title); changed=true; } if(ed.authors&&ed.authors.length){ const names=ed.authors.map(a=> a.name || a.author && a.author.key || '').filter(Boolean); if(names.length){ form.author.value=names.join(', '); changed=true; } } if(ed.physical_format){ const fmt=(ed.physical_format||'').toLowerCase(); let mapped='print'; if(fmt.includes('ebook')||fmt.includes('e-book')||fmt.includes('kindle')) mapped='ebook'; else if(fmt.includes('audio')) mapped='audio'; form.format.value=mapped; changed=true; } if(changed) markDirty(); }
-    if(ed.covers && ed.covers.length) {
+    if(ed._itunesArtwork && itunesCoverState){
+      coverPreview.src=itunesCoverState.dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=itunesCoverState.base64; coverPreview.dataset.mime=itunesCoverState.mime; if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${itunesCoverState.dataUrl}')`); const ph=document.getElementById('coverPlaceholder'); if(ph) ph.style.display='none'; if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded();
+    } else if(ed.covers && ed.covers.length) {
       loadCoverById(ed.covers[0]);
-    } else {
+    } else if(!ed._itunesArtwork) {
       const ph = document.getElementById('coverPlaceholder');
       setCoverPlaceholder(ph,'no-cover');
       coverPreview.src = '';
