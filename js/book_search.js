@@ -136,7 +136,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   }
   async function fetchEditions(meta){ try{ const url='https://openlibrary.org'+meta.work_key+'/editions.json?limit=50'; const r=await fetch(url); const j=await r.json(); const all=(j.entries||j.editions||[]).filter(e=>e); const engOnly=all.filter(isEditionEnglishOrUnknown); editions=engOnly.length?engOnly:all; editions.sort(editionCoverSort);
     if(coverOnlyMode){
-      editions=editions.filter(e=>e.covers&&e.covers.length);
+      editions=engOnly.filter(e=>e.covers&&e.covers.length);
       if(editions.length){ editions.unshift({_itunesArtwork:true}); editionIndex=0; editionNav.style.display='flex'; editionInfo.textContent=`Cover 1 of ${editions.length}`; prevBtn.disabled=true; nextBtn.disabled=editions.length<=1; }
     } else if(editions.length){ editionIndex=0; editionNav.style.display='flex'; applyEdition(); }
     }catch(e){} }
