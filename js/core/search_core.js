@@ -197,7 +197,7 @@ export function stripNoise(title) {
 // Normalize author name for dedup keying: sorted initials + surname, all lowercase
 export function normalizeAuthorKey(name) {
   if (!name) return '';
-  const parts = name.replace(/[.,]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const parts = name.replace(/[.,-]/g, ' ').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '';
   if (parts.length === 1) return parts[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
   const surname = parts[parts.length - 1].replace(/[^a-z0-9]/gi, '').toLowerCase();
@@ -208,9 +208,9 @@ export function normalizeAuthorKey(name) {
   return initials.join('') + surname;
 }
 
-// Normalize title for dedup keying: strip noise then lowercase
+// Normalize title for dedup keying: strip noise, hyphens→spaces, collapse whitespace, lowercase
 export function normalizeTitleKey(title) {
-  return stripNoise(title || '').toLowerCase().trim();
+  return stripNoise(title || '').replace(/-/g, ' ').replace(/\s+/g, ' ').toLowerCase().trim();
 }
 
 // Pick the best display name from a list of variants
