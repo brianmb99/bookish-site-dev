@@ -1,6 +1,6 @@
 // book_search.js
 // Lightweight module to search OpenLibrary and populate the entry form
-import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary as coreMerge, enrichWithYear, enrichItunesWithYear, scoreDocument as coreScoreDocument, filterAndSort as coreFilterAndSort, deduplicateByDisplay as coreDedup, deduplicateItunesByDisplay as coreDedupItunes, filterOlSupersededByItunes as coreOlMinusItunes, detectISBN, parseAuthorTitle } from './core/search_core.js';
+import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeOpenLibrary as coreMerge, enrichWithYear, enrichItunesWithYear, scoreDocument as coreScoreDocument, filterAndSort as coreFilterAndSort, deduplicateByDisplay as coreDedup, deduplicateItunesByDisplay as coreDedupItunes, filterOlSupersededByItunes as coreOlMinusItunes, detectISBN, parseAuthorTitle, cleanTitle } from './core/search_core.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
@@ -118,8 +118,9 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     if(!strictActive && queryTokens.length){ rows.push('<div style="opacity:.55;font-size:.7rem;padding:2px 4px">No exact title match; showing broader results.</div>'); }
     if(failTitle && !failBroad){ rows.push('<div style="opacity:.45;font-size:.6rem;padding:2px 4px">Exact title search failed (fallback used).</div>'); }
     if(!failTitle && failBroad){ rows.push('<div style="opacity:.45;font-size:.6rem;padding:2px 4px">Broad search unavailable (exact only).</div>'); }
-    dedupIt.forEach(item=>{ const title=(item.collectionName||item.trackName||''); const safe=highlight(title.replace(/</g,'&lt;')); const author=(item.artistName||'').replace(/</g,'&lt;'); const safeAuthor=highlight(author); const year=item._yearComputed||''; const payload={ title, author, year: year?String(year):'', artwork:item.artworkUrl100||'', narrator: author, rawNarrators: author }; rows.push(`<div class="res res-itunes" data-src="it" data-json='${encodeURIComponent(JSON.stringify(payload))}'>${safe} <span style="opacity:.6">${safeAuthor}${year?(' • '+year):''}</span></div>`); });
-    olFiltered.forEach(d=>{ const title=(d.title||''); const sub=d.subtitle?(': '+d.subtitle):''; const safe=(title).replace(/</g,'&lt;'); const safeSub=sub.replace(/</g,'&lt;'); const combined=highlight(safe+safeSub); const author=(d.author_name&&d.author_name[0])?d.author_name[0]:''; const safeAuthor=highlight(author.replace(/</g,'&lt;')); const yr=d._yearComputed?` <span style="opacity:.45">${d._yearComputed}</span>`:''; const metaTitle=(d.title||'')+ (d.subtitle?(': '+d.subtitle):''); rows.push(`<div class="res" data-src="ol" data-work='${d.key}' data-cover='${d.cover_i||''}' data-json='${encodeURIComponent(JSON.stringify({title:metaTitle,author,cover_i:d.cover_i||'',work_key:d.key}))}'>${combined} <span style="opacity:.6">${safeAuthor}</span>${yr}</div>`); }); if(!rows.length){ resultsEl.innerHTML='<div style="opacity:.5">No results</div>'; return; } resultsEl.innerHTML=rows.slice(0,60).join(''); }
+    const safeJson=(obj)=>encodeURIComponent(JSON.stringify(obj)).replace(/'/g,'%27');
+    dedupIt.forEach(item=>{ const title=cleanTitle(item.collectionName||item.trackName||''); const safe=highlight(title.replace(/</g,'&lt;')); const author=(item.artistName||'').replace(/</g,'&lt;'); const safeAuthor=highlight(author); const year=item._yearComputed||''; const payload={ title, author, year: year?String(year):'', artwork:item.artworkUrl100||'', narrator: author, rawNarrators: author }; rows.push(`<div class="res res-itunes" data-src="it" data-json='${safeJson(payload)}'>${safe} <span style="opacity:.6">${safeAuthor}${year?(' • '+year):''}</span></div>`); });
+    olFiltered.forEach(d=>{ const title=cleanTitle(d.title||''); const sub=d.subtitle?(': '+d.subtitle):''; const safe=(title).replace(/</g,'&lt;'); const safeSub=sub.replace(/</g,'&lt;'); const combined=highlight(safe+safeSub); const author=(d.author_name&&d.author_name[0])?d.author_name[0]:''; const safeAuthor=highlight(author.replace(/</g,'&lt;')); const yr=d._yearComputed?` <span style="opacity:.45">${d._yearComputed}</span>`:''; const metaTitle=title+(d.subtitle?(': '+d.subtitle):''); rows.push(`<div class="res" data-src="ol" data-work='${d.key}' data-cover='${d.cover_i||''}' data-json='${safeJson({title:metaTitle,author,cover_i:d.cover_i||'',work_key:d.key})}'>${combined} <span style="opacity:.6">${safeAuthor}</span>${yr}</div>`); }); if(!rows.length){ resultsEl.innerHTML='<div style="opacity:.5">No results</div>'; return; } resultsEl.innerHTML=rows.slice(0,60).join(''); }
   function selectWork(meta){ currentAudio=null; currentWork=meta; editions=[]; editionIndex=0; editionNav.style.display='none';
     // Clear cover immediately when selecting new work
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
@@ -138,8 +139,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   async function selectItunes(payload){ currentWork=null; editions=[]; editionIndex=0; editionNav.style.display='none'; currentAudio=payload;
     // Clear previous cover
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
-    // Always set fields (not just when empty)
-    form.title.value = payload.title || '';
+    form.title.value = cleanTitle(payload.title || '');
     form.author.value = payload.author || '';
     form.format.value=activeFilter==='audiobook'?'audio':'print';
     markDirty();
@@ -159,8 +159,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       setCoverPlaceholder(ph,'no-cover');
     } }
   function populateFromBasic(meta){ if(!meta) return;
-    // Always set fields (not just when empty)
-    form.title.value = meta.title || '';
+    form.title.value = cleanTitle(meta.title || '');
     if(meta.author) form.author.value = meta.author;
     markDirty();
     // Handle cover with loading state
@@ -172,7 +171,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       coverPreview.style.display = 'none';
     } }
 
-  function applyEdition(){ if(!editions.length) return; const ed=editions[editionIndex]; let changed=false; if(ed.title){ form.title.value=ed.title; changed=true; } if(ed.authors&&ed.authors.length){ const names=ed.authors.map(a=> a.name || a.author && a.author.key || '').filter(Boolean); if(names.length){ form.author.value=names.join(', '); changed=true; } } if(ed.physical_format){ const fmt=(ed.physical_format||'').toLowerCase(); let mapped='print'; if(fmt.includes('ebook')||fmt.includes('e-book')||fmt.includes('kindle')) mapped='ebook'; else if(fmt.includes('audio')) mapped='audio'; form.format.value=mapped; changed=true; } if(changed) markDirty();
+  function applyEdition(){ if(!editions.length) return; const ed=editions[editionIndex]; let changed=false; if(ed.title){ form.title.value=cleanTitle(ed.title); changed=true; } if(ed.authors&&ed.authors.length){ const names=ed.authors.map(a=> a.name || a.author && a.author.key || '').filter(Boolean); if(names.length){ form.author.value=names.join(', '); changed=true; } } if(ed.physical_format){ const fmt=(ed.physical_format||'').toLowerCase(); let mapped='print'; if(fmt.includes('ebook')||fmt.includes('e-book')||fmt.includes('kindle')) mapped='ebook'; else if(fmt.includes('audio')) mapped='audio'; form.format.value=mapped; changed=true; } if(changed) markDirty();
     if(ed.covers && ed.covers.length) {
       loadCoverById(ed.covers[0]);
     } else {

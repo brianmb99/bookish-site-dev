@@ -133,14 +133,14 @@ export function deduplicateByDisplay(docs) {
 
 /** Normalized title|author key for an OpenLibrary work (matches deduplicateByDisplay). */
 export function displayKeyOpenLibrary(doc) {
-  const title = (doc.title || '').toLowerCase().trim();
+  const title = stripNoise(doc.title || '').toLowerCase().trim();
   const author = ((doc.author_name && doc.author_name[0]) || '').toLowerCase().trim();
   return `${title}|${author}`;
 }
 
 /** Normalized title|author key for an iTunes search hit. */
 export function displayKeyItunes(item) {
-  const title = (item.collectionName || item.trackName || '').toLowerCase().trim();
+  const title = stripNoise(item.collectionName || item.trackName || '').toLowerCase().trim();
   const author = (item.artistName || '').toLowerCase().trim();
   return `${title}|${author}`;
 }
@@ -164,6 +164,29 @@ export function filterOlSupersededByItunes(olDocs, itunesItems) {
   const keys = new Set();
   (itunesItems || []).forEach(i => keys.add(displayKeyItunes(i)));
   return (olDocs || []).filter(d => !keys.has(displayKeyOpenLibrary(d)));
+}
+
+// Strip noise words/markers from titles (Unabridged, Abridged, etc.)
+const NOISE_RE = /\s*[\(\[](un)?abridged[\)\]]\s*/gi;
+export function stripNoise(title) {
+  if (!title) return '';
+  return title.replace(NOISE_RE, '').trim();
+}
+
+// Title-case a string, but ONLY if it's ALL CAPS (preserves intentional mixed case)
+const TITLE_MINOR = new Set(['a','an','the','and','but','or','nor','for','yet','so','in','on','at','to','of','by','up','as','is','if','it']);
+export function toTitleCase(str) {
+  if (!str) return '';
+  if (str !== str.toUpperCase()) return str;
+  return str.toLowerCase().replace(/\b\w+/g, (word, idx) => {
+    if (idx > 0 && TITLE_MINOR.has(word)) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  });
+}
+
+// Clean a title for display: strip noise, then title-case if ALL CAPS
+export function cleanTitle(title) {
+  return toTitleCase(stripNoise(title));
 }
 
 // Detect if query is an ISBN (10 or 13 digits, with optional hyphens/spaces)
