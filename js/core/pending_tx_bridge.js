@@ -16,6 +16,14 @@ function getBridgeUrl() {
   return (typeof window !== 'undefined' && window.BOOKISH_PENDING_TX_BRIDGE) || DEFAULT_BRIDGE_URL;
 }
 
+// AbortSignal.timeout() requires Safari 16+ (iOS 16+). Use AbortController
+// fallback so bridge registration works on older devices.
+function timeoutSignal(ms) {
+  const c = new AbortController();
+  setTimeout(() => c.abort(), ms);
+  return c.signal;
+}
+
 /**
  * Derive the bridge lookup key: SHA-256(walletAddress.toLowerCase() + 'bookish')
  * Same derivation as Account-Lookup-Key used for account metadata on Arweave.
@@ -47,7 +55,7 @@ export async function registerPendingTxByKey(lookupKey, txIds) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lookupKey, txIds: ids }),
-      signal: AbortSignal.timeout(REGISTER_TIMEOUT_MS),
+      signal: timeoutSignal(REGISTER_TIMEOUT_MS),
     });
   } catch {
     // Silently ignore — bridge registration is best-effort
@@ -68,7 +76,7 @@ export async function fetchPendingTxIdsByKey(lookupKey) {
     const url = getBridgeUrl();
 
     const r = await fetch(`${url}/pending?key=${lookupKey}`, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: timeoutSignal(FETCH_TIMEOUT_MS),
     });
 
     if (!r.ok) return [];
