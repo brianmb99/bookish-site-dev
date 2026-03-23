@@ -177,18 +177,43 @@ export function deduplicateItunesByDisplay(items) {
 /**
  * Drop OpenLibrary works that match any iTunes result.
  * Full key match (title+author), or title-only match when OL has no author.
+ * Transfers _allWorkKeys and _allCovers from suppressed OL docs to the
+ * matching iTunes item so cover browsing can use them.
  */
 export function filterOlSupersededByItunes(olDocs, itunesItems) {
-  const fullKeys = new Set();
-  const titleKeys = new Set();
+  const keyToItunes = new Map();
+  const titleToItunes = new Map();
   (itunesItems || []).forEach(i => {
-    fullKeys.add(displayKeyItunes(i));
-    titleKeys.add(normalizeTitleKey(i.collectionName || i.trackName || ''));
+    const fk = displayKeyItunes(i);
+    if (!keyToItunes.has(fk)) keyToItunes.set(fk, i);
+    const tk = normalizeTitleKey(i.collectionName || i.trackName || '');
+    if (!titleToItunes.has(tk)) titleToItunes.set(tk, i);
   });
+
+  function transferOlData(olDoc, itItem) {
+    if (!itItem) return;
+    if (!itItem._olWorkKeys) itItem._olWorkKeys = [];
+    if (!itItem._olCovers) itItem._olCovers = [];
+    const wks = olDoc._allWorkKeys && olDoc._allWorkKeys.length ? olDoc._allWorkKeys : (olDoc.key ? [olDoc.key] : []);
+    const cvs = olDoc._allCovers && olDoc._allCovers.length ? olDoc._allCovers : (olDoc.cover_i ? [olDoc.cover_i] : []);
+    wks.forEach(k => { if (!itItem._olWorkKeys.includes(k)) itItem._olWorkKeys.push(k); });
+    cvs.forEach(c => { if (!itItem._olCovers.includes(c)) itItem._olCovers.push(c); });
+  }
+
   return (olDocs || []).filter(d => {
-    if (fullKeys.has(displayKeyOpenLibrary(d))) return false;
+    const olKey = displayKeyOpenLibrary(d);
+    if (keyToItunes.has(olKey)) {
+      transferOlData(d, keyToItunes.get(olKey));
+      return false;
+    }
     const authorRaw = (d.author_name && d.author_name[0]) || '';
-    if (!authorRaw.trim() && titleKeys.has(normalizeTitleKey(d.title || ''))) return false;
+    if (!authorRaw.trim()) {
+      const tk = normalizeTitleKey(d.title || '');
+      if (titleToItunes.has(tk)) {
+        transferOlData(d, titleToItunes.get(tk));
+        return false;
+      }
+    }
     return true;
   });
 }
