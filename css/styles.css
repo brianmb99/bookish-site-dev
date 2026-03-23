@@ -969,12 +969,16 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   transition:opacity .2s;
 }
 .modal-inner .tile-cover:has(img[style*="block"])::before{opacity:1}
-.modal-inner .tile-cover:has(.placeholder[style*="block"]){border:2px dashed var(--color-border-default)}
+.modal-inner .tile-cover:has(.placeholder[style*="block"]){border:2px dashed var(--color-border-default);justify-content:flex-start}
+.modal-inner .tile-cover:has(.placeholder[style*="block"]) .placeholder{
+  position:absolute;left:50%;top:33%;transform:translate(-50%,-50%);
+  width:100%;max-width:100%;padding:0 12px;box-sizing:border-box;pointer-events:none;z-index:1;
+}
 .modal-inner .tile-cover:hover{border-color:#3a4652;box-shadow:0 4px 14px -4px rgba(0,0,0,.6)}
 .modal-inner .tile-cover img{width:100%;height:100%;object-fit:contain;display:block;position:relative;z-index:1}
 .modal-inner .tile-cover .placeholder{font-size:.6rem;opacity:.6;text-align:center;padding:0 12px}
 /* Cover placeholder icon (SVG book + label) */
-.placeholder-icon{display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.7;color:var(--color-text-secondary);padding-bottom:28px}
+.placeholder-icon{display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.7;color:var(--color-text-secondary)}
 .placeholder-icon span{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;font-weight:500}
 /* "Upload my own" pill — centered on cover tile, always visible when cover loaded */
 .upload-cover-btn{
@@ -989,6 +993,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 }
 .upload-cover-btn:hover{background:rgba(0,0,0,.75)!important;opacity:1}
 .upload-cover-btn:active{transform:translate(-50%,-50%)!important}
+.modal-inner .tile-cover:has(.placeholder[style*="block"]) .upload-cover-btn{top:58%}
 /* Cover remove button */
 .cover-remove-btn{
   position:absolute;
