@@ -217,9 +217,10 @@ export function normalizeAuthorKey(name) {
   return initials.join('') + surname;
 }
 
-// Normalize title for dedup keying: strip noise, all dashes→spaces, collapse whitespace, lowercase
+// Normalize title for dedup keying: strip noise, remove all dashes+spaces, lowercase
+// "The Muddle-Headed Wombat" and "The Muddleheaded Wombat" both become "themuddleheadedwombat"
 export function normalizeTitleKey(title) {
-  return stripNoise(title || '').replace(/[-\u2010-\u2015\u2212]/g, ' ').replace(/\s+/g, ' ').toLowerCase().trim();
+  return stripNoise(title || '').replace(/[-\s\u2010-\u2015\u2212]+/g, '').toLowerCase();
 }
 
 // Pick the best display name from a list of variants
