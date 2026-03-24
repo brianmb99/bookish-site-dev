@@ -1909,7 +1909,7 @@ function showFundingValueModal(address, isFunded = false) {
 
   // Pay with Coinbase
   document.getElementById('payWithCoinbaseBtn').onclick = () => {
-    closeAccountModal();
+    closeHelperModal();
     showFundingProgress(address);
     openCoinbaseOnrampWithInstructions(address);
   };
@@ -1987,7 +1987,12 @@ function showFundingProgress(address) {
       clearInterval(window.__fundingTimeoutCheck);
       window.__fundingTimeoutCheck = null;
     }
-    closeAccountModal();
+    // Stop fast balance polling
+    if (window.__fastPollInterval) {
+      clearInterval(window.__fastPollInterval);
+      window.__fastPollInterval = null;
+    }
+    closeHelperModal();
     // Reset button state
     const buyBtn = document.getElementById('buyCoinbaseBtn');
     if (buyBtn) {
@@ -2081,7 +2086,7 @@ function showFundingSuccess() {
   `);
 
   document.getElementById('backToBooksBtn').onclick = () => {
-    closeAccountModal();
+    closeHelperModal();
   };
 }
 
@@ -2191,7 +2196,7 @@ async function openCoinbaseOnrampWithInstructions(address) {
         window.__fastPollInterval = null;
         
         // Close progress modal and show simple confirmation
-        closeAccountModal();
+        closeHelperModal();
         setTimeout(() => {
           showAccountModal(`
             <div style="text-align:center;padding:20px 0;">
@@ -2203,9 +2208,9 @@ async function openCoinbaseOnrampWithInstructions(address) {
               <button id="fundingDoneBtn" class="btn" style="min-width:120px;">Done</button>
             </div>
           `);
-          document.getElementById('fundingDoneBtn').onclick = closeAccountModal;
+          document.getElementById('fundingDoneBtn').onclick = closeHelperModal;
         }, 300);
-        
+
         // Trigger a sync to update the cached balance
         if (window.bookishSyncManager?.triggerPersistenceCheck) {
           window.bookishSyncManager.triggerPersistenceCheck();
@@ -2317,7 +2322,7 @@ async function openCoinbaseOnrampWithInstructions(address) {
 
           if (parseFloat(balanceETH) > parseFloat(initialBalance)) {
             // Funds arrived! Show simple confirmation
-            closeAccountModal();
+            closeHelperModal();
             setTimeout(() => {
               showAccountModal(`
                 <div style="text-align:center;padding:20px 0;">
@@ -2329,16 +2334,16 @@ async function openCoinbaseOnrampWithInstructions(address) {
                   <button id="fundingDoneBtn" class="btn" style="min-width:120px;">Done</button>
                 </div>
               `);
-              document.getElementById('fundingDoneBtn').onclick = closeAccountModal;
+              document.getElementById('fundingDoneBtn').onclick = closeHelperModal;
             }, 300);
-            
+
             // Trigger sync to update cached balance
             if (window.bookishSyncManager?.triggerPersistenceCheck) {
               window.bookishSyncManager.triggerPersistenceCheck();
             }
           } else {
             // Funds not detected yet - show helpful message
-            closeAccountModal();
+            closeHelperModal();
             setTimeout(() => {
               showAccountModal(`
                 <div style="text-align:center;padding:20px 0;">
@@ -2353,13 +2358,13 @@ async function openCoinbaseOnrampWithInstructions(address) {
                   <button id="processingCloseBtn" class="btn" style="min-width:120px;">OK</button>
                 </div>
               `);
-              document.getElementById('processingCloseBtn').onclick = closeAccountModal;
+              document.getElementById('processingCloseBtn').onclick = closeHelperModal;
             }, 300);
           }
         } catch (err) {
           console.error('[Bookish:AccountUI] Final balance check failed:', err);
           // Just close the modal, sync will pick it up later
-          closeAccountModal();
+          closeHelperModal();
         }
       }
     }
@@ -2523,7 +2528,7 @@ export async function handlePersistAccountToArweave(isAutoTrigger = false) {
           window.__fundingTimeoutCheck = null;
         }
         // Close progress modal and show success
-        closeAccountModal();
+        closeHelperModal();
         setTimeout(() => {
           showFundingSuccess();
         }, 300);
