@@ -363,6 +363,10 @@ button.secondary:hover, .btn.secondary:hover{
 .empty-signin{margin-top:20px;font-size:.85rem;color:var(--color-text-muted)}
 .empty-signin .link-btn{background:none;border:none;color:var(--color-text-secondary);font-size:inherit;font-family:inherit;cursor:pointer;padding:0;text-decoration:none;transition:color .2s}
 .empty-signin .link-btn:hover{color:var(--color-text-primary);text-decoration:underline;text-underline-offset:2px}
+.empty-links{margin-top:16px;font-size:.8rem;color:var(--color-text-muted)}
+.empty-links span{opacity:.4;margin:0 2px}
+.empty-links a{color:var(--color-text-muted);text-decoration:none;transition:color .2s}
+.empty-links a:hover{color:var(--color-text-primary)}
 
 /* Shelf-empty state (has WTR books but no shelf books) */
 .shelf-empty{
@@ -684,15 +688,11 @@ button.secondary:hover, .btn.secondary:hover{
   color:var(--color-text-secondary);
   background:var(--color-bg-elevated);
 }
-footer{margin-top:40px;font-size:.55rem;opacity:.4;text-align:center}
-/* Keep footer links readable: default :visited purple vanishes on dark bg at low opacity */
-footer a:link,
-footer a:visited{
-  color:inherit;
-}
-footer a:hover{
-  color:var(--color-text-secondary);
-}
+footer{margin-top:40px;text-align:center}
+.footer-links{font-size:.7rem;color:var(--color-text-muted);opacity:.6}
+.footer-links a:link,.footer-links a:visited{color:var(--color-text-muted);text-decoration:none}
+.footer-links a:hover{color:var(--color-text-secondary)}
+.footer-meta{font-size:.55rem;opacity:.35;margin-top:4px}
 form.inline label{display:block;font-size:.65rem;margin-top:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
 form.inline input,form.inline select,form.inline textarea{
   font-family:var(--font-body);
