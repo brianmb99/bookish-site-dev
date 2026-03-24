@@ -59,7 +59,7 @@
       padding: 48px 24px 64px;
     }
 
-    /* Navigation */
+    /* === Shared nav === */
     .nav {
       display: flex;
       justify-content: space-between;
@@ -80,20 +80,32 @@
       background-clip: text;
     }
 
-    .nav-link {
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       font-size: 0.875rem;
-      font-weight: 600;
-      color: var(--color-primary);
-      text-decoration: none;
-      padding: 10px 20px;
-      border-radius: 8px;
-      border: 1px solid var(--color-primary);
-      transition: all 0.2s ease;
     }
 
-    .nav-link:hover {
-      background: var(--color-primary);
-      color: #fff;
+    .nav-links .sep {
+      color: var(--color-text-muted);
+      opacity: 0.4;
+      user-select: none;
+    }
+
+    .nav-links a {
+      color: var(--color-text-muted);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--color-text-primary);
+    }
+
+    .nav-links a.active {
+      color: var(--color-text-primary);
     }
 
     /* Hero */
@@ -245,70 +257,6 @@
       color: var(--color-text-secondary);
     }
 
-    /* FAQ */
-    .faq {
-      margin-bottom: 80px;
-    }
-
-    .faq-item {
-      border-bottom: 1px solid var(--color-border-subtle);
-    }
-
-    .faq-item:first-child {
-      border-top: 1px solid var(--color-border-subtle);
-    }
-
-    .faq-question {
-      width: 100%;
-      background: none;
-      border: none;
-      color: var(--color-text-primary);
-      font-family: var(--font-body);
-      font-size: 1rem;
-      font-weight: 600;
-      text-align: left;
-      padding: 20px 0;
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      transition: color 0.2s ease;
-    }
-
-    .faq-question:hover {
-      color: var(--color-primary-hover);
-    }
-
-    .faq-chevron {
-      flex-shrink: 0;
-      width: 20px;
-      height: 20px;
-      color: var(--color-text-muted);
-      transition: transform 0.2s ease;
-    }
-
-    .faq-item.open .faq-chevron {
-      transform: rotate(180deg);
-    }
-
-    .faq-answer {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.3s ease, padding 0.3s ease;
-    }
-
-    .faq-item.open .faq-answer {
-      max-height: 200px;
-      padding-bottom: 20px;
-    }
-
-    .faq-answer p {
-      font-size: 0.95rem;
-      color: var(--color-text-secondary);
-      line-height: 1.6;
-    }
-
     /* Alpha badge */
     .alpha-note {
       text-align: center;
@@ -410,7 +358,13 @@
   <!-- Nav -->
   <nav class="nav">
     <a href="/" class="nav-brand">Bookish</a>
-    <a href="/" class="nav-link">Open App</a>
+    <div class="nav-links">
+      <a href="/about.html" class="active">About</a>
+      <span class="sep">|</span>
+      <a href="/faq.html">FAQ</a>
+      <span class="sep">|</span>
+      <a href="/forever.html">Forever</a>
+    </div>
   </nav>
 
   <!-- Hero -->
@@ -473,61 +427,6 @@
     <p><strong>Early access</strong> — Bookish is currently in friends-and-family alpha. You're getting an early look. Things may be a little rough around the edges, and your feedback is incredibly helpful.</p>
   </section>
 
-  <!-- FAQ -->
-  <section class="faq">
-    <h2 class="section-title">Questions</h2>
-
-    <div class="faq-item">
-      <button class="faq-question" aria-expanded="false">
-        <span>Is it really free to start?</span>
-        <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-      </button>
-      <div class="faq-answer">
-        <p>Yes. Start adding books right away with no account at all — everything saves to your device. When you're ready to sync across devices and save permanently, create an account. Free storage is included to get you started.</p>
-      </div>
-    </div>
-
-    <div class="faq-item">
-      <button class="faq-question" aria-expanded="false">
-        <span>What does "permanent" mean?</span>
-        <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-      </button>
-      <div class="faq-answer">
-        <p>Your data is stored on a permanent, distributed network designed to last forever. It's not sitting on one company's server. Even if Bookish the app disappears someday, your data survives and can be retrieved.</p>
-      </div>
-    </div>
-
-    <div class="faq-item">
-      <button class="faq-question" aria-expanded="false">
-        <span>How much does it cost?</span>
-        <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-      </button>
-      <div class="faq-answer">
-        <p>Free to start. Use it on your device with no account, or create an account and get free storage included — no credit card needed. When you need more space, it's roughly a $5 one-time payment. No subscription — you pay once and it's yours.</p>
-      </div>
-    </div>
-
-    <div class="faq-item">
-      <button class="faq-question" aria-expanded="false">
-        <span>Is my data really private?</span>
-        <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-      </button>
-      <div class="faq-answer">
-        <p>Yes. Everything is encrypted on your device before it's stored. Bookish is designed so that you control access to your data — your books, your notes, all of it.</p>
-      </div>
-    </div>
-
-    <div class="faq-item">
-      <button class="faq-question" aria-expanded="false">
-        <span>Who built this?</span>
-        <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-      </button>
-      <div class="faq-answer">
-        <p>Bookish is an indie project built by Brian — a software engineer who wanted a reading tracker that respects privacy and actually lasts. No venture capital, no ads, no data harvesting. Just a tool built for book lovers.</p>
-      </div>
-    </div>
-  </section>
-
   <!-- Bottom CTA -->
   <section class="hero" style="margin-bottom: 48px;">
     <a href="/" class="hero-cta">Try Bookish</a>
@@ -535,27 +434,10 @@
 
   <!-- Footer -->
   <footer class="about-footer">
-    <p>Bookish &bull; <a href="/">Open App</a></p>
+    <p>Bookish &bull; <a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html">Forever</a></p>
   </footer>
 
 </div>
-
-<script>
-  document.querySelectorAll('.faq-question').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var item = this.parentElement;
-      var isOpen = item.classList.contains('open');
-      document.querySelectorAll('.faq-item.open').forEach(function(el) {
-        el.classList.remove('open');
-        el.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
-      });
-      if (!isOpen) {
-        item.classList.add('open');
-        this.setAttribute('aria-expanded', 'true');
-      }
-    });
-  });
-</script>
 
 </body>
 </html>

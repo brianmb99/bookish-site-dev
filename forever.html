@@ -36,9 +36,26 @@
     .success{color:#16a34a}
     .footer{margin-top:28px;padding-top:20px;border-top:1px solid #e2e8f0;font-size:.75rem;color:#94a3b8;text-align:center;line-height:1.6}
     .footer a{color:#2563eb}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;width:100%}
+    .nav-brand{font-size:1.1rem;font-weight:600;text-decoration:none;color:#1e293b;letter-spacing:-0.02em}
+    .nav-links{display:flex;align-items:center;gap:8px;font-size:.8rem}
+    .nav-links .sep{color:#94a3b8;opacity:.4;user-select:none}
+    .nav-links a{color:#94a3b8;text-decoration:none;font-weight:500;transition:color .2s}
+    .nav-links a:hover{color:#1e293b}
+    .nav-links a.active{color:#1e293b}
   </style>
 </head>
 <body>
+  <nav class="nav">
+    <a href="/" class="nav-brand">Bookish</a>
+    <div class="nav-links">
+      <a href="/about.html">About</a>
+      <span class="sep">|</span>
+      <a href="/faq.html">FAQ</a>
+      <span class="sep">|</span>
+      <a href="/forever.html" class="active">Forever</a>
+    </div>
+  </nav>
   <div id="app">
     <h1>📚 Bookish Data Export</h1>
     <p class="sub">This page is permanently stored and can never be taken down. Even if Bookish disappears, your books are yours — available forever.</p>

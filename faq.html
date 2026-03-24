@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>FAQ — Bookish</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="description" content="Frequently asked questions about Bookish — pricing, privacy, permanent storage, and more."/>
+  <meta name="theme-color" content="#2563eb"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-192.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
+  <style>
+    /* Reset & base */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-body: 'DM Sans', system-ui, sans-serif;
+      --color-bg-deep: #0f1114;
+      --color-bg-base: #151920;
+      --color-bg-surface: #1c222a;
+      --color-bg-elevated: #242b35;
+      --color-text-primary: #f7f5f2;
+      --color-text-secondary: #c9c5be;
+      --color-text-muted: #7a7670;
+      --color-border-subtle: #2a2f38;
+      --color-border-default: #363d48;
+      --color-primary: #3b82f6;
+      --color-primary-hover: #60a5fa;
+      --color-primary-muted: rgba(59, 130, 246, 0.15);
+      --color-accent: #f59e0b;
+      --color-success: #10b981;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: linear-gradient(180deg, var(--color-bg-deep) 0%, var(--color-bg-base) 100%);
+      color: var(--color-text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.025;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    /* Layout */
+    .page {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 24px 64px;
+    }
+
+    /* === Shared nav === */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 64px;
+    }
+
+    .nav-brand {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.875rem;
+    }
+
+    .nav-links .sep {
+      color: var(--color-text-muted);
+      opacity: 0.4;
+      user-select: none;
+    }
+
+    .nav-links a {
+      color: var(--color-text-muted);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--color-text-primary);
+    }
+
+    .nav-links a.active {
+      color: var(--color-text-primary);
+    }
+
+    /* Page header */
+    .page-header {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+
+    .page-header h1 {
+      font-family: var(--font-display);
+      font-size: 2.5rem;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+
+    .page-header p {
+      font-size: 1.05rem;
+      color: var(--color-text-secondary);
+    }
+
+    /* FAQ groups */
+    .faq-group {
+      margin-bottom: 48px;
+    }
+
+    .faq-group-title {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: var(--color-accent);
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--color-border-subtle);
+    }
+
+    .faq-entry {
+      margin-bottom: 32px;
+    }
+
+    .faq-entry:last-child {
+      margin-bottom: 0;
+    }
+
+    .faq-entry h3 {
+      font-family: var(--font-body);
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      margin-bottom: 8px;
+    }
+
+    .faq-entry p {
+      font-size: 0.95rem;
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    .about-footer {
+      text-align: center;
+      padding-top: 40px;
+      border-top: 1px solid var(--color-border-subtle);
+    }
+
+    .about-footer p {
+      font-size: 0.8rem;
+      color: var(--color-text-muted);
+    }
+
+    .about-footer a {
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .about-footer a:hover {
+      color: var(--color-primary);
+    }
+
+    /* Responsive */
+    @media (min-width: 600px) {
+      .page {
+        padding: 64px 32px 80px;
+      }
+
+      .page-header h1 {
+        font-size: 3rem;
+      }
+    }
+
+    @media (max-width: 599px) {
+      .page-header h1 {
+        font-size: 2rem;
+      }
+
+      .nav {
+        margin-bottom: 48px;
+      }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Nav -->
+  <nav class="nav">
+    <a href="/" class="nav-brand">Bookish</a>
+    <div class="nav-links">
+      <a href="/about.html">About</a>
+      <span class="sep">|</span>
+      <a href="/faq.html" class="active">FAQ</a>
+      <span class="sep">|</span>
+      <a href="/forever.html">Forever</a>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <div class="page-header">
+    <h1>Frequently Asked Questions</h1>
+    <p>Everything you need to know about Bookish.</p>
+  </div>
+
+  <!-- Getting Started -->
+  <section class="faq-group">
+    <h2 class="faq-group-title">Getting Started</h2>
+
+    <div class="faq-entry" id="free">
+      <h3>Is it really free to start?</h3>
+      <p>Yes. Start adding books right away with no account at all — everything saves to your device. When you're ready to sync across devices and save permanently, create an account. Free storage is included to get you started.</p>
+    </div>
+
+    <div class="faq-entry" id="permanent">
+      <h3>What does "permanent" mean?</h3>
+      <p>Your data is stored on a permanent, distributed network designed to last forever. It's not sitting on one company's server. Even if Bookish the app disappears someday, your data survives and can be retrieved.</p>
+    </div>
+
+    <div class="faq-entry" id="privacy">
+      <h3>Is my data really private?</h3>
+      <p>Yes. Everything is encrypted on your device before it's stored. Bookish is designed so that you control access to your data — your books, your notes, all of it.</p>
+    </div>
+  </section>
+
+  <!-- Pricing & Storage -->
+  <section class="faq-group">
+    <h2 class="faq-group-title" id="cost">Pricing & Storage</h2>
+
+    <div class="faq-entry" id="how-much">
+      <h3>How much does it cost?</h3>
+      <p>Free to start. Use it on your device with no account, or create an account and get free storage included — no credit card needed. When you need more space, it's roughly a $5 one-time payment. No subscription — you pay once and it's yours.</p>
+    </div>
+
+    <div class="faq-entry" id="paying-for">
+      <h3>What am I paying for?</h3>
+      <p>Your own permanent, encrypted storage. It costs about a penny per book — you only pay for what you use. No subscription, no monthly fee. Your first books are free.</p>
+    </div>
+
+    <div class="faq-entry" id="how-far">
+      <h3>How far does $5 go?</h3>
+      <p>A very long way. At a penny a book, $5 covers hundreds of books — a lifetime for most readers. If you eventually use your credit up, top up anytime at the same rate.</p>
+    </div>
+
+    <div class="faq-entry" id="why-not-free">
+      <h3>Why isn't it free?</h3>
+      <p>Because your books are yours — not ours. On most reading apps, the company owns your reading history and monetizes it. Here, we can't sell it or take it away. You pay a few dollars for storage instead of paying with your reading history.</p>
+    </div>
+
+    <div class="faq-entry" id="no-pay">
+      <h3>What if I don't pay?</h3>
+      <p>Bookish works fine without paying. Your books stay on this device for free, forever. Cloud backup just means they're also safe if you lose this device, and accessible from your other devices.</p>
+    </div>
+
+    <div class="faq-entry" id="money">
+      <h3>Where does the money go?</h3>
+      <p>Most of it (~75%) goes directly to your storage credit. A small portion supports Bookish development.</p>
+    </div>
+
+    <div class="faq-entry" id="coinbase">
+      <h3>Why Coinbase / crypto?</h3>
+      <p>Today, storage payments go through Coinbase because the underlying network uses cryptocurrency. We're adding card payments soon so you won't need to think about crypto at all.</p>
+    </div>
+  </section>
+
+  <!-- About -->
+  <section class="faq-group">
+    <h2 class="faq-group-title">About</h2>
+
+    <div class="faq-entry" id="who">
+      <h3>Who built this?</h3>
+      <p>Bookish is an indie project built by Brian — a software engineer who wanted a reading tracker that respects privacy and actually lasts. No venture capital, no ads, no data harvesting. Just a tool built for book lovers.</p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="about-footer">
+    <p>Bookish &bull; <a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html">Forever</a></p>
+  </footer>
+
+</div>
+
+</body>
+</html>

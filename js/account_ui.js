@@ -1851,7 +1851,6 @@ function handleBuyTransak() {
  */
 function showFundingValueModal(address, isFunded = false) {
   let advancedExpanded = false;
-  let faqExpanded = false;
 
   // Adapt messaging based on funding status
   const title = isFunded ? 'Add Credit' : 'Make Your Books Permanent';
@@ -1877,15 +1876,7 @@ function showFundingValueModal(address, isFunded = false) {
         </div>
       </div>
       <div style="margin:0 0 16px 0;">
-        <button id="toggleFaqBtn" class="btn-link" style="background:none;border:none;color:#94a3b8;font-size:.8rem;cursor:pointer;padding:0;">▸ Why is there a cost?</button>
-      </div>
-      <div id="faqSection" style="display:none;text-align:left;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px;margin:0 0 16px 0;">
-        <div class="funding-faq-pair"><p class="funding-faq-q">What am I paying for?</p><p class="funding-faq-a">Your own permanent, encrypted storage. It costs about a penny per book — you only pay for what you use. No subscription, no monthly fee. Your first books are free.</p></div>
-        <div class="funding-faq-pair"><p class="funding-faq-q">How far does $5 go?</p><p class="funding-faq-a">A very long way. At a penny a book, $5 covers hundreds of books — a lifetime for most readers. If you eventually use your credit up, top up anytime at the same rate.</p></div>
-        <div class="funding-faq-pair"><p class="funding-faq-q">Why isn't it free?</p><p class="funding-faq-a">Because your books are yours — not ours. On most reading apps, the company owns your reading history and monetizes it. Here, we can't sell it or take it away. You pay a few dollars for storage instead of paying with your reading history.</p></div>
-        <div class="funding-faq-pair"><p class="funding-faq-q">What if I don't pay?</p><p class="funding-faq-a">Bookish works fine without paying. Your books stay on this device for free, forever. Cloud backup just means they're also safe if you lose this device, and accessible from your other devices.</p></div>
-        <div class="funding-faq-pair"><p class="funding-faq-q">Where does the money go?</p><p class="funding-faq-a">Most of it (~75%) goes directly to your storage credit. A small portion supports Bookish development.</p></div>
-        <div class="funding-faq-pair"><p class="funding-faq-q">Why Coinbase / crypto?</p><p class="funding-faq-a">Today, storage payments go through Coinbase because the underlying network uses cryptocurrency. We're adding card payments soon so you won't need to think about crypto at all.</p></div>
+        <a href="/faq.html#cost" target="_blank" rel="noopener" style="color:#94a3b8;font-size:.8rem;text-decoration:none;transition:color .2s;" onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='#94a3b8'">Have questions about pricing? &rarr;</a>
       </div>
       ` : `
       <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:0 0 24px 0;text-align:left;">
@@ -1931,41 +1922,11 @@ function showFundingValueModal(address, isFunded = false) {
     if (advancedExpanded) {
       advancedSection.style.display = 'block';
       toggleBtn.textContent = '▾ Advanced: Send funds directly';
-      if (faqExpanded) {
-        faqExpanded = false;
-        const faqSection = document.getElementById('faqSection');
-        const faqBtn = document.getElementById('toggleFaqBtn');
-        if (faqSection) faqSection.style.display = 'none';
-        if (faqBtn) faqBtn.textContent = '▸ Why is there a cost?';
-      }
     } else {
       advancedSection.style.display = 'none';
       toggleBtn.textContent = '▸ Advanced: Send funds directly';
     }
   };
-
-  // Toggle FAQ section (close Advanced if open)
-  const toggleFaqBtn = document.getElementById('toggleFaqBtn');
-  if (toggleFaqBtn) {
-    toggleFaqBtn.onclick = () => {
-      faqExpanded = !faqExpanded;
-      const faqSection = document.getElementById('faqSection');
-      if (faqExpanded) {
-        faqSection.style.display = 'block';
-        toggleFaqBtn.textContent = '▾ Why is there a cost?';
-        if (advancedExpanded) {
-          advancedExpanded = false;
-          const advancedSection = document.getElementById('advancedSection');
-          const advancedBtn = document.getElementById('toggleAdvancedBtn');
-          if (advancedSection) advancedSection.style.display = 'none';
-          if (advancedBtn) advancedBtn.textContent = '▸ Advanced: Send funds directly';
-        }
-      } else {
-        faqSection.style.display = 'none';
-        toggleFaqBtn.textContent = '▸ Why is there a cost?';
-      }
-    };
-  }
 
   // Copy address
   document.getElementById('copyAddressBtn').onclick = async () => {
@@ -2169,7 +2130,7 @@ async function handleBuyStorage() {
 /**
  * Open Coinbase Onramp widget with clear instructions for user
  */
-function openCoinbaseOnrampWithInstructions(address) {
+async function openCoinbaseOnrampWithInstructions(address) {
   // Show loading state
   const buyBtn = document.getElementById('buyCoinbaseBtn');
   if (buyBtn) {
@@ -2182,8 +2143,19 @@ function openCoinbaseOnrampWithInstructions(address) {
     window.__updateFundingProgress('waiting');
   }
 
+  // Fetch the actual on-chain balance as baseline (don't trust cached value which may be '0')
+  let initialBalance = '0';
+  try {
+    const { getWalletBalance } = await import('./core/wallet_core.js');
+    const { balanceETH } = await getWalletBalance(address);
+    initialBalance = balanceETH || '0';
+  } catch (err) {
+    // Fall back to cached value if on-chain check fails
+    initialBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH || '0';
+    console.warn('[Bookish:AccountUI] Could not fetch initial balance, using cached:', initialBalance);
+  }
+
   // Start fast balance polling (every 5 seconds) while Coinbase widget is open
-  const initialBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH || '0';
   const startTime = Date.now();
   const FAST_POLL_INTERVAL = 5000; // 5 seconds
   const MAX_POLL_DURATION = 5 * 60 * 1000; // 5 minutes
