@@ -558,7 +558,7 @@ export function hideAccountNudge(){
 
 // --- PWA install banner (iOS Safari, non-Chrome Android) ---
 let nativeInstallAvailable = false;
-window.addEventListener('beforeinstallprompt', () => { nativeInstallAvailable = true; });
+window.addEventListener('beforeinstallprompt', (e) => { nativeInstallAvailable = true; });
 
 function showPwaInstallBanner() {
   if (nativeInstallAvailable) return;
@@ -704,7 +704,7 @@ function render(){
       if(illustration) illustration.textContent = '\u23F3';
     } else {
       if(headline) headline.textContent = 'Your reading journey starts here';
-      if(subtext) subtext.textContent = 'Track what you read. Keep it forever. It's yours.';
+      if(subtext) subtext.textContent = 'Track what you read. Keep it forever. It\u2019s yours.';
       if(addBtn) addBtn.style.display = '';
       if(signInDiv) signInDiv.style.display = storageManager.isLoggedIn() ? 'none' : '';
       if(illustration) illustration.textContent = '\uD83D\uDCDA';
