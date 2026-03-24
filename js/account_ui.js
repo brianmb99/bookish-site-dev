@@ -256,7 +256,6 @@ async function renderAccountModalContent(container) {
 
       <div class="account-data-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #334155;">
         <h3 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #94a3b8;">Your Data</h3>
-        <p style="font-size: 0.8rem; color: #cbd5e1; margin: 0 0 12px 0; line-height: 1.5;">Your books are yours — encrypted so only you can access them, not us, not anyone.</p>
         <button id="exportBooksBtn" type="button" class="btn secondary" style="width: 100%; margin-bottom: 8px;">📥 Export my books</button>
         <p style="font-size: 0.75rem; color: #64748b; margin: 4px 0 0 0; line-height: 1.5;">Export books from this device as CSV.</p>
         <a href="/forever.html" target="_blank" rel="noopener" style="font-size: 0.75rem; color: #60a5fa; display: inline-block; margin-top: 6px;">Export from cloud →</a>
