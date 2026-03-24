@@ -28,11 +28,19 @@
     <span class="nudge-icon">💡</span>
     <div class="nudge-text">
       <div class="nudge-headline">Your books, safe on any device.</div>
-      <div class="nudge-subtext">Save and own your data in the cloud.</div>
+      <div class="nudge-subtext">Less than a penny per book, no subscription.</div>
     </div>
     <button id="nudgeCreateAccountBtn" class="nudge-cta">Create Account →</button>
   </div>
   <button id="nudgeDismissBtn" class="nudge-dismiss" title="Dismiss">×</button>
+</div>
+
+<!-- PWA Install Banner (iOS Safari, non-Chrome Android) -->
+<div id="pwaInstallBanner" class="pwa-install-banner" style="display:none;">
+  <div class="pwa-install-content">
+    <span class="pwa-install-text" id="pwaInstallText"></span>
+    <button id="pwaInstallDismiss" class="pwa-install-dismiss" title="Dismiss">&times;</button>
+  </div>
 </div>
 
 <!-- Account Modal -->
@@ -72,15 +80,15 @@
 <div id="empty" class="empty-state" style="display:none">
   <div class="empty-illustration">📚</div>
   <h2 class="empty-headline">Your reading journey starts here</h2>
-  <p class="empty-subtext">Track what you read. Keep it forever. Access it anywhere.</p>
+  <p class="empty-subtext">Track what you read. Keep it forever. It's yours.</p>
   <button id="emptyAddBookBtn" class="btn primary empty-cta">Start Your Reading List</button>
   <div id="emptySignIn" class="empty-signin">Already have an account? <button class="link-btn" id="emptySignInBtn">Sign in</button></div>
 </div>
 <div id="celebrationToast" class="toast celebration-toast" style="display:none;">
   <span class="toast-icon">🎉</span>
-  <span class="toast-message">First book added! You're on your way.</span>
+  <span class="toast-message">First book saved! Your shelf is started.</span>
 </div>
-<footer>Bookish • Alpha • v0.2.70 • <a href="/forever.html" target="_blank" rel="noopener">Data export</a></footer>
+<footer>Bookish • Alpha • v0.2.71 • <a href="/forever.html" target="_blank" rel="noopener">Data export</a></footer>
 </div>
 
 <!-- Notes expand overlay -->

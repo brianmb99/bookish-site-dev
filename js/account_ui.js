@@ -256,6 +256,7 @@ async function renderAccountModalContent(container) {
 
       <div class="account-data-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #334155;">
         <h3 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #94a3b8;">Your Data</h3>
+        <p style="font-size: 0.8rem; color: #cbd5e1; margin: 0 0 12px 0; line-height: 1.5;">Your books are yours — encrypted so only you can access them, not us, not anyone.</p>
         <button id="exportBooksBtn" type="button" class="btn secondary" style="width: 100%; margin-bottom: 8px;">📥 Export my books</button>
         <p style="font-size: 0.75rem; color: #64748b; margin: 4px 0 0 0; line-height: 1.5;">Export books from this device as CSV.</p>
         <a href="/forever.html" target="_blank" rel="noopener" style="font-size: 0.75rem; color: #60a5fa; display: inline-block; margin-top: 6px;">Export from cloud →</a>
@@ -1550,7 +1551,7 @@ function handleManualSeedLogin() {
       await storeSessionEncryptedSeed(account.seed);
 
       // Try to download account metadata from Arweave if it exists
-      statusDiv.innerHTML = '<span style="color:#10b981;">✓ Recovery phrase verified, checking Arweave...</span>';
+      statusDiv.innerHTML = '<span style="color:#10b981;">✓ Recovery phrase verified, checking storage...</span>';
 
       let accountData = {
         version: 1,
@@ -1832,7 +1833,7 @@ function handleBuyTransak() {
   showAccountModal(`
     <h3>Transak Coming Soon</h3>
     <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:16px 0;">
-      Transak integration is coming soon! For now, please use Coinbase to purchase Base ETH.
+      Transak integration is coming soon! For now, please use Coinbase to add funds.
     </p>
     <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:16px 0;">
       Transak will offer guest checkout, allowing you to purchase crypto without creating an account.
@@ -1896,10 +1897,10 @@ function showFundingValueModal(address, isFunded = false) {
       <button id="payWithCoinbaseBtn" class="btn" style="width:100%;padding:14px 20px;background:#2563eb;margin-bottom:12px;">Pay with Coinbase</button>
       <button id="payWithCardBtn" class="btn secondary" style="width:100%;padding:12px 20px;margin-bottom:12px;opacity:.6;cursor:not-allowed;" disabled>Pay with Card (Coming Soon)</button>
       <div style="margin:16px 0;">
-        <button id="toggleAdvancedBtn" class="btn-link" style="background:none;border:none;color:#94a3b8;font-size:.8rem;cursor:pointer;padding:0;">▸ Advanced: Send crypto directly</button>
+        <button id="toggleAdvancedBtn" class="btn-link" style="background:none;border:none;color:#94a3b8;font-size:.8rem;cursor:pointer;padding:0;">▸ Advanced: Send funds directly</button>
       </div>
       <div id="advancedSection" style="display:none;text-align:left;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px;margin:16px 0;">
-        <div style="font-size:.8rem;opacity:.9;margin-bottom:8px;">Send Base ETH to this address:</div>
+        <div style="font-size:.8rem;opacity:.9;margin-bottom:8px;">Send funds to this address (Base network, ETH):</div>
         <div style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px 12px;margin:8px 0;display:flex;justify-content:space-between;align-items:center;">
           <code style="font-size:.75rem;word-break:break-all;flex:1;">${address}</code>
           <button id="copyAddressBtn" class="btn secondary copy-btn" style="margin-left:8px;padding:4px 8px;font-size:.7rem;">Copy</button>
@@ -1930,7 +1931,7 @@ function showFundingValueModal(address, isFunded = false) {
     const toggleBtn = document.getElementById('toggleAdvancedBtn');
     if (advancedExpanded) {
       advancedSection.style.display = 'block';
-      toggleBtn.textContent = '▾ Advanced: Send crypto directly';
+      toggleBtn.textContent = '▾ Advanced: Send funds directly';
       if (faqExpanded) {
         faqExpanded = false;
         const faqSection = document.getElementById('faqSection');
@@ -1940,7 +1941,7 @@ function showFundingValueModal(address, isFunded = false) {
       }
     } else {
       advancedSection.style.display = 'none';
-      toggleBtn.textContent = '▸ Advanced: Send crypto directly';
+      toggleBtn.textContent = '▸ Advanced: Send funds directly';
     }
   };
 
@@ -1958,7 +1959,7 @@ function showFundingValueModal(address, isFunded = false) {
           const advancedSection = document.getElementById('advancedSection');
           const advancedBtn = document.getElementById('toggleAdvancedBtn');
           if (advancedSection) advancedSection.style.display = 'none';
-          if (advancedBtn) advancedBtn.textContent = '▸ Advanced: Send crypto directly';
+          if (advancedBtn) advancedBtn.textContent = '▸ Advanced: Send funds directly';
         }
       } else {
         faqSection.style.display = 'none';
@@ -2287,7 +2288,7 @@ function openCoinbaseOnrampWithInstructions(address) {
         </p>
         ${showManualOption ? `
         <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:16px 0;">
-          <strong>Manual option:</strong> Copy your wallet address and send Base ETH directly:
+          <strong>Manual option:</strong> Copy your address and send funds directly (Base network, ETH):
         </p>
         <div style="background:#1e293b;border:1px solid #334155;border-radius:6px;padding:12px;margin:16px 0;">
           <div style="font-size:.75rem;opacity:.7;margin-bottom:4px;">Your wallet address:</div>

@@ -181,10 +181,10 @@ export class BookRepository {
         this._emitError('post-fund-timeout', 'Funding sent. Credit pending (can take a few minutes). Try again shortly from Account.', pending);
         this._emitProgress(['Funding sent – awaiting credit', 'Retry from Account shortly']);
       } else if (e?.code === 'base-insufficient-funds' || e?.code === 'base-insufficient-funds-recent') {
-        this._emitError('base-insufficient-funds', 'Auto-fund blocked: Base wallet low on ETH. Add a small amount and retry from Account.', pending);
-        this._emitProgress(['Base wallet low on ETH', 'Add a small amount, then retry']);
+        this._emitError('base-insufficient-funds', 'Storage credit used up. Add credit in your account to resume saving.', pending);
+        this._emitProgress(['Storage credit used up', 'Add credit to resume']);
       } else {
-        this._emitProgress(['Offline – queued for publish']);
+        this._emitProgress(['Couldn\u2019t reach the server \u2013 queued for retry']);
       }
     }
 
@@ -510,11 +510,11 @@ export class BookRepository {
         this._emitError('post-fund-timeout', 'Funding sent. Credit pending (few minutes). Retry from Account shortly.', pending);
         this._emitProgress(['Funding sent – awaiting credit', 'Retry from Account shortly']);
       } else if (e?.code === 'base-insufficient-funds' || e?.code === 'base-insufficient-funds-recent') {
-        this._emitError('base-insufficient-funds', 'Auto-fund blocked: Base wallet low on ETH. Top up and retry from Account.', pending);
-        this._emitProgress(['Base wallet low on ETH', 'Add a small amount, then retry']);
+        this._emitError('base-insufficient-funds', 'Storage credit used up. Add credit in your account to resume saving.', pending);
+        this._emitProgress(['Storage credit used up', 'Add credit to resume']);
       } else {
-        this._emitError('save-failed', 'Save failed', pending);
-        this._emitProgress(['Save failed']);
+        this._emitError('save-failed', 'Something went wrong saving to the cloud. Your books are safe locally.', pending);
+        this._emitProgress(['Couldn\u2019t save to cloud \u2013 will retry']);
       }
     }
   }

@@ -556,6 +556,41 @@ export function hideAccountNudge(){
   }
 }
 
+// --- PWA install banner (iOS Safari, non-Chrome Android) ---
+let nativeInstallAvailable = false;
+window.addEventListener('beforeinstallprompt', () => { nativeInstallAvailable = true; });
+
+function showPwaInstallBanner() {
+  if (nativeInstallAvailable) return;
+  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) return;
+  if (localStorage.getItem('bookish.installBannerDismissed')) return;
+  if (entries.length < 1) return;
+
+  const banner = document.getElementById('pwaInstallBanner');
+  const textEl = document.getElementById('pwaInstallText');
+  if (!banner || !textEl) return;
+
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(ua);
+  const isAndroid = /Android/.test(ua);
+
+  if (isIOS) {
+    textEl.innerHTML = 'Install Bookish on your phone: tap <strong>Share</strong> \u25a1\u2191 then <strong>Add to Home Screen</strong>';
+  } else if (isAndroid) {
+    textEl.innerHTML = 'Install Bookish: tap <strong>Menu</strong> \u22ee then <strong>Add to Home Screen</strong>';
+  } else {
+    return; // Desktop without native install — don't show
+  }
+
+  banner.style.display = 'block';
+}
+
+document.getElementById('pwaInstallDismiss')?.addEventListener('click', () => {
+  const banner = document.getElementById('pwaInstallBanner');
+  if (banner) banner.style.display = 'none';
+  localStorage.setItem('bookish.installBannerDismissed', 'true');
+});
+
 // --- Generated cover color palette ---
 const COVER_PALETTE=[
   'linear-gradient(145deg,#6b2137 0%,#4a1528 100%)', // burgundy
@@ -669,7 +704,7 @@ function render(){
       if(illustration) illustration.textContent = '\u23F3';
     } else {
       if(headline) headline.textContent = 'Your reading journey starts here';
-      if(subtext) subtext.textContent = 'Track what you read. Keep it forever. Access it anywhere.';
+      if(subtext) subtext.textContent = 'Track what you read. Keep it forever. It's yours.';
       if(addBtn) addBtn.style.display = '';
       if(signInDiv) signInDiv.style.display = storageManager.isLoggedIn() ? 'none' : '';
       if(illustration) illustration.textContent = '\uD83D\uDCDA';
@@ -950,7 +985,7 @@ async function createServerless(payload) {
     if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('pulse'); setTimeout(() => el.classList.remove('pulse'), 1500); }
     return;
   }
-  if (entries.length === 1) showCelebrationToast();
+  if (entries.length === 1) { showCelebrationToast(); showPwaInstallBanner(); }
   if (entries.length === 3) showAccountNudge();
 }
 
@@ -973,8 +1008,8 @@ form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) re
   const toastMsg = rsValue === READING_STATUS.WANT_TO_READ ? 'Added to Want to Read' : rsValue === READING_STATUS.READING ? 'Added to Currently Reading' : (!priorTxid ? 'Added to Shelf' : null);
   if(priorTxid){
   closeModal();
-  editServerless(priorTxid,payload).catch(()=> { walletError='Save failed'; uiStatusManager.refresh(); });
-} else { closeModal(); createServerless(payload).then(()=>{ if(toastMsg) showStatusToast(toastMsg); }).catch(()=> { walletError='Save failed'; uiStatusManager.refresh(); }); }
+  editServerless(priorTxid,payload).catch(()=> { walletError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); });
+} else { closeModal(); createServerless(payload).then(()=>{ if(toastMsg) showStatusToast(toastMsg); }).catch(()=> { walletError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); }); }
 });
 
 deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value; if(!txid) return; closeModal(); await deleteServerless(txid); });
@@ -1042,6 +1077,7 @@ async function initCacheLayer(){
     console.log('[Bookish] Loaded', entries.length, 'books from cache');
     // Show account nudge on load if 3+ books and logged out (per FIRST_RUN_EXPERIENCE.md)
     showAccountNudge();
+    showPwaInstallBanner();
 
     // Initialize sync manager
     initSyncManager({
@@ -1088,15 +1124,18 @@ async function initCacheLayer(){
   } catch(err) {
     console.error('[Bookish] IndexedDB failed to initialize:', err);
     // Fail fast with clear error message
-    walletError='Storage Error: IndexedDB unavailable'; uiStatusManager.refresh();
+    walletError='Local storage unavailable. Your published books are safe.'; uiStatusManager.refresh();
     // Show error in UI
     if(emptyEl) {
       emptyEl.style.display='block';
       emptyEl.innerHTML = `
         <div style="max-width:600px;margin:40px auto;padding:32px;background:#1e293b;border:2px solid #dc2626;border-radius:12px;text-align:left;">
-          <h2 style="color:#dc2626;margin:0 0 16px 0;font-size:1.5rem;">⚠️ Storage Error</h2>
-          <p style="font-size:1rem;line-height:1.6;margin-bottom:16px;">
-            <strong>IndexedDB is unavailable.</strong> Bookish requires local storage to function.
+          <h2 style="color:#dc2626;margin:0 0 16px 0;font-size:1.5rem;">⚠️ Local Storage Error</h2>
+          <p style="font-size:1rem;line-height:1.6;margin-bottom:8px;">
+            <strong>Local storage is unavailable.</strong> Bookish requires it to function.
+          </p>
+          <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin-bottom:16px;">
+            If you have a Bookish account, your published books are safe — they're stored permanently and will re-sync when this is fixed.
           </p>
           <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin-bottom:24px;">
             <strong>Error:</strong> ${err.message || 'Internal error opening backing store for indexedDB.open'}
@@ -1124,7 +1163,7 @@ async function initCacheLayer(){
 }
 
 // --- Status & sync bootstrap ---
-async function loadStatus(){ const have=await ensureKeys(); if(!have){ uiStatusManager.refresh(); return; } try { const owner=await browserClient.address(); uiStatusManager.refresh(); } catch{ walletError='Key error'; uiStatusManager.refresh(); } }
+async function loadStatus(){ const have=await ensureKeys(); if(!have){ uiStatusManager.refresh(); return; } try { const owner=await browserClient.address(); uiStatusManager.refresh(); } catch{ walletError='Account error. Try signing in again.'; uiStatusManager.refresh(); } }
 
 // --- Init ---
 // Ensure modal is closed on page load

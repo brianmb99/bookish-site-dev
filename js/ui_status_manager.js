@@ -90,15 +90,18 @@ class UIStatusManager {
     // ═══════════════════════════════════════════════════════════════
     if (balance.error) {
       return {
-        message: `Wallet error: ${balance.error}`,
+        message: balance.error,
         priority: PRIORITY.CRITICAL,
         maxDisplay: 10000 // Show for 10s, then recalc
       };
     }
 
     if (sync.error) {
+      const friendly = sync.error.toLowerCase().includes('fetch')
+        ? 'Couldn\u2019t reach the server. Your books are safe \u2014 we\u2019ll retry when you\u2019re back online.'
+        : sync.error;
       return {
-        message: `Sync error: ${sync.error}`,
+        message: friendly,
         priority: PRIORITY.CRITICAL,
         maxDisplay: 10000
       };
