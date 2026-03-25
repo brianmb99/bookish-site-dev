@@ -1910,7 +1910,7 @@ function showFundingValueModal(address, isFunded = false) {
   // Pay with Coinbase
   document.getElementById('payWithCoinbaseBtn').onclick = () => {
     closeHelperModal();
-    showFundingProgress(address);
+    showFundingProgress(address, isFunded);
     openCoinbaseOnrampWithInstructions(address);
   };
 
@@ -1952,18 +1952,25 @@ function showFundingValueModal(address, isFunded = false) {
  * Phase 3: Show progress modal during funding
  * @param {string} address - Wallet address
  */
-function showFundingProgress(address) {
+function showFundingProgress(address, isFunded) {
   let progressState = 'initiated'; // initiated, waiting, setting-up
+  window.__fundingIsFunded = isFunded; // Store for success callback
+
+  const title = isFunded ? 'Adding Credit...' : 'Setting Up Cloud Backup...';
+  const body = isFunded
+    ? 'Your credit will be added once payment is confirmed.'
+    : 'We\u2019ll automatically set up your permanent storage once payment is confirmed.';
+  const step3 = isFunded ? 'Adding credit' : 'Setting up storage';
 
   showAccountModal(`
     <div style="text-align:center;padding:20px 0;">
-      <h3 style="margin:0 0 16px 0;">Setting Up Cloud Backup...</h3>
+      <h3 style="margin:0 0 16px 0;">${title}</h3>
       <div style="font-size:3rem;margin:16px 0;opacity:.9;">⏳</div>
       <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:0 0 24px 0;">
         Complete your purchase in the Coinbase window.
       </p>
       <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:0 0 24px 0;">
-        We'll automatically set up your permanent storage once payment is confirmed.
+        ${body}
       </p>
       <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px;margin:0 0 24px 0;text-align:left;">
         <div id="progressStep1" class="funding-progress-step" style="display:flex;align-items:center;gap:8px;font-size:.85rem;margin:8px 0;opacity:1;">
@@ -1973,7 +1980,7 @@ function showFundingProgress(address) {
           <span>○</span> <span>Waiting for confirmation...</span>
         </div>
         <div id="progressStep3" class="funding-progress-step" style="display:flex;align-items:center;gap:8px;font-size:.85rem;margin:8px 0;opacity:.5;">
-          <span>○</span> <span>Setting up storage</span>
+          <span>○</span> <span>${step3}</span>
         </div>
       </div>
       <button id="cancelFundingBtn" class="btn-link" style="background:none;border:none;color:#94a3b8;font-size:.875rem;cursor:pointer;">Cancel</button>
@@ -2003,6 +2010,7 @@ function showFundingProgress(address) {
     window.__fundingProgressState = null;
     window.__updateFundingProgress = null;
     window.__fundingStartedAt = null;
+    window.__fundingIsFunded = null;
   };
 
   // Store progress state updater globally so Coinbase callbacks can update it
@@ -2073,13 +2081,18 @@ function showFundingProgress(address) {
 /**
  * Phase 3: Show success modal after funding completes
  */
-function showFundingSuccess() {
+function showFundingSuccess(isFunded) {
+  const title = isFunded ? 'Credit Added!' : 'Cloud Backup Enabled!';
+  const body = isFunded
+    ? 'Your cloud storage balance has been topped up.'
+    : 'Your books are now saved permanently and accessible from any device.';
+
   showAccountModal(`
     <div style="text-align:center;padding:20px 0;">
       <div class="success-checkmark" style="font-size:3rem;margin-bottom:16px;animation:scaleIn .3s ease-out;color:#10b981;">✓</div>
-      <h3 style="margin:0 0 12px 0;">Cloud Backup Enabled!</h3>
+      <h3 style="margin:0 0 12px 0;">${title}</h3>
       <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin:0 0 24px 0;">
-        Your books are now saved permanently and accessible from any device.
+        ${body}
       </p>
       <button id="backToBooksBtn" class="btn" style="width:100%;padding:14px 20px;background:#2563eb;">Back to My Books</button>
     </div>
@@ -2110,8 +2123,17 @@ async function handleBuyStorage() {
       return;
     }
 
-    // Use cached balance for instant display (non-blocking)
-    const cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH;
+    // Use cached balance, fall back to on-chain fetch if unavailable
+    let cachedBalance = window.bookishSyncManager?.getSyncStatus?.()?.currentBalanceETH;
+    if (cachedBalance === null || cachedBalance === undefined) {
+      try {
+        const { getWalletBalance } = await import('./core/wallet_core.js');
+        const { balanceETH } = await getWalletBalance(walletInfo.address);
+        cachedBalance = balanceETH;
+      } catch (err) {
+        console.warn('[Bookish:AccountUI] Could not fetch balance for isFunded check:', err);
+      }
+    }
     const isFunded = cachedBalance !== null && cachedBalance !== undefined && parseFloat(cachedBalance) >= 0.00002;
 
     // Show modal immediately with cached state
@@ -2529,13 +2551,15 @@ export async function handlePersistAccountToArweave(isAutoTrigger = false) {
         }
         // Close progress modal and show success
         closeHelperModal();
+        const wasFunded = window.__fundingIsFunded;
         setTimeout(() => {
-          showFundingSuccess();
+          showFundingSuccess(wasFunded);
         }, 300);
         // Clear progress state
         window.__fundingProgressState = null;
         window.__updateFundingProgress = null;
         window.__fundingStartedAt = null;
+        window.__fundingIsFunded = null;
       }
     }, 2000);
 
