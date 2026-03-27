@@ -36,6 +36,14 @@
     .success{color:#16a34a}
     .footer{margin-top:28px;padding-top:20px;border-top:1px solid #e2e8f0;font-size:.75rem;color:#94a3b8;text-align:center;line-height:1.6}
     .footer a{color:#2563eb}
+    #exportChoice{display:none;margin-top:20px}
+    .export-cards{display:flex;gap:16px}
+    .export-card{flex:1;border:1px solid #e2e8f0;border-radius:12px;padding:20px;text-align:center;background:#fff}
+    .export-card h3{margin:0 0 8px;font-size:1rem}
+    .export-card p{font-size:.8rem;color:#64748b;margin:0 0 16px;line-height:1.5}
+    .export-card .btn{font-size:.875rem;padding:10px 16px}
+    .export-card .icon{font-size:1.5rem;margin-bottom:8px}
+    @media(max-width:500px){.export-cards{flex-direction:column}}
     .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;width:100%}
     .nav-brand{font-size:1.1rem;font-weight:600;text-decoration:none;color:#1e293b;letter-spacing:-0.02em}
     .nav-links{display:flex;align-items:center;gap:8px;font-size:.8rem}
@@ -87,6 +95,22 @@
     <p class="secure" id="secureMsg">Your credentials never leave your browser. All processing happens locally.</p>
     <button id="exportBtn" class="btn">Export My Books</button>
     <div id="status">Ready to export.</div>
+    <div id="exportChoice">
+      <div class="export-cards">
+        <div class="export-card">
+          <div class="icon">📄</div>
+          <h3>CSV File</h3>
+          <p>Spreadsheet-compatible. Import into other apps.</p>
+          <button id="downloadCsvBtn" class="btn">Download</button>
+        </div>
+        <div class="export-card">
+          <div class="icon">🎨</div>
+          <h3>Visual Page</h3>
+          <p>Beautiful HTML page with cover art. Share it, print it, keep it forever.</p>
+          <button id="downloadHtmlBtn" class="btn">Download</button>
+        </div>
+      </div>
+    </div>
     <div class="footer">Recently added books may take up to 30 minutes to appear. Fully auditable — right-click to view page source.</div>
   </div>
   <script>
@@ -2282,7 +2306,7 @@ aes-js/lib.esm/aes.js:
     var payload = JSON.parse(new TextDecoder().decode(ptBytes));
     if(!payload.seed || typeof payload.seed !== 'string') throw new Error('Could not decrypt account data. Please verify your credentials.');
     console.log('[Export] Credential decrypted successfully. Display name:', payload.displayName);
-    return payload.seed;
+    return { seed: payload.seed, displayName: payload.displayName || '' };
   }
 
   // --- Query all book entries with pagination (uses shared query module) ---
@@ -2334,8 +2358,140 @@ aes-js/lib.esm/aes.js:
     return books.length;
   }
 
-  // --- Export flow (shared tail: seed -> address -> books -> CSV) ---
-  async function exportBooksFromSeed(seed){
+  // --- HTML generation helpers ---
+  var HTML_COVER_PALETTE=[
+    '#6b2137','#1e3a5f','#2d4a3e','#5b4a3f','#4a3b6b',
+    '#3a5043','#5a3e3e','#2a4a5a','#5a4a2a','#4a2a4a'
+  ];
+  function htmlCoverColor(title){
+    var h=0;for(var i=0;i<title.length;i++)h=((h<<5)-h+title.charCodeAt(i))|0;
+    return HTML_COVER_PALETTE[Math.abs(h)%HTML_COVER_PALETTE.length];
+  }
+  function escapeHtml(s){
+    if(!s)return'';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function renderStars(rating){
+    if(!rating||rating<1||rating>5)return'';
+    var s='';for(var i=0;i<rating;i++)s+='★';return s;
+  }
+  function statusLabel(s){
+    var st=(s||'').toLowerCase();
+    if(st==='want_to_read')return'Want to Read';
+    if(st==='reading')return'Currently Reading';
+    if(st==='read')return'Read';
+    return'';
+  }
+  var STATUS_ORDER=['want_to_read','reading','read',''];
+
+  function generateAndDownloadHTML(books, displayName){
+    // Group by reading status
+    var groups={};
+    books.forEach(function(b){
+      var key=(b.readingStatus||b.status||'').toLowerCase();
+      if(key!=='want_to_read'&&key!=='reading'&&key!=='read')key='';
+      if(!groups[key])groups[key]=[];
+      groups[key].push(b);
+    });
+    // Sort each group by createdAt descending
+    Object.keys(groups).forEach(function(k){
+      groups[k].sort(function(a,b){
+        return(b.createdAt||b.created||0)-(a.createdAt||a.created||0);
+      });
+    });
+
+    var now=new Date();
+    var monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var dateStr=monthNames[now.getMonth()]+' '+now.getFullYear();
+    var nameStr=escapeHtml(displayName)||'My';
+    var title=nameStr+(nameStr==='My'?'':'\u2019s')+' Reading List';
+    var safeName=(displayName||'library').replace(/[^a-zA-Z0-9_-]/g,'_').toLowerCase();
+
+    var cardsHtml='';
+    STATUS_ORDER.forEach(function(key){
+      if(!groups[key]||groups[key].length===0)return;
+      var label=statusLabel(key)||(key===''?'No Status':'');
+      cardsHtml+='<div class="section"><h2>'+escapeHtml(label)+' <span class="count">('+groups[key].length+')</span></h2><div class="grid">';
+      groups[key].forEach(function(b){
+        var coverHtml;
+        if(b.coverImage){
+          var mime=b.mimeType||'image/jpeg';
+          coverHtml='<img src="data:'+escapeHtml(mime)+';base64,'+b.coverImage+'" alt="'+escapeHtml(b.title)+'">';
+        }else{
+          var col=htmlCoverColor(b.title||'');
+          coverHtml='<div class="placeholder" style="background:'+col+'"><span>'+escapeHtml(b.title||'Untitled')+'</span></div>';
+        }
+        var stars=renderStars(b.rating);
+        var dateAdded=formatDateAdded(b.createdAt||b.created);
+        var dateRead=b.dateRead||'';
+        var dateDisplay=dateRead||dateAdded;
+        var notes=b.notes||'';
+        if(notes.length>200)notes=notes.slice(0,200)+'...';
+
+        cardsHtml+='<div class="card"><div class="cover">'+coverHtml+'</div>';
+        cardsHtml+='<div class="info"><div class="book-title">'+escapeHtml(b.title||'Untitled')+'</div>';
+        cardsHtml+='<div class="author">'+escapeHtml(b.author||'')+'</div>';
+        if(stars)cardsHtml+='<div class="stars">'+stars+'</div>';
+        if(dateDisplay)cardsHtml+='<div class="date">'+escapeHtml(dateDisplay)+'</div>';
+        if(notes)cardsHtml+='<div class="notes">'+escapeHtml(notes)+'</div>';
+        cardsHtml+='</div></div>';
+      });
+      cardsHtml+='</div></div>';
+    });
+
+    var html='<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escapeHtml(title)+'</title><style>'
+      +'*{box-sizing:border-box;margin:0;padding:0}'
+      +'body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#fff;color:#1e293b;padding:40px 24px;max-width:900px;margin:0 auto}'
+      +'header{text-align:center;margin-bottom:40px}'
+      +'header h1{font-size:1.75rem;font-weight:700;margin-bottom:6px}'
+      +'header .meta{font-size:.9rem;color:#64748b}'
+      +'.section{margin-bottom:36px}'
+      +'.section h2{font-size:1.25rem;text-transform:uppercase;letter-spacing:.08em;color:#64748b;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:16px}'
+      +'.section h2 .count{font-weight:400;font-size:.9rem}'
+      +'.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}'
+      +'.card{display:flex;flex-direction:column;background:#f8fafc;border-radius:10px;overflow:hidden}'
+      +'.cover{width:100%;display:flex;justify-content:center;align-items:center;background:#e2e8f0}'
+      +'.cover img{width:120px;height:auto;display:block}'
+      +'.cover .placeholder{width:100%;min-height:170px;display:flex;align-items:center;justify-content:center;padding:16px}'
+      +'.cover .placeholder span{color:#fff;font-size:.8rem;font-weight:600;text-align:center;writing-mode:vertical-rl;text-orientation:mixed;max-height:150px;overflow:hidden}'
+      +'.info{padding:10px 12px 14px}'
+      +'.book-title{font-size:.95rem;font-weight:600;line-height:1.3}'
+      +'.author{font-size:.85rem;color:#64748b;margin-top:2px}'
+      +'.stars{color:#f59e0b;font-size:.9rem;margin-top:4px}'
+      +'.date{font-size:.75rem;color:#94a3b8;margin-top:4px}'
+      +'.notes{font-size:.8rem;font-style:italic;color:#64748b;margin-top:6px;line-height:1.4}'
+      +'footer{text-align:center;margin-top:48px;padding-top:24px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:.8rem;line-height:1.8}'
+      +'footer a{color:#2563eb;text-decoration:none}'
+      +'@media(max-width:768px){.grid{grid-template-columns:repeat(3,1fr)}}'
+      +'@media(max-width:500px){.grid{grid-template-columns:repeat(2,1fr)}.cover img{width:100px}}'
+      +'@media print{body{padding:20px}.card{break-inside:avoid}.grid{gap:12px}}'
+      +'</style></head><body>'
+      +'<header><h1>📚 '+escapeHtml(title)+'</h1>'
+      +'<div class="meta">'+books.length+' books · Exported from Bookish · '+dateStr+'</div></header>'
+      +cardsHtml
+      +'<footer>Exported from <a href="https://getbookish.app">Bookish</a><br>'
+      +'Your books, stored permanently on Arweave.<br>'
+      +'This page has no external dependencies — it works forever, even offline.</footer>'
+      +'</body></html>';
+
+    var blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;
+    a.download='bookish-library-'+safeName+'.html';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // --- State for export choice ---
+  var exportChoiceEl = document.getElementById('exportChoice');
+  var downloadCsvBtn = document.getElementById('downloadCsvBtn');
+  var downloadHtmlBtn = document.getElementById('downloadHtmlBtn');
+  var pendingBooks = null;
+  var pendingDisplayName = '';
+
+  // --- Export flow (shared tail: seed -> address -> books -> show choice) ---
+  async function exportBooksFromSeed(seed, displayName){
     setStatus('Deriving wallet...');
     var address = await B.deriveWalletAddress(seed);
     console.log('[Export] Derived wallet address:', address);
@@ -2361,32 +2517,47 @@ aes-js/lib.esm/aes.js:
     }
 
     if(books.length===0){setStatus('Found entries but could not decrypt any books.',true);return;}
-    var count=generateAndDownloadCSV(books);
-    setStatus('Exported '+count+' books! Your download has started.');
+    pendingBooks = books;
+    pendingDisplayName = displayName || '';
+    setStatus('Found ' + books.length + ' books. Choose your export:');
     statusEl.classList.add('success');
+    exportChoiceEl.style.display = 'block';
     emailInput.value = '';
     passwordInput.value = '';
     seedInput.value = '';
   }
+
+  downloadCsvBtn.addEventListener('click', function(){
+    if(!pendingBooks) return;
+    generateAndDownloadCSV(pendingBooks);
+  });
+
+  downloadHtmlBtn.addEventListener('click', function(){
+    if(!pendingBooks) return;
+    generateAndDownloadHTML(pendingBooks, pendingDisplayName);
+  });
 
   // --- Main export handler ---
   async function exportBooks(){
     exportBtn.disabled=true;
     setStatus('Starting...');
     try{
+      exportChoiceEl.style.display = 'none';
+      pendingBooks = null;
+      pendingDisplayName = '';
       if(activeTab==='email'){
         var email=emailInput.value.trim();
         var password=passwordInput.value;
         if(!email){setStatus('Please enter your email.',true);return;}
         if(!password){setStatus('Please enter your password.',true);return;}
-        var seed=await resolveSeedFromCredentials(email, password);
+        var cred=await resolveSeedFromCredentials(email, password);
         setStatus('Found account. Searching for books...');
-        await exportBooksFromSeed(seed);
+        await exportBooksFromSeed(cred.seed, cred.displayName);
       }else{
         var raw=seedInput.value;
         if(!raw.trim()){setStatus('Please enter your recovery phrase.',true);return;}
         if(!B.validateSeed(raw)){setStatus('Invalid recovery phrase. Please check that you\'ve entered all 12 words correctly.',true);return;}
-        await exportBooksFromSeed(raw);
+        await exportBooksFromSeed(raw, '');
       }
     }catch(err){
       setStatus('Error: '+(err?.message||String(err)),true);

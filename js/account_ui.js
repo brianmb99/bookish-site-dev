@@ -2270,7 +2270,7 @@ async function openCoinbaseOnrampWithInstructions(address) {
       let showManualOption = true;
 
       if (errorMessage.includes('not configured') || errorMessage.includes('credentials')) {
-        errorMessage = 'Coinbase integration is not configured on the server. Please contact support or fund your wallet manually.';
+        errorMessage = 'Coinbase integration is not configured on the server. Please contact support or add funds manually.';
         showManualOption = true;
       } else if (errorMessage.includes('Popup blocked')) {
         errorMessage = 'Your browser blocked the popup. Please allow popups for this site and try again.';
