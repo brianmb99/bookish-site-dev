@@ -2360,8 +2360,16 @@ aes-js/lib.esm/aes.js:
 
   // --- HTML generation helpers ---
   var HTML_COVER_PALETTE=[
-    '#6b2137','#1e3a5f','#2d4a3e','#5b4a3f','#4a3b6b',
-    '#3a5043','#5a3e3e','#2a4a5a','#5a4a2a','#4a2a4a'
+    'linear-gradient(145deg,#6b2137 0%,#4a1528 100%)',
+    'linear-gradient(145deg,#1e3a5f 0%,#152a45 100%)',
+    'linear-gradient(145deg,#2d4a3e 0%,#1c332b 100%)',
+    'linear-gradient(145deg,#5b4a3f 0%,#3d312a 100%)',
+    'linear-gradient(145deg,#4a3b6b 0%,#332852 100%)',
+    'linear-gradient(145deg,#3a5043 0%,#263830 100%)',
+    'linear-gradient(145deg,#5a3e3e 0%,#3d2929 100%)',
+    'linear-gradient(145deg,#2a4a5a 0%,#1c3340 100%)',
+    'linear-gradient(145deg,#5a4a2a 0%,#3d3220 100%)',
+    'linear-gradient(145deg,#4a2a4a 0%,#331e33 100%)'
   ];
   function htmlCoverColor(title){
     var h=0;for(var i=0;i<title.length;i++)h=((h<<5)-h+title.charCodeAt(i))|0;
@@ -2370,10 +2378,6 @@ aes-js/lib.esm/aes.js:
   function escapeHtml(s){
     if(!s)return'';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-  function renderStars(rating){
-    if(!rating||rating<1||rating>5)return'';
-    var s='';for(var i=0;i<rating;i++)s+='★';return s;
   }
   function statusLabel(s){
     var st=(s||'').toLowerCase();
@@ -2384,6 +2388,54 @@ aes-js/lib.esm/aes.js:
   }
   var STATUS_ORDER=['want_to_read','reading','read',''];
 
+  function buildExportCard(b){
+    var rs=(b.readingStatus||b.status||'').toLowerCase();
+    var isReading=rs==='reading';
+    var isWtr=rs==='want_to_read';
+    // Cover
+    var coverInner;
+    if(b.coverImage){
+      var mime=b.mimeType||'image/jpeg';
+      var dataUrl='data:'+mime+';base64,'+b.coverImage;
+      coverInner='<img src="'+escapeHtml(dataUrl)+'" alt="'+escapeHtml(b.title)+'">';
+    }else{
+      var grad=htmlCoverColor(b.title||'');
+      coverInner='<div class="generated-cover" style="background:'+grad+'">'
+        +'<span class="generated-title">'+escapeHtml(b.title||'Untitled')+'</span>'
+        +(b.author?'<span class="generated-author">'+escapeHtml(b.author)+'</span>':'')
+        +'</div>';
+    }
+    var coverStyle=b.coverImage?' style="--cover-url:url(\'data:'+(b.mimeType||'image/jpeg')+';base64,'+b.coverImage+'\')"':'';
+    // Metadata strip
+    var metaParts=[];
+    if(b.rating&&b.rating>=1&&b.rating<=5){
+      var filled='';for(var i=0;i<b.rating;i++)filled+='\u2605';
+      var empty='';for(var j=0;j<5-b.rating;j++)empty+='\u2606';
+      metaParts.push('<span class="card-rating">'+filled+'<span class="stars-empty">'+empty+'</span></span>');
+    }
+    if(b.owned)metaParts.push('<span class="card-owned">\ud83d\udcd6 Owned</span>');
+    var metaHtml=metaParts.length?'<div class="card-metadata">'+metaParts.join('')+'</div>':'';
+    // Details
+    var detailsInner='';
+    if(isWtr)detailsInner='<div class="card-wtr-label">Want to Read</div>';
+    else if(isReading)detailsInner='<div class="card-reading-label"><span>\u25d0 Reading</span></div>';
+    else if(b.dateRead)detailsInner='<span class="read-date">Read '+escapeHtml(b.dateRead)+'</span>';
+    // Notes
+    var notes=b.notes||'';
+    if(notes.length>200)notes=notes.slice(0,200)+'...';
+    var notesHtml=notes?'<p class="card-notes">'+escapeHtml(notes)+'</p>':'';
+
+    return '<div class="card"'+(isReading?' data-reading="true"':'')+'>'
+      +'<div class="cover"'+coverStyle+'>'+coverInner+'</div>'
+      +'<div class="meta">'
+      +'<p class="title">'+escapeHtml(b.title||'Untitled')+'</p>'
+      +'<p class="author">'+escapeHtml(b.author||'')+'</p>'
+      +metaHtml
+      +'<div class="details">'+detailsInner+'</div>'
+      +notesHtml
+      +'</div></div>';
+  }
+
   function generateAndDownloadHTML(books, displayName){
     // Group by reading status
     var groups={};
@@ -2393,7 +2445,6 @@ aes-js/lib.esm/aes.js:
       if(!groups[key])groups[key]=[];
       groups[key].push(b);
     });
-    // Sort each group by createdAt descending
     Object.keys(groups).forEach(function(k){
       groups[k].sort(function(a,b){
         return(b.createdAt||b.created||0)-(a.createdAt||a.created||0);
@@ -2412,67 +2463,61 @@ aes-js/lib.esm/aes.js:
       if(!groups[key]||groups[key].length===0)return;
       var label=statusLabel(key)||(key===''?'No Status':'');
       cardsHtml+='<div class="section"><h2>'+escapeHtml(label)+' <span class="count">('+groups[key].length+')</span></h2><div class="grid">';
-      groups[key].forEach(function(b){
-        var coverHtml;
-        if(b.coverImage){
-          var mime=b.mimeType||'image/jpeg';
-          coverHtml='<img src="data:'+escapeHtml(mime)+';base64,'+b.coverImage+'" alt="'+escapeHtml(b.title)+'">';
-        }else{
-          var col=htmlCoverColor(b.title||'');
-          coverHtml='<div class="placeholder" style="background:'+col+'"><span>'+escapeHtml(b.title||'Untitled')+'</span></div>';
-        }
-        var stars=renderStars(b.rating);
-        var dateAdded=formatDateAdded(b.createdAt||b.created);
-        var dateRead=b.dateRead||'';
-        var dateDisplay=dateRead||dateAdded;
-        var notes=b.notes||'';
-        if(notes.length>200)notes=notes.slice(0,200)+'...';
-
-        cardsHtml+='<div class="card"><div class="cover">'+coverHtml+'</div>';
-        cardsHtml+='<div class="info"><div class="book-title">'+escapeHtml(b.title||'Untitled')+'</div>';
-        cardsHtml+='<div class="author">'+escapeHtml(b.author||'')+'</div>';
-        if(stars)cardsHtml+='<div class="stars">'+stars+'</div>';
-        if(dateDisplay)cardsHtml+='<div class="date">'+escapeHtml(dateDisplay)+'</div>';
-        if(notes)cardsHtml+='<div class="notes">'+escapeHtml(notes)+'</div>';
-        cardsHtml+='</div></div>';
-      });
+      groups[key].forEach(function(b){ cardsHtml+=buildExportCard(b); });
       cardsHtml+='</div></div>';
     });
 
-    var html='<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escapeHtml(title)+'</title><style>'
-      +'*{box-sizing:border-box;margin:0;padding:0}'
-      +'body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#fff;color:#1e293b;padding:40px 24px;max-width:900px;margin:0 auto}'
-      +'header{text-align:center;margin-bottom:40px}'
-      +'header h1{font-size:1.75rem;font-weight:700;margin-bottom:6px}'
-      +'header .meta{font-size:.9rem;color:#64748b}'
-      +'.section{margin-bottom:36px}'
-      +'.section h2{font-size:1.25rem;text-transform:uppercase;letter-spacing:.08em;color:#64748b;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:16px}'
-      +'.section h2 .count{font-weight:400;font-size:.9rem}'
-      +'.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}'
-      +'.card{display:flex;flex-direction:column;background:#f8fafc;border-radius:10px;overflow:hidden}'
-      +'.cover{width:100%;display:flex;justify-content:center;align-items:center;background:#e2e8f0}'
-      +'.cover img{width:120px;height:auto;display:block}'
-      +'.cover .placeholder{width:100%;min-height:170px;display:flex;align-items:center;justify-content:center;padding:16px}'
-      +'.cover .placeholder span{color:#fff;font-size:.8rem;font-weight:600;text-align:center;writing-mode:vertical-rl;text-orientation:mixed;max-height:150px;overflow:hidden}'
-      +'.info{padding:10px 12px 14px}'
-      +'.book-title{font-size:.95rem;font-weight:600;line-height:1.3}'
-      +'.author{font-size:.85rem;color:#64748b;margin-top:2px}'
-      +'.stars{color:#f59e0b;font-size:.9rem;margin-top:4px}'
-      +'.date{font-size:.75rem;color:#94a3b8;margin-top:4px}'
-      +'.notes{font-size:.8rem;font-style:italic;color:#64748b;margin-top:6px;line-height:1.4}'
-      +'footer{text-align:center;margin-top:48px;padding-top:24px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:.8rem;line-height:1.8}'
-      +'footer a{color:#2563eb;text-decoration:none}'
-      +'@media(max-width:768px){.grid{grid-template-columns:repeat(3,1fr)}}'
-      +'@media(max-width:500px){.grid{grid-template-columns:repeat(2,1fr)}.cover img{width:100px}}'
-      +'@media print{body{padding:20px}.card{break-inside:avoid}.grid{gap:12px}}'
-      +'</style></head><body>'
-      +'<header><h1>📚 '+escapeHtml(title)+'</h1>'
-      +'<div class="meta">'+books.length+' books · Exported from Bookish · '+dateStr+'</div></header>'
+    var css='*{box-sizing:border-box;margin:0;padding:0}'
+      +'body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#151920;color:#f7f5f2;padding:32px 24px;min-height:100vh}'
+      +'.container{max-width:960px;margin:0 auto}'
+      +'header{text-align:center;margin-bottom:32px}'
+      +'header h1{font-size:1.5rem;font-weight:700;margin-bottom:4px;color:#f7f5f2}'
+      +'header .meta{font-size:.85rem;color:#7a7670}'
+      +'.section{margin-bottom:32px}'
+      +'.section h2{font-size:.85rem;text-transform:uppercase;letter-spacing:.1em;color:#7a7670;padding-bottom:8px;margin-bottom:16px;border-bottom:1px solid #2a2f38}'
+      +'.section h2 .count{font-weight:400}'
+      +'.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}'
+      +'.card{display:flex;flex-direction:column;background:#1c222a;border:1px solid #2a2f38;border-radius:12px;overflow:hidden;position:relative}'
+      +'.card[data-reading="true"]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:12px 0 0 12px;background:linear-gradient(180deg,#3b82f6 0%,#60a5fa 100%);z-index:1}'
+      +'.cover{width:100%;height:0;padding-top:150%;position:relative;background:linear-gradient(145deg,#242b35 0%,#0f1114 100%);overflow:hidden}'
+      +'.cover::before{content:"";position:absolute;inset:-15px;background:var(--cover-url) center/cover no-repeat;filter:blur(15px) brightness(0.65);z-index:0;opacity:0}'
+      +'.cover:has(img)::before{opacity:1}'
+      +'.cover img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;z-index:1}'
+      +'.generated-cover{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px 10px;text-align:center;gap:4px}'
+      +'.generated-title{font-size:.8rem;font-weight:500;line-height:1.25;color:rgba(255,255,255,.85);display:-webkit-box;-webkit-line-clamp:5;line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}'
+      +'.generated-author{font-size:.6rem;font-weight:400;color:rgba(255,255,255,.45);line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
+      +'.meta{padding:10px 12px 14px}'
+      +'.title{font-size:1rem;font-weight:600;line-height:1.2;color:#f7f5f2;margin:0 0 4px}'
+      +'.author{font-size:.875rem;font-weight:500;color:#c9c5be;margin:0 0 6px}'
+      +'.card-metadata{display:flex;align-items:center;gap:6px;font-size:.6rem;opacity:.6;margin:2px 0 0;line-height:1.3}'
+      +'.card-rating{letter-spacing:1px;color:#eab308}'
+      +'.stars-empty{opacity:.4;color:#363d48}'
+      +'.card-owned{display:inline-flex;align-items:center;gap:3px}'
+      +'.details{font-size:.65rem;opacity:.65;display:flex;flex-direction:column;gap:2px;margin-top:4px}'
+      +'.card-reading-label{font-size:.7rem;color:#3b82f6;opacity:.85}'
+      +'.card-wtr-label{font-size:.65rem;color:#7a7670}'
+      +'.read-date{font-size:.65rem;color:#7a7670}'
+      +'.card-notes{font-size:.65rem;line-height:1.35;opacity:.55;margin:4px 0 0;font-style:italic;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
+      +'footer{text-align:center;margin-top:48px;padding-top:24px;border-top:1px solid #2a2f38;color:#7a7670;font-size:.75rem;line-height:1.8}'
+      +'footer a{color:#3b82f6;text-decoration:none}'
+      +'@media(max-width:768px){.grid{grid-template-columns:repeat(3,1fr);gap:18px}}'
+      +'@media(max-width:500px){.grid{grid-template-columns:repeat(2,1fr);gap:14px}}'
+      +'@media print{body{background:#fff;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+      +'.card{break-inside:avoid;border-color:#ddd}'
+      +'.title{color:#1a1a1a}.author{color:#555}'
+      +'footer{color:#888}footer a{color:#2563eb}}';
+
+    var html='<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+      +'<title>'+escapeHtml(title)+'</title>'
+      +'<style>'+css+'</style></head><body>'
+      +'<div class="container">'
+      +'<header><h1>\ud83d\udcda '+escapeHtml(title)+'</h1>'
+      +'<div class="meta">'+books.length+' books \u00b7 Exported from Bookish \u00b7 '+escapeHtml(dateStr)+'</div></header>'
       +cardsHtml
       +'<footer>Exported from <a href="https://getbookish.app">Bookish</a><br>'
       +'Your books, stored permanently on Arweave.<br>'
-      +'This page has no external dependencies — it works forever, even offline.</footer>'
-      +'</body></html>';
+      +'This page has no external dependencies \u2014 it works forever, even offline.</footer>'
+      +'</div></body></html>';
 
     var blob=new Blob([html],{type:'text/html;charset=utf-8'});
     var url=URL.createObjectURL(blob);

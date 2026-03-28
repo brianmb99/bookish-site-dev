@@ -7,6 +7,7 @@ import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
 import { buildDisplayList } from './core/shelf_filter.js';
+import { fetchSyncStatus, ackSyncedTxids } from './browser_client.js';
 
 // --- Version logging (always visible in console) ---
 {
@@ -848,8 +849,33 @@ function scheduleRenderAfterProbe(){
 
 /**
  * Probe Arweave for entries uploaded but not yet confirmed (no UI; updates cache + display).
+ * Uses dirty flag from upload proxy when available (PR-034):
+ *   - dirty=false → skip all probing (O(1))
+ *   - dirty=true  → only probe the listed txids (O(k))
+ *   - proxy unavailable → fall back to legacy per-entry probing
  */
-function probePendingArweaveConfirmations(){
+async function probePendingArweaveConfirmations(){
+  const addr = await window.bookishWallet?.getAddress?.();
+  if (addr) {
+    const status = await fetchSyncStatus(addr);
+    if (status) {
+      if (!status.dirty) return; // Nothing pending — skip all probing
+      // Only probe txids the proxy knows about
+      const pendingSet = new Set(status.pendingTxids);
+      const confirmed = [];
+      for (const e of entries) {
+        if (!e.txid || e.onArweave) continue;
+        if (!pendingSet.has(e.txid)) continue;
+        await probeAndUpdateEntry(e);
+        if (e.onArweave) confirmed.push(e.txid);
+      }
+      if (confirmed.length > 0) {
+        ackSyncedTxids(addr, confirmed).catch(() => {});
+      }
+      return;
+    }
+    // Fallback: proxy unavailable — use legacy per-entry probing
+  }
   for(const e of entries){
     if(!e.txid || e.onArweave) continue;
     probeAndUpdateEntry(e);
