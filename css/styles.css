@@ -468,6 +468,63 @@ button.secondary:hover, .btn.secondary:hover{
   margin-left:4px;
 }
 
+/* Shelf search */
+.shelf-search-wrap{margin:0 0 12px}
+.shelf-search-inner{position:relative;display:flex;align-items:center}
+.shelf-search-icon{position:absolute;left:12px;color:var(--color-text-muted);display:flex;align-items:center;pointer-events:none}
+#shelfSearch{
+  width:100%;height:44px;
+  background:var(--color-bg-deep);
+  color:var(--color-text-primary);
+  border:1px solid transparent;
+  border-radius:10px;
+  padding:0 36px 0 40px;
+  font-family:var(--font-body);
+  font-size:.9rem;
+  box-sizing:border-box;
+  transition:border-color .2s,box-shadow .2s,background .2s;
+}
+#shelfSearch:focus{outline:none;border-color:var(--color-primary);box-shadow:0 0 0 3px var(--color-primary-muted);background:var(--color-bg-base)}
+#shelfSearch::placeholder{color:var(--color-text-muted)}
+.shelf-search-clear{
+  position:absolute;right:8px;
+  width:24px;height:24px;
+  border:none;background:transparent;
+  color:var(--color-text-secondary);
+  cursor:pointer;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;
+  transition:color .15s,background .15s;
+}
+.shelf-search-clear:hover{color:var(--color-text-primary);background:var(--color-bg-elevated)}
+.shelf-search-count{font-size:.8rem;color:var(--color-text-secondary);margin-top:6px;padding-left:2px}
+
+/* Show more button */
+.show-more-wrap{text-align:center;padding:16px 0}
+.show-more-btn{
+  background:none;border:none;
+  color:var(--color-text-secondary);
+  font-family:var(--font-body);
+  font-size:.85rem;
+  cursor:pointer;padding:8px 16px;
+  transition:color .15s;
+}
+.show-more-btn:hover,.show-more-btn:focus-visible{color:var(--color-text-primary)}
+
+/* Want to Read label on search result cards */
+.card-wtr-label{
+  display:inline-block;
+  font-size:.65rem;
+  color:var(--color-text-muted);
+  font-weight:600;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  background:var(--color-bg-elevated);
+  padding:2px 6px;
+  border-radius:4px;
+  margin-top:4px;
+}
+
 /* WTR drawer overlay */
 .wtr-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:5000;animation:fadeIn .2s ease-out}
 .wtr-drawer{position:fixed;background:var(--color-bg-elevated);z-index:5001;overflow-y:auto;display:flex;flex-direction:column}

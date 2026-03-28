@@ -6,6 +6,7 @@ import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
+import { buildDisplayList } from './core/shelf_filter.js';
 
 // --- Version logging (always visible in console) ---
 {
@@ -73,6 +74,18 @@ const wtrAddBtn = document.getElementById('wtrAddBtn');
 const wtrFooterAdd = document.getElementById('wtrFooterAdd');
 const statusSelector = document.getElementById('statusSelector');
 const readingStatusInput = document.getElementById('readingStatusInput');
+
+// --- Shelf search & pagination ---
+const shelfSearchWrap = document.getElementById('shelfSearchWrap');
+const shelfSearchInput = document.getElementById('shelfSearch');
+const shelfSearchClear = document.getElementById('shelfSearchClear');
+const shelfSearchCount = document.getElementById('shelfSearchCount');
+const showMoreWrap = document.getElementById('showMoreWrap');
+const showMoreBtn = document.getElementById('showMoreBtn');
+const PAGE_SIZE = 20;
+let visibleLimit = PAGE_SIZE;
+let searchQuery = '';
+let _searchDebounce = null;
 
 function showStatusToast(msg) {
   const existing = document.getElementById('bookishStatusToast');
@@ -613,7 +626,7 @@ function generatedCoverColor(title){
 function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false; const key=entry.txid||entry.id||''; const el=key?document.querySelector('.card[data-txid="'+key+'"]'):null; if(el){ el.classList.add('deleting'); el.style.pointerEvents='none'; el.style.opacity='0.35'; } }
 
 /** Build inner HTML for a single book card */
-function buildCardHTML(e){
+function buildCardHTML(e, isWtrResult){
   const dateDisp=formatDisplayDate(e.dateRead);
   const notesSnippet = e.notes ? `<p class="card-notes">${escapeHtml(e.notes)}</p>` : '';
   const metaStrip = buildCardMetadata(e);
@@ -625,13 +638,14 @@ function buildCardHTML(e){
     ? `<div class="card-reading-label"><span class="card-reading-text">◐ Reading</span><button type="button" class="card-done-check" data-done-key="${escapeHtml(cardKey)}" title="Mark as read" aria-label="Mark as read">✓</button></div>`
     : '';
   const showDate = !isReading && dateDisp;
+  const wtrLabel = isWtrResult ? '<div class="card-wtr-label">Want to Read</div>' : '';
   return `
       <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
       <div class="meta">
         <p class="title">${e.title||'<i>Untitled</i>'}</p>
         <p class="author">${e.author||''}</p>
         ${metaStrip}
-        <div class="details">${readingRow}${showDate ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
+        <div class="details">${wtrLabel}${readingRow}${showDate ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
         ${notesSnippet}
       </div>`;
 }
@@ -714,6 +728,8 @@ function render(){
     emptyEl.style.display='block';
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
     if(actionBarEl) actionBarEl.style.display = 'none';
+    if(shelfSearchWrap) shelfSearchWrap.style.display = 'none';
+    if(showMoreWrap) showMoreWrap.style.display = 'none';
     hideAccountNudge();
     return;
   }
@@ -723,6 +739,8 @@ function render(){
     emptyEl.style.display='none';
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'block';
     if(actionBarEl) actionBarEl.style.display = '';
+    if(shelfSearchWrap) shelfSearchWrap.style.display = 'none';
+    if(showMoreWrap) showMoreWrap.style.display = 'none';
     hideAccountNudge();
     return;
   }
@@ -730,7 +748,30 @@ function render(){
   emptyEl.style.display='none';
   if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
   if(actionBarEl) actionBarEl.style.display = '';
+  if(shelfSearchWrap) shelfSearchWrap.style.display = '';
   if(storageManager.isLoggedIn()) hideAccountNudge();
+
+  // --- Search filtering + pagination via shelf_filter ---
+  const { displayEntries, matchCount, remaining, isSearching } = buildDisplayList({
+    shelfEntries, wantList, searchQuery, visibleLimit
+  });
+
+  if(isSearching){
+    if(shelfSearchCount){
+      shelfSearchCount.textContent = matchCount === 0 ? 'No matches found' : `${matchCount} result${matchCount===1?'':'s'}`;
+      shelfSearchCount.style.display = '';
+    }
+    if(showMoreWrap) showMoreWrap.style.display = 'none';
+  } else {
+    if(shelfSearchCount) shelfSearchCount.style.display = 'none';
+    if(remaining > 0){
+      if(showMoreBtn) showMoreBtn.textContent = `Show more (${remaining} remaining)`;
+      if(showMoreBtn) showMoreBtn.setAttribute('aria-label', `Show ${PAGE_SIZE} more books, ${remaining} remaining`);
+      if(showMoreWrap) showMoreWrap.style.display = '';
+    } else {
+      if(showMoreWrap) showMoreWrap.style.display = 'none';
+    }
+  }
 
   // --- Keyed DOM reconciliation ---
   const existingMap = new Map();
@@ -741,10 +782,10 @@ function render(){
   const desiredKeys = new Set();
   const orderedCards = [];
 
-  for(const e of shelfEntries){
+  for(const e of displayEntries){
     const key = e.txid || e.id || '';
     desiredKeys.add(key);
-    const fp = entryFingerprint(e);
+    const fp = entryFingerprint(e) + (e._wtrResult ? '\twtr' : '');
     const isReading = normalizeReadingStatus(e) === READING_STATUS.READING;
 
     let card = existingMap.get(key);
@@ -756,7 +797,7 @@ function render(){
         card.dataset.fmt=fmtVariant;
         card.dataset.format=rawFmt;
         if(isReading) card.dataset.reading='true'; else delete card.dataset.reading;
-        card.innerHTML=buildCardHTML(e);
+        card.innerHTML=buildCardHTML(e, e._wtrResult);
         card.dataset._fp=fp;
         if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
         else { card.style.pointerEvents=''; card.style.opacity=''; }
@@ -770,7 +811,7 @@ function render(){
       card.dataset.fmt=fmtVariant;
       card.dataset.format=rawFmt;
       if(isReading) card.dataset.reading='true';
-      card.innerHTML=buildCardHTML(e);
+      card.innerHTML=buildCardHTML(e, e._wtrResult);
       card.dataset._fp=fp;
       if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
     }
@@ -898,6 +939,38 @@ wtrClose?.addEventListener('click', closeWtrDrawer);
 wtrAddBtn?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
 wtrFooterAdd?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
 document.getElementById('shelfEmptyBrowse')?.addEventListener('click', openWtrDrawer);
+
+// --- Shelf search & show-more event handlers ---
+shelfSearchInput?.addEventListener('input', ()=>{
+  clearTimeout(_searchDebounce);
+  _searchDebounce = setTimeout(()=>{
+    searchQuery = (shelfSearchInput.value || '').trim();
+    if(shelfSearchClear) shelfSearchClear.style.display = searchQuery ? '' : 'none';
+    if(!searchQuery) visibleLimit = PAGE_SIZE;
+    render();
+  }, 150);
+});
+shelfSearchClear?.addEventListener('click', ()=>{
+  if(shelfSearchInput) shelfSearchInput.value = '';
+  searchQuery = '';
+  visibleLimit = PAGE_SIZE;
+  if(shelfSearchClear) shelfSearchClear.style.display = 'none';
+  render();
+});
+shelfSearchInput?.addEventListener('keydown', (ev)=>{
+  if(ev.key === 'Escape'){
+    ev.preventDefault();
+    if(shelfSearchInput) shelfSearchInput.value = '';
+    searchQuery = '';
+    visibleLimit = PAGE_SIZE;
+    if(shelfSearchClear) shelfSearchClear.style.display = 'none';
+    render();
+  }
+});
+showMoreBtn?.addEventListener('click', ()=>{
+  visibleLimit += PAGE_SIZE;
+  render();
+});
 
 // WTR drawer event delegation: "Start Reading" + row tap
 wtrListEl?.addEventListener('click', (ev)=>{
