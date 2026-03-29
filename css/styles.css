@@ -499,17 +499,125 @@ button.secondary:hover, .btn.secondary:hover{
 .shelf-search-clear:hover{color:var(--color-text-primary);background:var(--color-bg-elevated)}
 .shelf-search-count{font-size:.8rem;color:var(--color-text-secondary);margin-top:6px;padding-left:2px}
 
-/* Show more button */
-.show-more-wrap{text-align:center;padding:16px 0}
-.show-more-btn{
+/* Year header */
+.year-header{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  height:44px;
+  margin:0 0 12px;
+}
+.year-arrow{
   background:none;border:none;
   color:var(--color-text-secondary);
-  font-family:var(--font-body);
-  font-size:.85rem;
-  cursor:pointer;padding:8px 16px;
-  transition:color .15s;
+  font-size:1rem;
+  cursor:pointer;
+  width:44px;height:44px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:8px;
+  transition:color .15s,background .15s;
+  flex-shrink:0;
 }
-.show-more-btn:hover,.show-more-btn:focus-visible{color:var(--color-text-primary)}
+.year-arrow:hover:not(:disabled){color:var(--color-text-primary);background:var(--color-bg-elevated)}
+.year-arrow:disabled{color:var(--color-text-muted);cursor:default;opacity:.4}
+.year-arrow:focus-visible{outline:3px solid var(--color-primary);outline-offset:-1px}
+.year-label{font-size:1.1rem;font-weight:600;color:var(--color-text-primary)}
+.year-sep{color:var(--color-text-muted);font-size:.9rem}
+.year-count{font-size:.8rem;color:var(--color-text-secondary)}
+
+/* Spine navigator */
+.spine-nav{
+  padding:8px 0 12px;
+  position:relative;
+}
+.spine-strip{
+  display:flex;
+  align-items:flex-end;
+  gap:3px;
+  overflow-x:auto;
+  scrollbar-width:none;
+  justify-content:center;
+}
+.spine-strip::-webkit-scrollbar{display:none}
+.spine-strip.overflow-scroll{justify-content:flex-start}
+.spine-btn{
+  height:48px;
+  min-width:32px;
+  max-width:80px;
+  border:none;
+  border-radius:3px;
+  cursor:pointer;
+  font-size:.7rem;
+  font-weight:600;
+  color:rgba(255,255,255,.85);
+  text-shadow:0 1px 2px rgba(0,0,0,.4);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  transition:transform .2s,filter .15s,box-shadow .2s;
+  box-shadow:0 1px 3px rgba(0,0,0,.3);
+}
+.spine-btn:hover{filter:brightness(1.2)}
+.spine-btn:focus-visible{outline:3px solid var(--color-primary);outline-offset:2px}
+.spine-btn[aria-selected="true"]{
+  transform:translateY(-3px);
+  box-shadow:0 3px 8px rgba(0,0,0,.4);
+  filter:brightness(1.3);
+}
+@media(prefers-reduced-motion:reduce){
+  .spine-btn[aria-selected="true"]{transform:none}
+}
+
+/* Spine color palette */
+.spine-btn[data-spine-color="0"]{background:#4a5568}
+.spine-btn[data-spine-color="1"]{background:#553c2e}
+.spine-btn[data-spine-color="2"]{background:#2d4a3e}
+.spine-btn[data-spine-color="3"]{background:#4a3f5c}
+.spine-btn[data-spine-color="4"]{background:#3b4c5a}
+.spine-btn[data-spine-color="5"]{background:#5c4a3a}
+.spine-btn[data-spine-color="undated"]{background:#555}
+
+/* Spine scroll fade indicators */
+.spine-nav::before,.spine-nav::after{
+  content:'';
+  position:absolute;
+  top:0;bottom:0;width:20px;
+  pointer-events:none;
+  z-index:1;
+  opacity:0;
+  transition:opacity .2s;
+}
+.spine-nav::before{left:0;background:linear-gradient(to right,var(--color-bg-base),transparent)}
+.spine-nav::after{right:0;background:linear-gradient(to left,var(--color-bg-base),transparent)}
+.spine-nav.fade-left::before{opacity:1}
+.spine-nav.fade-right::after{opacity:1}
+
+/* Year transition */
+.cards.year-fade-out{opacity:0;transition:opacity 150ms ease-out}
+.cards.year-fade-in{opacity:1;transition:opacity 150ms ease-in}
+@media(prefers-reduced-motion:reduce){
+  .cards.year-fade-out,.cards.year-fade-in{transition:none}
+}
+
+/* Year badge on search result cards */
+.card-year-badge{
+  display:inline-block;
+  font-size:.65rem;
+  color:var(--color-text-muted);
+  font-weight:600;
+  letter-spacing:.04em;
+  background:var(--color-bg-elevated);
+  padding:2px 6px;
+  border-radius:4px;
+  margin-top:2px;
+}
+
+/* Empty year message */
+.year-empty{
+  text-align:center;
+  padding:40px 20px;
+  color:var(--color-text-muted);
+  font-size:.9rem;
+}
 
 /* Want to Read label on search result cards */
 .card-wtr-label{

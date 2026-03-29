@@ -6,7 +6,7 @@ import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
-import { buildDisplayList } from './core/shelf_filter.js';
+import { buildDisplayList, getYearList } from './core/shelf_filter.js';
 import { fetchSyncStatus, ackSyncedTxids } from './browser_client.js';
 
 // --- Version logging (always visible in console) ---
@@ -76,17 +76,23 @@ const wtrFooterAdd = document.getElementById('wtrFooterAdd');
 const statusSelector = document.getElementById('statusSelector');
 const readingStatusInput = document.getElementById('readingStatusInput');
 
-// --- Shelf search & pagination ---
+// --- Shelf search & year navigation ---
 const shelfSearchWrap = document.getElementById('shelfSearchWrap');
 const shelfSearchInput = document.getElementById('shelfSearch');
 const shelfSearchClear = document.getElementById('shelfSearchClear');
 const shelfSearchCount = document.getElementById('shelfSearchCount');
-const showMoreWrap = document.getElementById('showMoreWrap');
-const showMoreBtn = document.getElementById('showMoreBtn');
-const PAGE_SIZE = 20;
-let visibleLimit = PAGE_SIZE;
+const yearHeader = document.getElementById('yearHeader');
+const yearPrevBtn = document.getElementById('yearPrev');
+const yearNextBtn = document.getElementById('yearNext');
+const yearLabelEl = document.getElementById('yearLabel');
+const yearCountEl = document.getElementById('yearCount');
+const yearSearchStatus = document.getElementById('yearSearchStatus');
+const spineNav = document.getElementById('spineNav');
+const spineStrip = document.getElementById('spineStrip');
+let selectedYear = null; // null = default (current year or most recent)
 let searchQuery = '';
 let _searchDebounce = null;
+let _lastYearGroups = null; // cached for spine nav interactions
 
 function showStatusToast(msg) {
   const existing = document.getElementById('bookishStatusToast');
@@ -640,13 +646,14 @@ function buildCardHTML(e, isWtrResult){
     : '';
   const showDate = !isReading && dateDisp;
   const wtrLabel = isWtrResult ? '<div class="card-wtr-label">Want to Read</div>' : '';
+  const yearBadge = e._showYearBadge && e.dateRead ? `<span class="card-year-badge">${escapeHtml(e.dateRead.slice(0,4))}</span>` : '';
   return `
       <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
       <div class="meta">
         <p class="title">${e.title||'<i>Untitled</i>'}</p>
         <p class="author">${e.author||''}</p>
         ${metaStrip}
-        <div class="details">${wtrLabel}${readingRow}${showDate ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
+        <div class="details">${wtrLabel}${yearBadge}${readingRow}${showDate ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
         ${notesSnippet}
       </div>`;
 }
@@ -671,7 +678,7 @@ function buildCardMetadata(e){
 
 /** Quick fingerprint for change detection — avoids unnecessary innerHTML rewrites */
 function entryFingerprint(e){
-  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.notes||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e.onArweave?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'')+'\t'+(e.owned?'1':'0')+'\t'+(e.tags||'');
+  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.notes||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e.onArweave?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'')+'\t'+(e.owned?'1':'0')+'\t'+(e.tags||'')+'\t'+(e._showYearBadge?'1':'0');
 }
 
 function render(){
@@ -730,7 +737,8 @@ function render(){
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
     if(actionBarEl) actionBarEl.style.display = 'none';
     if(shelfSearchWrap) shelfSearchWrap.style.display = 'none';
-    if(showMoreWrap) showMoreWrap.style.display = 'none';
+    if(yearHeader) yearHeader.style.display = 'none';
+    if(spineNav) spineNav.style.display = 'none';
     hideAccountNudge();
     return;
   }
@@ -741,7 +749,8 @@ function render(){
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'block';
     if(actionBarEl) actionBarEl.style.display = '';
     if(shelfSearchWrap) shelfSearchWrap.style.display = 'none';
-    if(showMoreWrap) showMoreWrap.style.display = 'none';
+    if(yearHeader) yearHeader.style.display = 'none';
+    if(spineNav) spineNav.style.display = 'none';
     hideAccountNudge();
     return;
   }
@@ -752,29 +761,92 @@ function render(){
   if(shelfSearchWrap) shelfSearchWrap.style.display = '';
   if(storageManager.isLoggedIn()) hideAccountNudge();
 
-  // --- Search filtering + pagination via shelf_filter ---
-  const { displayEntries, matchCount, remaining, isSearching } = buildDisplayList({
-    shelfEntries, wantList, searchQuery, visibleLimit
+  // --- Search filtering + year grouping via shelf_filter ---
+  const { displayEntries, matchCount, isSearching, yearGroups, activeYear, yearQuery } = buildDisplayList({
+    shelfEntries, wantList, searchQuery, selectedYear
   });
+  _lastYearGroups = yearGroups;
+
+  // Year search: clear search bar and navigate to year
+  if(yearQuery && shelfSearchInput){
+    shelfSearchInput.value = '';
+    searchQuery = '';
+    selectedYear = yearQuery;
+    if(shelfSearchClear) shelfSearchClear.style.display = 'none';
+  }
+
+  const yearList = getYearList(yearGroups);
 
   if(isSearching){
     if(shelfSearchCount){
-      shelfSearchCount.textContent = matchCount === 0 ? 'No matches found' : `${matchCount} result${matchCount===1?'':'s'}`;
+      shelfSearchCount.textContent = matchCount === 0 ? 'No matches found' : `${matchCount} result${matchCount===1?'':'s'} across all years`;
       shelfSearchCount.style.display = '';
     }
-    if(showMoreWrap) showMoreWrap.style.display = 'none';
+    if(yearHeader) yearHeader.style.display = 'none';
+    if(spineNav) spineNav.style.display = 'none';
+    if(yearSearchStatus) yearSearchStatus.style.display = 'none';
   } else {
     if(shelfSearchCount) shelfSearchCount.style.display = 'none';
-    if(remaining > 0){
-      if(showMoreBtn) showMoreBtn.textContent = `Show more (${remaining} remaining)`;
-      if(showMoreBtn) showMoreBtn.setAttribute('aria-label', `Show ${PAGE_SIZE} more books, ${remaining} remaining`);
-      if(showMoreWrap) showMoreWrap.style.display = '';
-    } else {
-      if(showMoreWrap) showMoreWrap.style.display = 'none';
+
+    // Year header
+    if(yearHeader && activeYear){
+      yearHeader.style.display = yearList.length > 0 ? 'flex' : 'none';
+      if(yearLabelEl) yearLabelEl.textContent = activeYear;
+      const count = displayEntries.length;
+      if(yearCountEl) yearCountEl.textContent = `${count} book${count===1?'':'s'}`;
+
+      // Arrow state
+      const yearKeys = yearList.map(y => y.year);
+      const idx = yearKeys.indexOf(activeYear);
+      if(yearPrevBtn){
+        yearPrevBtn.disabled = idx <= 0;
+        yearPrevBtn.setAttribute('aria-disabled', idx <= 0 ? 'true' : 'false');
+      }
+      if(yearNextBtn){
+        yearNextBtn.disabled = idx < 0 || idx >= yearKeys.length - 1;
+        yearNextBtn.setAttribute('aria-disabled', (idx < 0 || idx >= yearKeys.length - 1) ? 'true' : 'false');
+      }
+      // Hide arrows when only one year
+      if(yearList.length <= 1){
+        if(yearPrevBtn) yearPrevBtn.style.display = 'none';
+        if(yearNextBtn) yearNextBtn.style.display = 'none';
+      } else {
+        if(yearPrevBtn) yearPrevBtn.style.display = '';
+        if(yearNextBtn) yearNextBtn.style.display = '';
+      }
+    } else if(yearHeader){
+      yearHeader.style.display = 'none';
     }
+
+    // Spine navigator
+    if(spineNav && spineStrip){
+      if(yearList.length > 1){
+        spineNav.style.display = '';
+        renderSpineNav(yearList, activeYear);
+      } else {
+        spineNav.style.display = 'none';
+      }
+    }
+
+    if(yearSearchStatus) yearSearchStatus.style.display = 'none';
+  }
+
+  // Add year badges during search
+  if(isSearching){
+    for(const e of displayEntries) e._showYearBadge = true;
+  }
+
+  // Show empty year message when year has no books
+  if(!isSearching && activeYear && displayEntries.length === 0 && yearGroups.size > 0){
+    cardsEl.innerHTML = `<div class="year-empty">No books in ${activeYear === 'Undated' ? 'Undated' : activeYear} yet</div>`;
+    return;
   }
 
   // --- Keyed DOM reconciliation ---
+  // Remove non-card elements (e.g. year-empty message)
+  const yearEmptyMsg = cardsEl.querySelector('.year-empty');
+  if(yearEmptyMsg) yearEmptyMsg.remove();
+
   const existingMap = new Map();
   for(const el of [...cardsEl.children]){
     if(el.dataset && el.dataset.txid) existingMap.set(el.dataset.txid, el);
@@ -968,20 +1040,18 @@ wtrAddBtn?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, REA
 wtrFooterAdd?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
 document.getElementById('shelfEmptyBrowse')?.addEventListener('click', openWtrDrawer);
 
-// --- Shelf search & show-more event handlers ---
+// --- Shelf search event handlers ---
 shelfSearchInput?.addEventListener('input', ()=>{
   clearTimeout(_searchDebounce);
   _searchDebounce = setTimeout(()=>{
     searchQuery = (shelfSearchInput.value || '').trim();
     if(shelfSearchClear) shelfSearchClear.style.display = searchQuery ? '' : 'none';
-    if(!searchQuery) visibleLimit = PAGE_SIZE;
     render();
   }, 150);
 });
 shelfSearchClear?.addEventListener('click', ()=>{
   if(shelfSearchInput) shelfSearchInput.value = '';
   searchQuery = '';
-  visibleLimit = PAGE_SIZE;
   if(shelfSearchClear) shelfSearchClear.style.display = 'none';
   render();
 });
@@ -990,14 +1060,94 @@ shelfSearchInput?.addEventListener('keydown', (ev)=>{
     ev.preventDefault();
     if(shelfSearchInput) shelfSearchInput.value = '';
     searchQuery = '';
-    visibleLimit = PAGE_SIZE;
     if(shelfSearchClear) shelfSearchClear.style.display = 'none';
     render();
   }
 });
-showMoreBtn?.addEventListener('click', ()=>{
-  visibleLimit += PAGE_SIZE;
-  render();
+
+// --- Year navigation ---
+function navigateYear(year){
+  selectedYear = year;
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(prefersReducedMotion){
+    render();
+    return;
+  }
+  cardsEl.classList.add('year-fade-out');
+  setTimeout(()=>{
+    render();
+    cardsEl.classList.remove('year-fade-out');
+    cardsEl.classList.add('year-fade-in');
+    setTimeout(()=> cardsEl.classList.remove('year-fade-in'), 150);
+  }, 150);
+}
+
+yearPrevBtn?.addEventListener('click', ()=>{
+  if(!_lastYearGroups) return;
+  const keys = [..._lastYearGroups.keys()];
+  const idx = keys.indexOf(selectedYear);
+  if(idx > 0) navigateYear(keys[idx - 1]);
+});
+yearNextBtn?.addEventListener('click', ()=>{
+  if(!_lastYearGroups) return;
+  const keys = [..._lastYearGroups.keys()];
+  const idx = keys.indexOf(selectedYear);
+  if(idx >= 0 && idx < keys.length - 1) navigateYear(keys[idx + 1]);
+});
+
+// --- Spine navigator rendering ---
+const SPINE_COLORS = 6;
+function renderSpineNav(yearList, activeYear){
+  if(!spineStrip) return;
+  spineStrip.innerHTML = '';
+  for(let i = 0; i < yearList.length; i++){
+    const { year, count } = yearList[i];
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'spine-btn';
+    btn.role = 'tab';
+    btn.setAttribute('aria-selected', year === activeYear ? 'true' : 'false');
+    btn.setAttribute('aria-label', `${year === 'Undated' ? 'Undated' : year}, ${count} book${count===1?'':'s'}`);
+    btn.title = `${year} \u00B7 ${count} book${count===1?'':'s'}`;
+    btn.dataset.spineColor = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
+    btn.style.width = `${Math.min(80, Math.max(32, count * 2.5))}px`;
+    btn.textContent = year === 'Undated' ? '?' : `\u2019${year.slice(2)}`;
+    btn.tabIndex = year === activeYear ? 0 : -1;
+    btn.addEventListener('click', ()=> navigateYear(year));
+    spineStrip.appendChild(btn);
+  }
+
+  // Scroll active spine into view
+  const activeBtn = spineStrip.querySelector('[aria-selected="true"]');
+  if(activeBtn) activeBtn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+
+  // Check overflow for fade indicators
+  updateSpineFades();
+  spineStrip.addEventListener('scroll', updateSpineFades, { passive: true });
+}
+
+function updateSpineFades(){
+  if(!spineNav || !spineStrip) return;
+  const { scrollLeft, scrollWidth, clientWidth } = spineStrip;
+  const overflows = scrollWidth > clientWidth + 1;
+  spineStrip.classList.toggle('overflow-scroll', overflows);
+  spineNav.classList.toggle('fade-left', overflows && scrollLeft > 2);
+  spineNav.classList.toggle('fade-right', overflows && scrollLeft + clientWidth < scrollWidth - 2);
+}
+
+// Keyboard navigation within spine strip (arrow keys)
+spineStrip?.addEventListener('keydown', (ev)=>{
+  if(ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+  ev.preventDefault();
+  const spines = [...spineStrip.querySelectorAll('.spine-btn')];
+  const current = spines.findIndex(b => b.getAttribute('aria-selected') === 'true');
+  let next = current;
+  if(ev.key === 'ArrowLeft' && current > 0) next = current - 1;
+  if(ev.key === 'ArrowRight' && current < spines.length - 1) next = current + 1;
+  if(next !== current){
+    spines[next].focus();
+    spines[next].click();
+  }
 });
 
 // WTR drawer event delegation: "Start Reading" + row tap
