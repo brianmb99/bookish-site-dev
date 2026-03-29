@@ -499,35 +499,17 @@ button.secondary:hover, .btn.secondary:hover{
 .shelf-search-clear:hover{color:var(--color-text-primary);background:var(--color-bg-elevated)}
 .shelf-search-count{font-size:.8rem;color:var(--color-text-secondary);margin-top:6px;padding-left:2px}
 
-/* Year header */
-.year-header{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  height:44px;
-  margin:0 0 12px;
-}
-.year-arrow{
-  background:none;border:none;
+/* Year label line (below spine nav) */
+.year-label-line{
+  font-size:.8rem;
   color:var(--color-text-secondary);
-  font-size:1rem;
-  cursor:pointer;
-  width:44px;height:44px;
-  display:flex;align-items:center;justify-content:center;
-  border-radius:8px;
-  transition:color .15s,background .15s;
-  flex-shrink:0;
+  margin:0 0 10px 2px;
 }
-.year-arrow:hover:not(:disabled){color:var(--color-text-primary);background:var(--color-bg-elevated)}
-.year-arrow:disabled{color:var(--color-text-muted);cursor:default;opacity:.4}
-.year-arrow:focus-visible{outline:3px solid var(--color-primary);outline-offset:-1px}
-.year-label{font-size:1.1rem;font-weight:600;color:var(--color-text-primary)}
-.year-sep{color:var(--color-text-muted);font-size:.9rem}
-.year-count{font-size:.8rem;color:var(--color-text-secondary)}
 
 /* Spine navigator */
 .spine-nav{
-  padding:8px 0 12px;
+  padding:4px 0 0;
+  margin:0 0 6px;
   position:relative;
 }
 .spine-strip{
@@ -537,6 +519,8 @@ button.secondary:hover, .btn.secondary:hover{
   overflow-x:auto;
   scrollbar-width:none;
   justify-content:center;
+  padding-bottom:4px;
+  box-shadow:0 3px 4px -2px rgba(0,0,0,.35);
 }
 .spine-strip::-webkit-scrollbar{display:none}
 .spine-strip.overflow-scroll{justify-content:flex-start}
@@ -545,23 +529,51 @@ button.secondary:hover, .btn.secondary:hover{
   min-width:32px;
   max-width:80px;
   border:none;
-  border-radius:3px;
+  border-radius:2px 2px 0 0;
   cursor:pointer;
   font-size:.7rem;
   font-weight:600;
   color:rgba(255,255,255,.85);
-  text-shadow:0 1px 2px rgba(0,0,0,.4);
+  text-shadow:0 1px 2px rgba(0,0,0,.5);
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;
   transition:transform .2s,filter .15s,box-shadow .2s;
-  box-shadow:0 1px 3px rgba(0,0,0,.3);
+  box-shadow:inset -1px 0 0 rgba(0,0,0,.2),inset 1px 0 0 rgba(255,255,255,.06);
+  position:relative;
+  overflow:hidden;
 }
-.spine-btn:hover{filter:brightness(1.2)}
+/* Book-spine texture: faint vertical lines suggesting individual book edges */
+.spine-btn::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:repeating-linear-gradient(
+    to right,
+    transparent,
+    transparent 5px,
+    rgba(0,0,0,.12) 5px,
+    rgba(0,0,0,.12) 6px,
+    transparent 6px,
+    transparent 8px
+  );
+  pointer-events:none;
+}
+/* Subtle top edge highlight */
+.spine-btn::after{
+  content:'';
+  position:absolute;
+  top:0;left:0;right:0;
+  height:1px;
+  background:rgba(255,255,255,.15);
+  pointer-events:none;
+}
+.spine-btn:hover{filter:brightness(1.25)}
 .spine-btn:focus-visible{outline:3px solid var(--color-primary);outline-offset:2px}
 .spine-btn[aria-selected="true"]{
-  transform:translateY(-3px);
-  box-shadow:0 3px 8px rgba(0,0,0,.4);
-  filter:brightness(1.3);
+  transform:translateY(-4px);
+  box-shadow:0 4px 10px rgba(0,0,0,.5),inset -1px 0 0 rgba(0,0,0,.2),inset 1px 0 0 rgba(255,255,255,.08);
+  filter:brightness(1.5);
+  z-index:1;
 }
 @media(prefers-reduced-motion:reduce){
   .spine-btn[aria-selected="true"]{transform:none}
@@ -617,6 +629,11 @@ button.secondary:hover, .btn.secondary:hover{
   padding:40px 20px;
   color:var(--color-text-muted);
   font-size:.9rem;
+}
+.year-empty-icon{
+  font-size:1.8rem;
+  margin-bottom:8px;
+  opacity:.5;
 }
 
 /* Want to Read label on search result cards */

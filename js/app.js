@@ -81,12 +81,7 @@ const shelfSearchWrap = document.getElementById('shelfSearchWrap');
 const shelfSearchInput = document.getElementById('shelfSearch');
 const shelfSearchClear = document.getElementById('shelfSearchClear');
 const shelfSearchCount = document.getElementById('shelfSearchCount');
-const yearHeader = document.getElementById('yearHeader');
-const yearPrevBtn = document.getElementById('yearPrev');
-const yearNextBtn = document.getElementById('yearNext');
 const yearLabelEl = document.getElementById('yearLabel');
-const yearCountEl = document.getElementById('yearCount');
-const yearSearchStatus = document.getElementById('yearSearchStatus');
 const spineNav = document.getElementById('spineNav');
 const spineStrip = document.getElementById('spineStrip');
 let selectedYear = null; // null = default (current year or most recent)
@@ -737,7 +732,7 @@ function render(){
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
     if(actionBarEl) actionBarEl.style.display = 'none';
     if(shelfSearchWrap) shelfSearchWrap.style.display = 'none';
-    if(yearHeader) yearHeader.style.display = 'none';
+    if(yearLabelEl) yearLabelEl.style.display = 'none';
     if(spineNav) spineNav.style.display = 'none';
     hideAccountNudge();
     return;
@@ -749,7 +744,7 @@ function render(){
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'block';
     if(actionBarEl) actionBarEl.style.display = '';
     if(shelfSearchWrap) shelfSearchWrap.style.display = 'none';
-    if(yearHeader) yearHeader.style.display = 'none';
+    if(yearLabelEl) yearLabelEl.style.display = 'none';
     if(spineNav) spineNav.style.display = 'none';
     hideAccountNudge();
     return;
@@ -782,43 +777,21 @@ function render(){
       shelfSearchCount.textContent = matchCount === 0 ? 'No matches found' : `${matchCount} result${matchCount===1?'':'s'} across all years`;
       shelfSearchCount.style.display = '';
     }
-    if(yearHeader) yearHeader.style.display = 'none';
+    if(yearLabelEl) yearLabelEl.style.display = 'none';
     if(spineNav) spineNav.style.display = 'none';
-    if(yearSearchStatus) yearSearchStatus.style.display = 'none';
   } else {
     if(shelfSearchCount) shelfSearchCount.style.display = 'none';
 
-    // Year header
-    if(yearHeader && activeYear){
-      yearHeader.style.display = yearList.length > 0 ? 'flex' : 'none';
-      if(yearLabelEl) yearLabelEl.textContent = activeYear;
+    // Year label (simple text line below spine nav)
+    if(yearLabelEl && activeYear){
       const count = displayEntries.length;
-      if(yearCountEl) yearCountEl.textContent = `${count} book${count===1?'':'s'}`;
-
-      // Arrow state
-      const yearKeys = yearList.map(y => y.year);
-      const idx = yearKeys.indexOf(activeYear);
-      if(yearPrevBtn){
-        yearPrevBtn.disabled = idx <= 0;
-        yearPrevBtn.setAttribute('aria-disabled', idx <= 0 ? 'true' : 'false');
-      }
-      if(yearNextBtn){
-        yearNextBtn.disabled = idx < 0 || idx >= yearKeys.length - 1;
-        yearNextBtn.setAttribute('aria-disabled', (idx < 0 || idx >= yearKeys.length - 1) ? 'true' : 'false');
-      }
-      // Hide arrows when only one year
-      if(yearList.length <= 1){
-        if(yearPrevBtn) yearPrevBtn.style.display = 'none';
-        if(yearNextBtn) yearNextBtn.style.display = 'none';
-      } else {
-        if(yearPrevBtn) yearPrevBtn.style.display = '';
-        if(yearNextBtn) yearNextBtn.style.display = '';
-      }
-    } else if(yearHeader){
-      yearHeader.style.display = 'none';
+      yearLabelEl.textContent = `${activeYear === 'Undated' ? 'Undated' : activeYear} \u00B7 ${count} book${count===1?'':'s'}`;
+      yearLabelEl.style.display = yearList.length > 0 ? '' : 'none';
+    } else if(yearLabelEl){
+      yearLabelEl.style.display = 'none';
     }
 
-    // Spine navigator
+    // Spine navigator (top position, hidden when single year)
     if(spineNav && spineStrip){
       if(yearList.length > 1){
         spineNav.style.display = '';
@@ -827,8 +800,6 @@ function render(){
         spineNav.style.display = 'none';
       }
     }
-
-    if(yearSearchStatus) yearSearchStatus.style.display = 'none';
   }
 
   // Add year badges during search
@@ -838,7 +809,7 @@ function render(){
 
   // Show empty year message when year has no books
   if(!isSearching && activeYear && displayEntries.length === 0 && yearGroups.size > 0){
-    cardsEl.innerHTML = `<div class="year-empty">No books in ${activeYear === 'Undated' ? 'Undated' : activeYear} yet</div>`;
+    cardsEl.innerHTML = `<div class="year-empty"><div class="year-empty-icon">\uD83D\uDCD6</div>No books in ${activeYear === 'Undated' ? 'Undated' : activeYear} yet</div>`;
     return;
   }
 
@@ -1082,18 +1053,6 @@ function navigateYear(year){
   }, 150);
 }
 
-yearPrevBtn?.addEventListener('click', ()=>{
-  if(!_lastYearGroups) return;
-  const keys = [..._lastYearGroups.keys()];
-  const idx = keys.indexOf(selectedYear);
-  if(idx > 0) navigateYear(keys[idx - 1]);
-});
-yearNextBtn?.addEventListener('click', ()=>{
-  if(!_lastYearGroups) return;
-  const keys = [..._lastYearGroups.keys()];
-  const idx = keys.indexOf(selectedYear);
-  if(idx >= 0 && idx < keys.length - 1) navigateYear(keys[idx + 1]);
-});
 
 // --- Spine navigator rendering ---
 const SPINE_COLORS = 6;
@@ -1111,15 +1070,20 @@ function renderSpineNav(yearList, activeYear){
     btn.title = `${year} \u00B7 ${count} book${count===1?'':'s'}`;
     btn.dataset.spineColor = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
     btn.style.width = `${Math.min(80, Math.max(32, count * 2.5))}px`;
-    btn.textContent = year === 'Undated' ? '?' : `\u2019${year.slice(2)}`;
+    btn.textContent = year === 'Undated' ? '?' : year.slice(2);
     btn.tabIndex = year === activeYear ? 0 : -1;
     btn.addEventListener('click', ()=> navigateYear(year));
     spineStrip.appendChild(btn);
   }
 
-  // Scroll active spine into view
+  // Scroll active spine into view (horizontal only — avoid page jump)
   const activeBtn = spineStrip.querySelector('[aria-selected="true"]');
-  if(activeBtn) activeBtn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  if(activeBtn){
+    const stripRect = spineStrip.getBoundingClientRect();
+    const btnRect = activeBtn.getBoundingClientRect();
+    const btnCenter = btnRect.left + btnRect.width / 2 - stripRect.left + spineStrip.scrollLeft;
+    spineStrip.scrollTo({ left: btnCenter - stripRect.width / 2, behavior: 'smooth' });
+  }
 
   // Check overflow for fade indicators
   updateSpineFades();
