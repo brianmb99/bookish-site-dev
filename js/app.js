@@ -784,6 +784,7 @@ function render(){
   const orderedCards = [];
 
   for(const e of displayEntries){
+    try{
     const key = e.txid || e.id || '';
     desiredKeys.add(key);
     const fp = entryFingerprint(e) + (e._wtrResult ? '\twtr' : '');
@@ -825,6 +826,7 @@ function render(){
       openModal(e);
     };
     orderedCards.push(card);
+    }catch(err){ console.warn('[Bookish] Skipping corrupt entry', e.txid||e.id, err.message); }
   }
 
   for(const [key, el] of existingMap){
