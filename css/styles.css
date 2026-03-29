@@ -1082,7 +1082,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .modal-inner .field-block.readonly input:not(:focus){border-color:transparent;background:transparent;cursor:text}
 .modal-inner .primary-actions{margin-top:12px;display:flex;gap:10px}
 .modal-inner.add-mode .primary-actions{justify-content:center}
-.modal-inner .primary-actions .danger{margin-left:auto}
+.modal-inner .primary-actions #cancelBtn{margin-left:auto}
 .modal-inner .primary-actions .btn{padding:10px 18px;font-size:.8rem}
 /* Distinguish edit (existing entry) vs add */
 .modal-inner:not(.add-mode) .add-only{display:none}
