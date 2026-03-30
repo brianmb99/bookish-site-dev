@@ -657,54 +657,51 @@ button.secondary:hover, .btn.secondary:hover{
 }
 .year-header.spine-open::after{opacity:0}
 
+/* Shared reset — strip all button chrome */
+.year-arrow,
+.year-toggle,
+.year-chevron-btn{
+  all:unset;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  transition:color .15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.year-arrow:focus-visible,
+.year-toggle:focus-visible,
+.year-chevron-btn:focus-visible{
+  outline:2px solid var(--color-primary);
+  outline-offset:2px;
+  border-radius:2px;
+}
+
 .year-arrow{
-  background:none;
-  border:none;
   color:var(--color-text-muted);
   font-size:.85rem;
   font-weight:300;
-  cursor:pointer;
-  padding:10px 6px;
-  border-radius:4px;
-  line-height:1;
-  transition:color .15s;
+  padding:6px 4px;
 }
 .year-arrow:hover{color:var(--color-text-primary)}
-.year-arrow:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
 .year-arrow[disabled]{opacity:.2;cursor:default;pointer-events:none}
 
 .year-toggle{
-  display:flex;
-  align-items:center;
-  gap:4px;
-  background:none;
-  border:none;
   color:var(--color-text-secondary);
   font-size:.8rem;
   font-weight:500;
-  cursor:pointer;
-  padding:4px 4px;
-  border-radius:4px;
-  transition:color .15s;
+  gap:4px;
+  padding:4px 2px;
 }
 .year-toggle:hover{color:var(--color-text-primary)}
-.year-toggle:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
 
 .year-toggle-label{pointer-events:none}
 
 .year-chevron-btn{
-  background:none;
-  border:none;
-  cursor:pointer;
-  padding:10px 6px;
-  border-radius:4px;
-  line-height:1;
-  margin-left:2px;
-  transition:color .15s;
   color:var(--color-text-muted);
+  margin-left:2px;
+  padding:6px 4px;
 }
 .year-chevron-btn:hover{color:var(--color-text-secondary)}
-.year-chevron-btn:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
 
 .year-chevron{
   font-size:.6rem;
