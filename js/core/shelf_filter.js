@@ -27,16 +27,23 @@ export function isYearQuery(query) {
 }
 
 /**
- * Group entries by year extracted from dateRead. Entries without dateRead go into "Undated".
- * Returns a Map ordered by year descending, with "Undated" last.
+ * Group entries by year extracted from dateRead.
+ * "Currently reading" books (readingStatus === 'reading') get their own "Reading" group at the start.
+ * Entries without dateRead that aren't currently reading go into "Undated" at the end.
+ * Returns a Map ordered: Reading (if any), years descending, Undated (if any).
  * @param {Array} entries - book entries (already sorted within each status group)
- * @returns {Map<string, Array>} year -> entries, ordered by year desc, "Undated" last
+ * @returns {Map<string, Array>} year -> entries, ordered as described
  */
 export function groupByYear(entries) {
   const yearMap = new Map();
+  const reading = [];
   const undated = [];
 
   for (const e of entries) {
+    if (e.readingStatus === 'reading') {
+      reading.push(e);
+      continue;
+    }
     const year = e.dateRead?.slice(0, 4);
     if (year && /^\d{4}$/.test(year)) {
       if (!yearMap.has(year)) yearMap.set(year, []);
@@ -49,6 +56,9 @@ export function groupByYear(entries) {
   // Sort years descending
   const sortedYears = [...yearMap.keys()].sort((a, b) => b.localeCompare(a));
   const result = new Map();
+  if (reading.length) {
+    result.set('Reading', reading);
+  }
   for (const y of sortedYears) {
     result.set(y, yearMap.get(y));
   }

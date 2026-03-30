@@ -520,17 +520,18 @@ button.secondary:hover, .btn.secondary:hover{
   scrollbar-width:none;
   justify-content:flex-start;
   padding-bottom:4px;
-  border-bottom:2px solid #2a2a2a;
+  border-bottom:3px solid #2a2a2a;
+  border-image:repeating-linear-gradient(to right,#2a2a2a,#302a24 12px,#2a2a2a 24px) 3;
   box-shadow:0 2px 6px -1px rgba(0,0,0,.5);
 }
 .spine-strip::-webkit-scrollbar{display:none}
 .spine-strip.overflow-scroll{justify-content:flex-start}
 .spine-btn{
-  height:48px;
-  min-width:18px;
+  height:56px;
+  min-width:12px;
   max-width:96px;
   border:none;
-  border-radius:2px 2px 0 0;
+  border-radius:0;
   cursor:pointer;
   font-size:.65rem;
   font-weight:600;
@@ -559,13 +560,13 @@ button.secondary:hover, .btn.secondary:hover{
   );
   pointer-events:none;
 }
-/* Subtle top edge highlight */
+/* Subtle side highlight (top edge is jagged via clip-path) */
 .spine-btn::after{
   content:'';
   position:absolute;
-  top:0;left:0;right:0;
-  height:1px;
-  background:rgba(255,255,255,.15);
+  top:0;left:0;bottom:0;
+  width:1px;
+  background:rgba(255,255,255,.08);
   pointer-events:none;
 }
 .spine-btn:hover{filter:brightness(1.25)}
@@ -581,13 +582,14 @@ button.secondary:hover, .btn.secondary:hover{
 }
 
 /* Spine color palette — muted grays, like real hardcovers */
-.spine-btn[data-spine-color="0"]{background:#3a3a3a;height:46px}
-.spine-btn[data-spine-color="1"]{background:#454545;height:50px}
-.spine-btn[data-spine-color="2"]{background:#3e3e3e;height:48px}
-.spine-btn[data-spine-color="3"]{background:#484848;height:44px}
-.spine-btn[data-spine-color="4"]{background:#404040;height:52px}
-.spine-btn[data-spine-color="5"]{background:#4a4a4a;height:47px}
-.spine-btn[data-spine-color="undated"]{background:#333;height:45px}
+.spine-btn[data-spine-color="0"]{background:#3a3a3a}
+.spine-btn[data-spine-color="1"]{background:#454545}
+.spine-btn[data-spine-color="2"]{background:#3e3e3e}
+.spine-btn[data-spine-color="3"]{background:#484848}
+.spine-btn[data-spine-color="4"]{background:#404040}
+.spine-btn[data-spine-color="5"]{background:#4a4a4a}
+.spine-btn[data-spine-color="undated"]{background:#333}
+.spine-btn[data-spine-color="reading"]{background:#3d3529}
 
 /* Spine scroll fade indicators */
 .spine-nav::before,.spine-nav::after{

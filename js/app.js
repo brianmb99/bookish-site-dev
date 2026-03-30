@@ -785,7 +785,8 @@ function render(){
     // Year label (simple text line below spine nav)
     if(yearLabelEl && activeYear){
       const count = displayEntries.length;
-      yearLabelEl.textContent = `${activeYear === 'Undated' ? 'Undated' : activeYear} \u00B7 ${count} book${count===1?'':'s'}`;
+      const yearDisplay = activeYear === 'Undated' ? 'Undated' : activeYear === 'Reading' ? 'Currently Reading' : activeYear;
+      yearLabelEl.textContent = `${yearDisplay} \u00B7 ${count} book${count===1?'':'s'}`;
       yearLabelEl.style.display = yearList.length > 0 ? '' : 'none';
     } else if(yearLabelEl){
       yearLabelEl.style.display = 'none';
@@ -809,7 +810,7 @@ function render(){
 
   // Show empty year message when year has no books
   if(!isSearching && activeYear && displayEntries.length === 0 && yearGroups.size > 0){
-    cardsEl.innerHTML = `<div class="year-empty"><div class="year-empty-icon">\uD83D\uDCD6</div>No books in ${activeYear === 'Undated' ? 'Undated' : activeYear} yet</div>`;
+    cardsEl.innerHTML = `<div class="year-empty"><div class="year-empty-icon">\uD83D\uDCD6</div>No books in ${activeYear === 'Undated' ? 'Undated' : activeYear === 'Reading' ? 'Currently Reading' : activeYear} yet</div>`;
     return;
   }
 
@@ -1056,6 +1057,28 @@ function navigateYear(year){
 
 // --- Spine navigator rendering ---
 const SPINE_COLORS = 6;
+
+/** Deterministic pseudo-random jagged top edge for a spine button.
+ *  Generates a polygon clip-path where the top edge undulates to look like
+ *  uneven book heights. Uses a simple hash so the same year always looks the same. */
+function spineClipPath(year, widthPx){
+  const seed = typeof year === 'string'
+    ? year.split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)
+    : 0;
+  const steps = Math.max(3, Math.round(widthPx / 6));
+  const pts = [];
+  for(let i = 0; i <= steps; i++){
+    const x = (i / steps) * 100;
+    // Deterministic variation 0–30% of top region
+    const hash = Math.abs((seed * 2654435761 + i * 40503) | 0);
+    const vary = (hash % 30);
+    pts.push(`${x.toFixed(1)}% ${vary}%`);
+  }
+  // Close polygon: bottom-right, bottom-left
+  pts.push('100% 100%', '0% 100%');
+  return `polygon(${pts.join(', ')})`;
+}
+
 function renderSpineNav(yearList, activeYear){
   if(!spineStrip) return;
   spineStrip.innerHTML = '';
@@ -1066,11 +1089,16 @@ function renderSpineNav(yearList, activeYear){
     btn.className = 'spine-btn';
     btn.role = 'tab';
     btn.setAttribute('aria-selected', year === activeYear ? 'true' : 'false');
-    btn.setAttribute('aria-label', `${year === 'Undated' ? 'Undated' : year}, ${count} book${count===1?'':'s'}`);
-    btn.title = `${year} \u00B7 ${count} book${count===1?'':'s'}`;
-    btn.dataset.spineColor = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
-    btn.style.width = `${Math.min(96, Math.max(18, count * 3.5))}px`;
-    btn.textContent = year === 'Undated' ? '?' : year.slice(2);
+    const label = year === 'Undated' ? 'Undated' : year === 'Reading' ? 'Currently Reading' : year;
+    btn.setAttribute('aria-label', `${label}, ${count} book${count===1?'':'s'}`);
+    btn.title = `${label} \u00B7 ${count} book${count===1?'':'s'}`;
+    const colorKey = year === 'Undated' ? 'undated' : year === 'Reading' ? 'reading' : String(i % SPINE_COLORS);
+    btn.dataset.spineColor = colorKey;
+    // Sqrt curve: small years are thin, big years are substantial
+    const w = Math.min(96, Math.max(12, Math.round(Math.sqrt(count) * 12)));
+    btn.style.width = `${w}px`;
+    btn.style.clipPath = spineClipPath(year, w);
+    btn.textContent = year === 'Undated' ? '?' : year === 'Reading' ? '\u25B6' : year.slice(2);
     btn.tabIndex = year === activeYear ? 0 : -1;
     btn.addEventListener('click', ()=> navigateYear(year));
     spineStrip.appendChild(btn);
