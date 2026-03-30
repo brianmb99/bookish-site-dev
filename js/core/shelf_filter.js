@@ -17,31 +17,23 @@ export function filterBySearch(entries, query) {
 }
 
 /**
- * Detect if a search query is a year (e.g. "2024", "1998")
- * @param {string} query - trimmed search string
- * @returns {string|null} the year string if it's a year query, null otherwise
- */
-export function isYearQuery(query) {
-  if (!query) return null;
-  return /^(19|20)\d{2}$/.test(query) ? query : null;
-}
-
-/**
  * Group entries by year extracted from dateRead.
- * "Currently reading" books (readingStatus === 'reading') get their own "Reading" group at the start.
- * Entries without dateRead that aren't currently reading go into "Undated" at the end.
- * Returns a Map ordered: Reading (if any), years descending, Undated (if any).
+ * "Currently reading" books (readingStatus === 'reading') are placed in the current year.
+ * Entries without dateRead go into "Undated" at the end.
+ * Returns a Map ordered by year descending, with "Undated" last.
  * @param {Array} entries - book entries (already sorted within each status group)
- * @returns {Map<string, Array>} year -> entries, ordered as described
+ * @returns {Map<string, Array>} year -> entries, ordered by year desc, "Undated" last
  */
 export function groupByYear(entries) {
   const yearMap = new Map();
-  const reading = [];
   const undated = [];
+  const currentYear = new Date().getFullYear().toString();
 
   for (const e of entries) {
+    // Currently reading books go into the current year
     if (e.readingStatus === 'reading') {
-      reading.push(e);
+      if (!yearMap.has(currentYear)) yearMap.set(currentYear, []);
+      yearMap.get(currentYear).push(e);
       continue;
     }
     const year = e.dateRead?.slice(0, 4);
@@ -56,9 +48,6 @@ export function groupByYear(entries) {
   // Sort years descending
   const sortedYears = [...yearMap.keys()].sort((a, b) => b.localeCompare(a));
   const result = new Map();
-  if (reading.length) {
-    result.set('Reading', reading);
-  }
   for (const y of sortedYears) {
     result.set(y, yearMap.get(y));
   }
@@ -102,35 +91,10 @@ export function getDefaultYear(yearGroups) {
  * @param {Array} opts.wantList - want-to-read entries (already sorted)
  * @param {string} opts.searchQuery - current search term (trimmed)
  * @param {string|null} opts.selectedYear - currently selected year (null = default)
- * @returns {{ displayEntries: Array, matchCount: number|null, isSearching: boolean, yearGroups: Map, activeYear: string|null, yearQuery: string|null }}
+ * @returns {{ displayEntries: Array, matchCount: number|null, isSearching: boolean, yearGroups: Map, activeYear: string|null }}
  */
 export function buildDisplayList({ shelfEntries, wantList, searchQuery, selectedYear }) {
   const yearGroups = groupByYear(shelfEntries);
-
-  // Check if query is a year navigation request
-  const yearQuery = isYearQuery(searchQuery);
-  if (yearQuery) {
-    // Year exists in data — navigate to it
-    if (yearGroups.has(yearQuery)) {
-      return {
-        displayEntries: yearGroups.get(yearQuery),
-        matchCount: null,
-        isSearching: false,
-        yearGroups,
-        activeYear: yearQuery,
-        yearQuery,
-      };
-    }
-    // Year doesn't exist — show empty year view
-    return {
-      displayEntries: [],
-      matchCount: null,
-      isSearching: false,
-      yearGroups,
-      activeYear: yearQuery,
-      yearQuery,
-    };
-  }
 
   const isSearching = searchQuery.length > 0;
 
@@ -144,7 +108,6 @@ export function buildDisplayList({ shelfEntries, wantList, searchQuery, selected
       isSearching: true,
       yearGroups,
       activeYear: selectedYear || getDefaultYear(yearGroups),
-      yearQuery: null,
     };
   }
 
@@ -157,6 +120,5 @@ export function buildDisplayList({ shelfEntries, wantList, searchQuery, selected
     isSearching: false,
     yearGroups,
     activeYear,
-    yearQuery: null,
   };
 }

@@ -757,18 +757,10 @@ function render(){
   if(storageManager.isLoggedIn()) hideAccountNudge();
 
   // --- Search filtering + year grouping via shelf_filter ---
-  const { displayEntries, matchCount, isSearching, yearGroups, activeYear, yearQuery } = buildDisplayList({
+  const { displayEntries, matchCount, isSearching, yearGroups, activeYear } = buildDisplayList({
     shelfEntries, wantList, searchQuery, selectedYear
   });
   _lastYearGroups = yearGroups;
-
-  // Year search: clear search bar and navigate to year
-  if(yearQuery && shelfSearchInput){
-    shelfSearchInput.value = '';
-    searchQuery = '';
-    selectedYear = yearQuery;
-    if(shelfSearchClear) shelfSearchClear.style.display = 'none';
-  }
 
   const yearList = getYearList(yearGroups);
 
@@ -785,7 +777,7 @@ function render(){
     // Year label (simple text line below spine nav)
     if(yearLabelEl && activeYear){
       const count = displayEntries.length;
-      const yearDisplay = activeYear === 'Undated' ? 'Undated' : activeYear === 'Reading' ? 'Currently Reading' : activeYear;
+      const yearDisplay = activeYear === 'Undated' ? 'Undated' : activeYear;
       yearLabelEl.textContent = `${yearDisplay} \u00B7 ${count} book${count===1?'':'s'}`;
       yearLabelEl.style.display = yearList.length > 0 ? '' : 'none';
     } else if(yearLabelEl){
@@ -810,7 +802,7 @@ function render(){
 
   // Show empty year message when year has no books
   if(!isSearching && activeYear && displayEntries.length === 0 && yearGroups.size > 0){
-    cardsEl.innerHTML = `<div class="year-empty"><div class="year-empty-icon">\uD83D\uDCD6</div>No books in ${activeYear === 'Undated' ? 'Undated' : activeYear === 'Reading' ? 'Currently Reading' : activeYear} yet</div>`;
+    cardsEl.innerHTML = `<div class="year-empty"><div class="year-empty-icon">\uD83D\uDCD6</div>No books in ${activeYear === 'Undated' ? 'Undated' : activeYear} yet</div>`;
     return;
   }
 
@@ -1058,23 +1050,11 @@ function navigateYear(year){
 // --- Spine navigator rendering ---
 const SPINE_COLORS = 8;
 
-/** Monotonic width: more books = wider spine, but not proportional.
- *  Uses step thresholds for a natural feel. */
+/** Monotonic width: more books = wider spine. Three clean steps. */
 function spineWidth(count){
-  if(count >= 20) return 44;
-  if(count >= 12) return 38;
-  if(count >= 6)  return 32;
-  if(count >= 3)  return 28;
-  return 24;
-}
-
-/** Monotonic height: more books = slightly taller spine. */
-function spineHeight(count){
-  if(count >= 20) return 82;
-  if(count >= 12) return 76;
-  if(count >= 6)  return 72;
-  if(count >= 3)  return 68;
-  return 64;
+  if(count >= 10) return 38;
+  if(count >= 4)  return 30;
+  return 22;
 }
 
 function renderSpineNav(yearList, activeYear){
@@ -1102,13 +1082,12 @@ function renderSpineNav(yearList, activeYear){
     btn.className = 'spine-btn';
     btn.role = 'tab';
     btn.setAttribute('aria-selected', year === activeYear ? 'true' : 'false');
-    const label = year === 'Undated' ? 'Undated' : year === 'Reading' ? 'Currently Reading' : year;
+    const label = year === 'Undated' ? 'Undated' : year;
     btn.setAttribute('aria-label', `${label}, ${count} book${count===1?'':'s'}`);
     btn.title = `${label} \u00B7 ${count} book${count===1?'':'s'}`;
-    const colorKey = year === 'Undated' ? 'undated' : year === 'Reading' ? 'reading' : String(i % SPINE_COLORS);
+    const colorKey = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
     btn.dataset.spineColor = colorKey;
     btn.style.width = `${spineWidth(count)}px`;
-    btn.style.height = `${spineHeight(count)}px`;
 
     // Bookmark ribbon on selected year
     if(year === activeYear){
@@ -1120,7 +1099,7 @@ function renderSpineNav(yearList, activeYear){
 
     // Year text — full year vertical, or icon for special groups
     const txt = document.createElement('span');
-    txt.textContent = year === 'Undated' ? '?' : year === 'Reading' ? '\u25B6' : year;
+    txt.textContent = year === 'Undated' ? '?' : year;
     btn.appendChild(txt);
 
     btn.tabIndex = year === activeYear ? 0 : -1;

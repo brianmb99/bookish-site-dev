@@ -506,7 +506,7 @@ button.secondary:hover, .btn.secondary:hover{
   margin:0 0 10px 2px;
 }
 
-/* Spine navigator — classic vertical book spines on a shelf */
+/* Spine navigator — vertical book spines on a wooden shelf */
 .spine-nav{
   padding:0;
   margin:0 0 6px;
@@ -515,109 +515,91 @@ button.secondary:hover, .btn.secondary:hover{
 .spine-strip{
   display:flex;
   align-items:flex-end;
-  gap:2px;
+  gap:1px;
   overflow-x:auto;
   scrollbar-width:none;
   justify-content:flex-start;
-  padding:0 0 6px;
+  padding:0 0 4px;
   /* Wood shelf surface */
-  border-bottom:4px solid #3a2e22;
+  border-bottom:3px solid #3a2e22;
   border-image:repeating-linear-gradient(
     to right,#3a2e22,#44362a 8px,#3a2e22 16px,#352820 24px,#3a2e22 32px
-  ) 4;
-  box-shadow:0 3px 8px -2px rgba(0,0,0,.6),inset 0 -1px 0 rgba(255,255,255,.04);
+  ) 3;
+  box-shadow:0 2px 6px -1px rgba(0,0,0,.5);
 }
 .spine-strip::-webkit-scrollbar{display:none}
 .spine-strip.overflow-scroll{justify-content:flex-start}
 
 /* Decade divider — subtle gap between decade groups */
 .spine-decade-gap{
-  width:6px;
+  width:5px;
   flex-shrink:0;
   align-self:stretch;
-  border-right:1px solid rgba(255,255,255,.06);
+  border-right:1px solid rgba(255,255,255,.05);
 }
 
 .spine-btn{
-  height:72px;
-  min-width:24px;
-  max-width:52px;
+  height:44px;
+  min-width:22px;
+  max-width:38px;
   border:none;
-  border-radius:2px 2px 0 0;
+  border-radius:1px 1px 0 0;
   cursor:pointer;
-  /* Vertical text — reads top to bottom like a real spine */
-  writing-mode:vertical-rl;
+  /* Vertical text — rotated so head tilts right to read (English spine convention) */
+  writing-mode:vertical-lr;
   text-orientation:mixed;
   font-family:'Georgia','Times New Roman',serif;
-  font-size:.6rem;
+  font-size:.55rem;
   font-weight:400;
-  letter-spacing:.03em;
-  color:rgba(255,255,255,.8);
-  text-shadow:0 0 2px rgba(0,0,0,.6);
+  letter-spacing:.02em;
+  color:rgba(255,255,255,.75);
+  text-shadow:0 0 2px rgba(0,0,0,.5);
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;
-  transition:transform .2s ease,filter .15s,box-shadow .2s;
-  /* Cloth/leather texture via layered gradients */
-  background-size:100% 100%,4px 4px;
-  background-blend-mode:overlay;
+  transition:transform .15s ease,filter .15s,box-shadow .15s;
   position:relative;
   overflow:hidden;
 }
 
-/* Cloth texture overlay */
+/* Cloth texture overlay — fine horizontal weave */
 .spine-btn::before{
   content:'';
   position:absolute;
   inset:0;
-  background:
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0,0,0,.06) 2px,
-      rgba(0,0,0,.06) 3px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 2px,
-      rgba(255,255,255,.02) 2px,
-      rgba(255,255,255,.02) 3px
-    );
-  pointer-events:none;
-}
-
-/* Gold foil edge — thin line along the left side */
-.spine-btn::after{
-  content:'';
-  position:absolute;
-  top:4px;left:0;bottom:4px;
-  width:1px;
-  background:linear-gradient(
-    to bottom,
+  background:repeating-linear-gradient(
+    0deg,
     transparent,
-    rgba(212,175,55,.25) 20%,
-    rgba(212,175,55,.35) 50%,
-    rgba(212,175,55,.25) 80%,
-    transparent
+    transparent 2px,
+    rgba(0,0,0,.05) 2px,
+    rgba(0,0,0,.05) 3px
   );
   pointer-events:none;
 }
 
-.spine-btn:hover{
-  filter:brightness(1.2);
-  transform:translateY(-2px);
+/* Gold foil edge — thin line along the top */
+.spine-btn::after{
+  content:'';
+  position:absolute;
+  top:0;left:3px;right:3px;
+  height:1px;
+  background:rgba(212,175,55,.18);
+  pointer-events:none;
 }
-.spine-btn:focus-visible{outline:3px solid var(--color-primary);outline-offset:2px}
 
-/* Selected spine: pulled forward with bookmark ribbon */
-.spine-btn[aria-selected="true"]{
-  transform:translateY(-6px);
-  filter:brightness(1.25);
-  z-index:1;
-  box-shadow:0 6px 14px rgba(0,0,0,.5);
+.spine-btn:hover{
+  filter:brightness(1.15);
+  transform:translateY(-1px);
 }
-/* Bookmark ribbon hanging from the top */
+.spine-btn:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
+
+/* Selected spine: pulled up with bookmark ribbon */
+.spine-btn[aria-selected="true"]{
+  transform:translateY(-4px);
+  filter:brightness(1.2);
+  z-index:1;
+  box-shadow:0 4px 10px rgba(0,0,0,.4);
+}
+/* Bookmark ribbon */
 .spine-btn[aria-selected="true"] .spine-ribbon{
   display:block;
 }
@@ -627,9 +609,9 @@ button.secondary:hover, .btn.secondary:hover{
   top:-1px;
   left:50%;
   transform:translateX(-50%);
-  width:6px;
-  height:14px;
-  background:var(--color-warning,#fbbf24);
+  width:4px;
+  height:10px;
+  background:#8b3a3a;
   clip-path:polygon(0 0,100% 0,100% 100%,50% 70%,0 100%);
   z-index:2;
 }
@@ -638,23 +620,22 @@ button.secondary:hover, .btn.secondary:hover{
   .spine-btn:hover{transform:none}
 }
 
-/* Spine color palette — rich hardcover colors */
-.spine-btn[data-spine-color="0"]{background:linear-gradient(135deg,#5c2a2a,#4a2020)}  /* burgundy */
-.spine-btn[data-spine-color="1"]{background:linear-gradient(135deg,#2a4a35,#1e3a28)}  /* forest */
-.spine-btn[data-spine-color="2"]{background:linear-gradient(135deg,#2a3550,#1e2940)}  /* navy */
-.spine-btn[data-spine-color="3"]{background:linear-gradient(135deg,#4a3a28,#3a2e1e)}  /* brown */
-.spine-btn[data-spine-color="4"]{background:linear-gradient(135deg,#3a2a4a,#2e1e3a)}  /* plum */
-.spine-btn[data-spine-color="5"]{background:linear-gradient(135deg,#2a4a4a,#1e3a3a)}  /* teal */
-.spine-btn[data-spine-color="6"]{background:linear-gradient(135deg,#4a3535,#3a2828)}  /* wine */
-.spine-btn[data-spine-color="7"]{background:linear-gradient(135deg,#354a2a,#283a1e)}  /* olive */
-.spine-btn[data-spine-color="undated"]{background:linear-gradient(135deg,#3a3a3a,#2e2e2e)}
-.spine-btn[data-spine-color="reading"]{background:linear-gradient(135deg,#4a3a1e,#3a2e16)}
+/* Spine color palette — dusty, muted hardcover colors */
+.spine-btn[data-spine-color="0"]{background:linear-gradient(160deg,#4a3838,#3e2e2e)}  /* dusty burgundy */
+.spine-btn[data-spine-color="1"]{background:linear-gradient(160deg,#354a3c,#2a3a30)}  /* faded forest */
+.spine-btn[data-spine-color="2"]{background:linear-gradient(160deg,#353e4a,#2a3240)}  /* worn navy */
+.spine-btn[data-spine-color="3"]{background:linear-gradient(160deg,#4a4038,#3a342c)}  /* old leather */
+.spine-btn[data-spine-color="4"]{background:linear-gradient(160deg,#403848,#342c3c)}  /* muted plum */
+.spine-btn[data-spine-color="5"]{background:linear-gradient(160deg,#384848,#2c3a3a)}  /* faded teal */
+.spine-btn[data-spine-color="6"]{background:linear-gradient(160deg,#483c3c,#3c3030)}  /* aged wine */
+.spine-btn[data-spine-color="7"]{background:linear-gradient(160deg,#3e4a38,#323a2c)}  /* sage */
+.spine-btn[data-spine-color="undated"]{background:linear-gradient(160deg,#3e3e3e,#333)}
 
 /* Spine scroll fade indicators */
 .spine-nav .spine-fade-left,
 .spine-nav .spine-fade-right{
   position:absolute;
-  top:0;bottom:0;width:24px;
+  top:0;bottom:0;width:20px;
   pointer-events:none;
   z-index:2;
   opacity:0;
