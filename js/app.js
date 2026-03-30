@@ -1356,9 +1356,9 @@ document.addEventListener('keydown', (ev)=>{
 // --- Spine navigator rendering ---
 const SPINE_COLORS = 8;
 
-/** Spine width: clamp(48px, count * 3px, 96px) */
+/** Spine width: clamp(36px, count * 3px, 96px) */
 function spineWidth(count){
-  return Math.max(48, Math.min(count * 3, 96));
+  return Math.max(36, Math.min(count * 3, 96));
 }
 
 function renderSpineNav(yearList, activeYear){
