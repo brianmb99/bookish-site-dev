@@ -638,20 +638,19 @@ button.secondary:hover, .btn.secondary:hover{
 .omnibox-skeleton-line:first-child{width:70%}
 .omnibox-skeleton-line:last-child{width:45%}
 
-/* ── Year header — toggle line with arrows + chevron ── */
+/* ── Year header — left-aligned plain text with thin chevrons ── */
 .year-header{
   display:flex;
   align-items:center;
-  justify-content:center;
-  gap:6px;
-  padding:4px 0 6px;
+  gap:2px;
+  padding:4px 0 6px 2px;
   position:relative;
 }
 /* Shelf-edge shadow hint when panel is closed */
 .year-header::after{
   content:'';
   position:absolute;
-  bottom:0;left:10%;right:10%;
+  bottom:0;left:0;right:10%;
   height:1px;
   background:rgba(255,255,255,.06);
   transition:opacity .2s;
@@ -661,39 +660,54 @@ button.secondary:hover, .btn.secondary:hover{
 .year-arrow{
   background:none;
   border:none;
-  color:var(--color-text-secondary);
-  font-size:.7rem;
+  color:var(--color-text-muted);
+  font-size:.85rem;
+  font-weight:300;
   cursor:pointer;
-  padding:4px 6px;
+  padding:10px 6px;
   border-radius:4px;
   line-height:1;
-  transition:color .15s,background .15s;
+  transition:color .15s;
 }
-.year-arrow:hover{color:var(--color-text-primary);background:var(--color-bg-elevated)}
+.year-arrow:hover{color:var(--color-text-primary)}
 .year-arrow:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
-.year-arrow[disabled]{opacity:.25;cursor:default;pointer-events:none}
+.year-arrow[disabled]{opacity:.2;cursor:default;pointer-events:none}
 
 .year-toggle{
   display:flex;
   align-items:center;
-  gap:5px;
+  gap:4px;
   background:none;
   border:none;
-  color:var(--color-text-primary);
-  font-size:.85rem;
+  color:var(--color-text-secondary);
+  font-size:.8rem;
   font-weight:500;
   cursor:pointer;
-  padding:4px 8px;
-  border-radius:6px;
-  transition:background .15s;
+  padding:4px 4px;
+  border-radius:4px;
+  transition:color .15s;
 }
-.year-toggle:hover{background:var(--color-bg-elevated)}
+.year-toggle:hover{color:var(--color-text-primary)}
 .year-toggle:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
 
 .year-toggle-label{pointer-events:none}
 
+.year-chevron-btn{
+  background:none;
+  border:none;
+  cursor:pointer;
+  padding:10px 6px;
+  border-radius:4px;
+  line-height:1;
+  margin-left:2px;
+  transition:color .15s;
+  color:var(--color-text-muted);
+}
+.year-chevron-btn:hover{color:var(--color-text-secondary)}
+.year-chevron-btn:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
+
 .year-chevron{
-  font-size:.55rem;
+  font-size:.6rem;
   transition:transform .2s ease;
   pointer-events:none;
 }
@@ -703,9 +717,9 @@ button.secondary:hover, .btn.secondary:hover{
 
 /* Single-year mode: hide arrows and chevron */
 .year-header.single-year .year-arrow,
-.year-header.single-year .year-chevron{display:none}
+.year-header.single-year .year-chevron-btn{display:none}
 .year-header.single-year .year-toggle{cursor:default}
-.year-header.single-year .year-toggle:hover{background:none}
+.year-header.single-year .year-toggle:hover{color:var(--color-text-secondary)}
 
 /* ── Spine panel — collapsible shelf of book spines ── */
 .spine-panel{

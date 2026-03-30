@@ -89,7 +89,7 @@ let omniboxBackdrop = null; // created dynamically
 const yearHeader = document.getElementById('yearHeader');
 const yearLabelEl = document.getElementById('yearLabel');
 const yearToggle = document.getElementById('yearToggle');
-const yearChevron = document.getElementById('yearChevron');
+const yearChevronBtn = document.getElementById('yearChevronBtn');
 const yearPrevBtn = document.getElementById('yearPrev');
 const yearNextBtn = document.getElementById('yearNext');
 const spinePanel = document.getElementById('spinePanel');
@@ -1339,6 +1339,9 @@ yearToggle?.addEventListener('click', ()=>{
   if(yearHeader?.classList.contains('single-year')) return;
   toggleSpinePanel();
 });
+yearChevronBtn?.addEventListener('click', ()=>{
+  toggleSpinePanel();
+});
 yearPrevBtn?.addEventListener('click', ()=> stepYear(-1));
 yearNextBtn?.addEventListener('click', ()=> stepYear(1));
 
@@ -1458,7 +1461,7 @@ spineStrip?.addEventListener('keydown', (ev)=>{
 
 // Year header arrow keys: navigate without opening panel
 yearHeader?.addEventListener('keydown', (ev)=>{
-  if(ev.target === yearPrevBtn || ev.target === yearNextBtn || ev.target === yearToggle){
+  if(ev.target === yearPrevBtn || ev.target === yearNextBtn || ev.target === yearToggle || ev.target === yearChevronBtn){
     if(ev.key === 'ArrowLeft'){ ev.preventDefault(); stepYear(-1); }
     if(ev.key === 'ArrowRight'){ ev.preventDefault(); stepYear(1); }
   }
