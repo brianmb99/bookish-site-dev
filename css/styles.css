@@ -506,105 +506,164 @@ button.secondary:hover, .btn.secondary:hover{
   margin:0 0 10px 2px;
 }
 
-/* Spine navigator */
+/* Spine navigator — classic vertical book spines on a shelf */
 .spine-nav{
-  padding:4px 0 0;
+  padding:0;
   margin:0 0 6px;
   position:relative;
 }
 .spine-strip{
   display:flex;
   align-items:flex-end;
-  gap:1px;
+  gap:2px;
   overflow-x:auto;
   scrollbar-width:none;
   justify-content:flex-start;
-  padding-bottom:4px;
-  border-bottom:3px solid #2a2a2a;
-  border-image:repeating-linear-gradient(to right,#2a2a2a,#302a24 12px,#2a2a2a 24px) 3;
-  box-shadow:0 2px 6px -1px rgba(0,0,0,.5);
+  padding:0 0 6px;
+  /* Wood shelf surface */
+  border-bottom:4px solid #3a2e22;
+  border-image:repeating-linear-gradient(
+    to right,#3a2e22,#44362a 8px,#3a2e22 16px,#352820 24px,#3a2e22 32px
+  ) 4;
+  box-shadow:0 3px 8px -2px rgba(0,0,0,.6),inset 0 -1px 0 rgba(255,255,255,.04);
 }
 .spine-strip::-webkit-scrollbar{display:none}
 .spine-strip.overflow-scroll{justify-content:flex-start}
+
+/* Decade divider — subtle gap between decade groups */
+.spine-decade-gap{
+  width:6px;
+  flex-shrink:0;
+  align-self:stretch;
+  border-right:1px solid rgba(255,255,255,.06);
+}
+
 .spine-btn{
-  height:56px;
-  min-width:12px;
-  max-width:96px;
+  height:72px;
+  min-width:24px;
+  max-width:52px;
   border:none;
-  border-radius:0;
+  border-radius:2px 2px 0 0;
   cursor:pointer;
-  font-size:.65rem;
-  font-weight:600;
-  color:rgba(255,255,255,.85);
-  text-shadow:0 1px 2px rgba(0,0,0,.5);
+  /* Vertical text — reads top to bottom like a real spine */
+  writing-mode:vertical-rl;
+  text-orientation:mixed;
+  font-family:'Georgia','Times New Roman',serif;
+  font-size:.6rem;
+  font-weight:400;
+  letter-spacing:.03em;
+  color:rgba(255,255,255,.8);
+  text-shadow:0 0 2px rgba(0,0,0,.6);
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;
-  transition:transform .2s,filter .15s,box-shadow .2s;
-  box-shadow:inset -1px 0 0 rgba(0,0,0,.2),inset 1px 0 0 rgba(255,255,255,.06);
+  transition:transform .2s ease,filter .15s,box-shadow .2s;
+  /* Cloth/leather texture via layered gradients */
+  background-size:100% 100%,4px 4px;
+  background-blend-mode:overlay;
   position:relative;
   overflow:hidden;
 }
-/* Book-spine texture: faint vertical lines suggesting individual book edges */
+
+/* Cloth texture overlay */
 .spine-btn::before{
   content:'';
   position:absolute;
   inset:0;
-  background:repeating-linear-gradient(
-    to right,
-    transparent,
-    transparent 5px,
-    rgba(0,0,0,.12) 5px,
-    rgba(0,0,0,.12) 6px,
-    transparent 6px,
-    transparent 8px
-  );
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,.06) 2px,
+      rgba(0,0,0,.06) 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,.02) 2px,
+      rgba(255,255,255,.02) 3px
+    );
   pointer-events:none;
 }
-/* Subtle side highlight (top edge is jagged via clip-path) */
+
+/* Gold foil edge — thin line along the left side */
 .spine-btn::after{
   content:'';
   position:absolute;
-  top:0;left:0;bottom:0;
+  top:4px;left:0;bottom:4px;
   width:1px;
-  background:rgba(255,255,255,.08);
+  background:linear-gradient(
+    to bottom,
+    transparent,
+    rgba(212,175,55,.25) 20%,
+    rgba(212,175,55,.35) 50%,
+    rgba(212,175,55,.25) 80%,
+    transparent
+  );
   pointer-events:none;
 }
-.spine-btn:hover{filter:brightness(1.25)}
+
+.spine-btn:hover{
+  filter:brightness(1.2);
+  transform:translateY(-2px);
+}
 .spine-btn:focus-visible{outline:3px solid var(--color-primary);outline-offset:2px}
+
+/* Selected spine: pulled forward with bookmark ribbon */
 .spine-btn[aria-selected="true"]{
-  transform:translateY(-5px) scaleY(1.12);
-  box-shadow:0 5px 12px rgba(0,0,0,.6),inset -1px 0 0 rgba(0,0,0,.2),inset 1px 0 0 rgba(255,255,255,.1);
-  filter:brightness(1.3);
+  transform:translateY(-6px);
+  filter:brightness(1.25);
   z-index:1;
+  box-shadow:0 6px 14px rgba(0,0,0,.5);
+}
+/* Bookmark ribbon hanging from the top */
+.spine-btn[aria-selected="true"] .spine-ribbon{
+  display:block;
+}
+.spine-ribbon{
+  display:none;
+  position:absolute;
+  top:-1px;
+  left:50%;
+  transform:translateX(-50%);
+  width:6px;
+  height:14px;
+  background:var(--color-warning,#fbbf24);
+  clip-path:polygon(0 0,100% 0,100% 100%,50% 70%,0 100%);
+  z-index:2;
 }
 @media(prefers-reduced-motion:reduce){
-  .spine-btn[aria-selected="true"]{transform:scaleY(1.12)}
+  .spine-btn[aria-selected="true"]{transform:none}
+  .spine-btn:hover{transform:none}
 }
 
-/* Spine color palette — muted grays, like real hardcovers */
-.spine-btn[data-spine-color="0"]{background:#3a3a3a}
-.spine-btn[data-spine-color="1"]{background:#454545}
-.spine-btn[data-spine-color="2"]{background:#3e3e3e}
-.spine-btn[data-spine-color="3"]{background:#484848}
-.spine-btn[data-spine-color="4"]{background:#404040}
-.spine-btn[data-spine-color="5"]{background:#4a4a4a}
-.spine-btn[data-spine-color="undated"]{background:#333}
-.spine-btn[data-spine-color="reading"]{background:#3d3529}
+/* Spine color palette — rich hardcover colors */
+.spine-btn[data-spine-color="0"]{background:linear-gradient(135deg,#5c2a2a,#4a2020)}  /* burgundy */
+.spine-btn[data-spine-color="1"]{background:linear-gradient(135deg,#2a4a35,#1e3a28)}  /* forest */
+.spine-btn[data-spine-color="2"]{background:linear-gradient(135deg,#2a3550,#1e2940)}  /* navy */
+.spine-btn[data-spine-color="3"]{background:linear-gradient(135deg,#4a3a28,#3a2e1e)}  /* brown */
+.spine-btn[data-spine-color="4"]{background:linear-gradient(135deg,#3a2a4a,#2e1e3a)}  /* plum */
+.spine-btn[data-spine-color="5"]{background:linear-gradient(135deg,#2a4a4a,#1e3a3a)}  /* teal */
+.spine-btn[data-spine-color="6"]{background:linear-gradient(135deg,#4a3535,#3a2828)}  /* wine */
+.spine-btn[data-spine-color="7"]{background:linear-gradient(135deg,#354a2a,#283a1e)}  /* olive */
+.spine-btn[data-spine-color="undated"]{background:linear-gradient(135deg,#3a3a3a,#2e2e2e)}
+.spine-btn[data-spine-color="reading"]{background:linear-gradient(135deg,#4a3a1e,#3a2e16)}
 
 /* Spine scroll fade indicators */
-.spine-nav::before,.spine-nav::after{
-  content:'';
+.spine-nav .spine-fade-left,
+.spine-nav .spine-fade-right{
   position:absolute;
-  top:0;bottom:0;width:20px;
+  top:0;bottom:0;width:24px;
   pointer-events:none;
-  z-index:1;
+  z-index:2;
   opacity:0;
   transition:opacity .2s;
 }
-.spine-nav::before{left:0;background:linear-gradient(to right,var(--color-bg-base),transparent)}
-.spine-nav::after{right:0;background:linear-gradient(to left,var(--color-bg-base),transparent)}
-.spine-nav.fade-left::before{opacity:1}
-.spine-nav.fade-right::after{opacity:1}
+.spine-nav .spine-fade-left{left:0;background:linear-gradient(to right,var(--color-bg-base),transparent)}
+.spine-nav .spine-fade-right{right:0;background:linear-gradient(to left,var(--color-bg-base),transparent)}
+.spine-nav.fade-left .spine-fade-left{opacity:1}
+.spine-nav.fade-right .spine-fade-right{opacity:1}
 
 /* Year transition */
 .cards.year-fade-out{opacity:0;transition:opacity 150ms ease-out}

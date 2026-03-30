@@ -1056,34 +1056,47 @@ function navigateYear(year){
 
 
 // --- Spine navigator rendering ---
-const SPINE_COLORS = 6;
+const SPINE_COLORS = 8;
 
-/** Deterministic pseudo-random jagged top edge for a spine button.
- *  Generates a polygon clip-path where the top edge undulates to look like
- *  uneven book heights. Uses a simple hash so the same year always looks the same. */
-function spineClipPath(year, widthPx){
-  const seed = typeof year === 'string'
-    ? year.split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)
-    : 0;
-  const steps = Math.max(3, Math.round(widthPx / 6));
-  const pts = [];
-  for(let i = 0; i <= steps; i++){
-    const x = (i / steps) * 100;
-    // Deterministic variation 0–30% of top region
-    const hash = Math.abs((seed * 2654435761 + i * 40503) | 0);
-    const vary = (hash % 30);
-    pts.push(`${x.toFixed(1)}% ${vary}%`);
-  }
-  // Close polygon: bottom-right, bottom-left
-  pts.push('100% 100%', '0% 100%');
-  return `polygon(${pts.join(', ')})`;
+/** Monotonic width: more books = wider spine, but not proportional.
+ *  Uses step thresholds for a natural feel. */
+function spineWidth(count){
+  if(count >= 20) return 44;
+  if(count >= 12) return 38;
+  if(count >= 6)  return 32;
+  if(count >= 3)  return 28;
+  return 24;
+}
+
+/** Monotonic height: more books = slightly taller spine. */
+function spineHeight(count){
+  if(count >= 20) return 82;
+  if(count >= 12) return 76;
+  if(count >= 6)  return 72;
+  if(count >= 3)  return 68;
+  return 64;
 }
 
 function renderSpineNav(yearList, activeYear){
   if(!spineStrip) return;
   spineStrip.innerHTML = '';
+  let prevDecade = null;
   for(let i = 0; i < yearList.length; i++){
     const { year, count } = yearList[i];
+    const isNumericYear = /^\d{4}$/.test(year);
+
+    // Insert decade divider between decade groups
+    if(isNumericYear){
+      const decade = year.slice(0, 3);
+      if(prevDecade !== null && decade !== prevDecade){
+        const gap = document.createElement('div');
+        gap.className = 'spine-decade-gap';
+        gap.setAttribute('aria-hidden', 'true');
+        spineStrip.appendChild(gap);
+      }
+      prevDecade = decade;
+    }
+
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'spine-btn';
@@ -1094,11 +1107,22 @@ function renderSpineNav(yearList, activeYear){
     btn.title = `${label} \u00B7 ${count} book${count===1?'':'s'}`;
     const colorKey = year === 'Undated' ? 'undated' : year === 'Reading' ? 'reading' : String(i % SPINE_COLORS);
     btn.dataset.spineColor = colorKey;
-    // Sqrt curve: small years are thin, big years are substantial
-    const w = Math.min(96, Math.max(12, Math.round(Math.sqrt(count) * 12)));
-    btn.style.width = `${w}px`;
-    btn.style.clipPath = spineClipPath(year, w);
-    btn.textContent = year === 'Undated' ? '?' : year === 'Reading' ? '\u25B6' : year.slice(2);
+    btn.style.width = `${spineWidth(count)}px`;
+    btn.style.height = `${spineHeight(count)}px`;
+
+    // Bookmark ribbon on selected year
+    if(year === activeYear){
+      const ribbon = document.createElement('span');
+      ribbon.className = 'spine-ribbon';
+      ribbon.setAttribute('aria-hidden', 'true');
+      btn.appendChild(ribbon);
+    }
+
+    // Year text — full year vertical, or icon for special groups
+    const txt = document.createElement('span');
+    txt.textContent = year === 'Undated' ? '?' : year === 'Reading' ? '\u25B6' : year;
+    btn.appendChild(txt);
+
     btn.tabIndex = year === activeYear ? 0 : -1;
     btn.addEventListener('click', ()=> navigateYear(year));
     spineStrip.appendChild(btn);
