@@ -96,13 +96,8 @@
   <p class="shelf-empty-text">Books you're reading and have finished show up here.</p>
   <button type="button" id="shelfEmptyBrowse" class="shelf-empty-link">Browse My Reading List →</button>
 </div>
-<div id="yearHeader" class="year-header" style="display:none" aria-live="polite">
-  <button type="button" id="yearPrev" class="year-arrow" aria-label="Previous year">&#8249;</button>
-  <button type="button" id="yearToggle" class="year-toggle" aria-expanded="false" aria-controls="spinePanel">
-    <span id="yearLabel" class="year-toggle-label"></span>
-  </button>
-  <button type="button" id="yearNext" class="year-arrow" aria-label="Next year">&#8250;</button>
-  <button type="button" id="yearChevronBtn" class="year-chevron-btn" aria-label="Toggle spine panel"><span id="yearChevron" class="year-chevron" aria-hidden="true">&#709;</span></button>
+<div id="yearHeader" class="year-header" style="display:none" role="button" tabindex="0" aria-expanded="false" aria-controls="spinePanel" aria-live="polite">
+  <span id="yearLabel" class="year-header-label"></span>
 </div>
 <div id="spinePanel" class="spine-panel" role="tablist" aria-label="Browse reading years">
   <div class="spine-panel-inner">
@@ -126,7 +121,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.84</div>
+  <div class="footer-meta">Alpha &bull; v0.2.85</div>
 </footer>
 </div>
 

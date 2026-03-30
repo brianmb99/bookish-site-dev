@@ -88,10 +88,6 @@ const omniboxManualAdd = document.getElementById('omniboxManualAdd');
 let omniboxBackdrop = null; // created dynamically
 const yearHeader = document.getElementById('yearHeader');
 const yearLabelEl = document.getElementById('yearLabel');
-const yearToggle = document.getElementById('yearToggle');
-const yearChevronBtn = document.getElementById('yearChevronBtn');
-const yearPrevBtn = document.getElementById('yearPrev');
-const yearNextBtn = document.getElementById('yearNext');
 const spinePanel = document.getElementById('spinePanel');
 const spinePanelInner = spinePanel?.querySelector('.spine-panel-inner');
 const spineStrip = document.getElementById('spineStrip');
@@ -791,21 +787,8 @@ function render(){
       if(yearLabelEl) yearLabelEl.textContent = `${yearDisplay} \u00B7 ${count} book${count===1?'':'s'}`;
       yearHeader.style.display = yearList.length > 0 ? '' : 'none';
 
-      // Single-year mode: no arrows, no chevron, no toggle
-      const isSingle = yearList.length <= 1;
-      yearHeader.classList.toggle('single-year', isSingle);
-
-      // Update prev/next arrow disabled state
-      if(!isSingle){
-        const idx = yearList.findIndex(y => y.year === activeYear);
-        if(yearPrevBtn) yearPrevBtn.disabled = idx <= 0;
-        if(yearNextBtn) yearNextBtn.disabled = idx >= yearList.length - 1;
-      }
-
       // Render spines into the panel (even if closed, so they're ready)
-      if(yearList.length > 1){
-        renderSpineNav(yearList, activeYear);
-      }
+      renderSpineNav(yearList, activeYear);
     } else if(yearHeader){
       yearHeader.style.display = 'none';
     }
@@ -1297,17 +1280,6 @@ function navigateYear(year){
   }, 150);
 }
 
-/** Step to adjacent year using yearList from last render. */
-function stepYear(direction){
-  if(!_lastYearGroups) return;
-  const yearList = getYearList(_lastYearGroups);
-  const idx = yearList.findIndex(y => y.year === selectedYear);
-  const next = idx + direction;
-  if(next >= 0 && next < yearList.length){
-    navigateYear(yearList[next].year);
-  }
-}
-
 // --- Spine panel toggle ---
 function openSpinePanel(){
   if(!spinePanel || spineOpen) return;
@@ -1315,7 +1287,7 @@ function openSpinePanel(){
   spinePanel.classList.remove('closing');
   spinePanel.classList.add('open');
   yearHeader?.classList.add('spine-open');
-  yearToggle?.setAttribute('aria-expanded', 'true');
+  yearHeader?.setAttribute('aria-expanded', 'true');
 }
 
 function closeSpinePanel(){
@@ -1324,8 +1296,7 @@ function closeSpinePanel(){
   spinePanel.classList.add('closing');
   spinePanel.classList.remove('open');
   yearHeader?.classList.remove('spine-open');
-  yearToggle?.setAttribute('aria-expanded', 'false');
-  // Clean up closing class after transition
+  yearHeader?.setAttribute('aria-expanded', 'false');
   const onEnd = ()=>{ spinePanel.classList.remove('closing'); spinePanel.removeEventListener('transitionend', onEnd); };
   spinePanel.addEventListener('transitionend', onEnd);
 }
@@ -1334,22 +1305,17 @@ function toggleSpinePanel(){
   spineOpen ? closeSpinePanel() : openSpinePanel();
 }
 
-// Year header button handlers
-yearToggle?.addEventListener('click', ()=>{
-  if(yearHeader?.classList.contains('single-year')) return;
-  toggleSpinePanel();
+// Year header click toggles spine panel
+yearHeader?.addEventListener('click', toggleSpinePanel);
+yearHeader?.addEventListener('keydown', (ev)=>{
+  if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); toggleSpinePanel(); }
 });
-yearChevronBtn?.addEventListener('click', ()=>{
-  toggleSpinePanel();
-});
-yearPrevBtn?.addEventListener('click', ()=> stepYear(-1));
-yearNextBtn?.addEventListener('click', ()=> stepYear(1));
 
 // Escape closes the spine panel
 document.addEventListener('keydown', (ev)=>{
   if(ev.key === 'Escape' && spineOpen){
     closeSpinePanel();
-    yearToggle?.focus();
+    yearHeader?.focus();
   }
 });
 
@@ -1459,13 +1425,6 @@ spineStrip?.addEventListener('keydown', (ev)=>{
   }
 });
 
-// Year header arrow keys: navigate without opening panel
-yearHeader?.addEventListener('keydown', (ev)=>{
-  if(ev.target === yearPrevBtn || ev.target === yearNextBtn || ev.target === yearToggle || ev.target === yearChevronBtn){
-    if(ev.key === 'ArrowLeft'){ ev.preventDefault(); stepYear(-1); }
-    if(ev.key === 'ArrowRight'){ ev.preventDefault(); stepYear(1); }
-  }
-});
 
 // WTR drawer event delegation: "Start Reading" + row tap
 wtrListEl?.addEventListener('click', (ev)=>{

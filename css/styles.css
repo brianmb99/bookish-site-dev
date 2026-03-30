@@ -638,14 +638,15 @@ button.secondary:hover, .btn.secondary:hover{
 .omnibox-skeleton-line:first-child{width:70%}
 .omnibox-skeleton-line:last-child{width:45%}
 
-/* ── Year header — left-aligned plain text with thin chevrons ── */
+/* ── Year header — plain text, clickable ── */
 .year-header{
-  display:flex;
-  align-items:center;
-  gap:2px;
   padding:4px 0 6px 2px;
   position:relative;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
 }
+.year-header:hover .year-header-label{color:var(--color-text-primary)}
+.year-header:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px;border-radius:2px}
 /* Shelf-edge shadow hint when panel is closed */
 .year-header::after{
   content:'';
@@ -657,84 +658,12 @@ button.secondary:hover, .btn.secondary:hover{
 }
 .year-header.spine-open::after{opacity:0}
 
-/* Shared reset — override global button styles completely */
-.year-arrow,
-.year-toggle,
-.year-chevron-btn{
-  background:none;
-  border:none;
-  border-radius:0;
-  box-shadow:none;
-  font-family:inherit;
-  font-size:inherit;
-  font-weight:inherit;
-  padding:0;
-  margin:0;
-  overflow:visible;
-  cursor:pointer;
-  display:inline-flex;
-  align-items:center;
-  justify-content:flex-start;
-  transition:color .15s;
-  -webkit-tap-highlight-color:transparent;
-  -webkit-appearance:none;
-  appearance:none;
-}
-.year-arrow:active,
-.year-toggle:active,
-.year-chevron-btn:active{transform:none}
-.year-arrow:focus-visible,
-.year-toggle:focus-visible,
-.year-chevron-btn:focus-visible{
-  outline:2px solid var(--color-primary);
-  outline-offset:2px;
-}
-
-.year-arrow{
-  color:var(--color-text-muted);
-  font-size:.85rem;
-  font-weight:300;
-  padding:2px 4px;
-  line-height:1;
-}
-.year-arrow:hover{color:var(--color-text-primary)}
-.year-arrow[disabled]{opacity:.2;cursor:default;pointer-events:none}
-
-.year-toggle{
-  color:var(--color-text-secondary);
+.year-header-label{
   font-size:.8rem;
   font-weight:500;
-  gap:4px;
-  padding:2px 2px;
-  line-height:1;
+  color:var(--color-text-secondary);
+  transition:color .15s;
 }
-.year-toggle:hover{color:var(--color-text-primary)}
-
-.year-toggle-label{pointer-events:none}
-
-.year-chevron-btn{
-  color:var(--color-text-muted);
-  font-size:.6rem;
-  margin-left:2px;
-  padding:2px 4px;
-  line-height:1;
-}
-.year-chevron-btn:hover{color:var(--color-text-secondary)}
-
-.year-chevron{
-  font-size:.6rem;
-  transition:transform .2s ease;
-  pointer-events:none;
-}
-.year-header.spine-open .year-chevron{
-  transform:rotate(180deg);
-}
-
-/* Single-year mode: hide arrows and chevron */
-.year-header.single-year .year-arrow,
-.year-header.single-year .year-chevron-btn{display:none}
-.year-header.single-year .year-toggle{cursor:default}
-.year-header.single-year .year-toggle:hover{color:var(--color-text-secondary)}
 
 /* ── Spine panel — collapsible shelf of book spines ── */
 .spine-panel{
