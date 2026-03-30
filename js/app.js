@@ -6,7 +6,7 @@ import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
-import { buildDisplayList, getYearList } from './core/shelf_filter.js';
+import { buildDisplayList, getYearList, filterBySearch } from './core/shelf_filter.js';
 import { fetchSyncStatus, ackSyncedTxids } from './browser_client.js';
 
 // --- Version logging (always visible in console) ---
@@ -28,7 +28,6 @@ const statusEl = document.getElementById('status');
 const cardsEl = document.getElementById('cards');
 const emptyEl = document.getElementById('empty');
 const shelfEmptyEl = document.getElementById('shelfEmpty');
-const actionBarEl = document.querySelector('.action-bar');
 const modal = document.getElementById('modal');
 // Account panel refs
 const accountBtn = document.getElementById('accountBtn');
@@ -44,7 +43,6 @@ const notesInput = document.getElementById('notesInput');
 const saveBtn = document.getElementById('saveBtn');
 const deleteBtn = document.getElementById('deleteBtn');
 const cancelBtn = document.getElementById('cancelBtn');
-const newBtn = document.getElementById('newBtn');
 // Phase 2: First-run experience refs
 const emptyAddBookBtn = document.getElementById('emptyAddBookBtn');
 const celebrationToast = document.getElementById('celebrationToast');
@@ -64,7 +62,8 @@ const OPT_FIELDS_KEY = 'bookish_active_fields';
 const OPTIONAL_FIELDS = ['notes','rating','owned','tags'];
 
 // --- Reading status (constants imported from book_repository.js) ---
-const wtrCounter = document.getElementById('wtrCounter');
+const wtrHeaderBtn = document.getElementById('wtrHeaderBtn');
+const wtrBadge = document.getElementById('wtrBadge');
 const wtrOverlay = document.getElementById('wtrOverlay');
 const wtrBackdrop = document.getElementById('wtrBackdrop');
 const wtrDrawer = document.getElementById('wtrDrawer');
@@ -76,11 +75,17 @@ const wtrFooterAdd = document.getElementById('wtrFooterAdd');
 const statusSelector = document.getElementById('statusSelector');
 const readingStatusInput = document.getElementById('readingStatusInput');
 
-// --- Shelf search & year navigation ---
-const shelfSearchWrap = document.getElementById('shelfSearchWrap');
-const shelfSearchInput = document.getElementById('shelfSearch');
-const shelfSearchClear = document.getElementById('shelfSearchClear');
-const shelfSearchCount = document.getElementById('shelfSearchCount');
+// --- Omnibox & year navigation ---
+const omniboxWrap = document.getElementById('omniboxWrap');
+const omniboxInput = document.getElementById('omniboxInput');
+const omniboxClear = document.getElementById('omniboxClear');
+const omniboxDropdown = document.getElementById('omniboxDropdown');
+const omniboxShelfSection = document.getElementById('omniboxShelfSection');
+const omniboxShelfResults = document.getElementById('omniboxShelfResults');
+const omniboxAddSection = document.getElementById('omniboxAddSection');
+const omniboxAddResults = document.getElementById('omniboxAddResults');
+const omniboxManualAdd = document.getElementById('omniboxManualAdd');
+let omniboxBackdrop = null; // created dynamically
 const yearLabelEl = document.getElementById('yearLabel');
 const spineNav = document.getElementById('spineNav');
 const spineStrip = document.getElementById('spineStrip');
@@ -692,11 +697,18 @@ function render(){
   // Main grid shows: reading first, then read
   const shelfEntries = [...readingList, ...readList];
 
-  if(wtrCounter){
-    if(wantList.length > 0){
-      wtrCounter.innerHTML = `My Reading List <span class="wtr-count">${wantList.length}</span>`;
-    } else {
-      wtrCounter.textContent = 'My Reading List';
+  // Update WTR header badge
+  if(wtrHeaderBtn){
+    if(wantList.length > 0 || shelfEntries.length > 0){
+      wtrHeaderBtn.style.display = '';
+    }
+    if(wtrBadge){
+      if(wantList.length > 0){
+        wtrBadge.textContent = wantList.length;
+        wtrBadge.style.display = '';
+      } else {
+        wtrBadge.style.display = 'none';
+      }
     }
   }
 
@@ -730,8 +742,7 @@ function render(){
     if(cardsEl.children.length > 0) cardsEl.replaceChildren();
     emptyEl.style.display='block';
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
-    if(actionBarEl) actionBarEl.style.display = 'none';
-    if(shelfSearchWrap) shelfSearchWrap.style.display = 'none';
+    if(omniboxWrap) omniboxWrap.style.display = 'none';
     if(yearLabelEl) yearLabelEl.style.display = 'none';
     if(spineNav) spineNav.style.display = 'none';
     hideAccountNudge();
@@ -742,8 +753,7 @@ function render(){
     if(cardsEl.children.length > 0) cardsEl.replaceChildren();
     emptyEl.style.display='none';
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'block';
-    if(actionBarEl) actionBarEl.style.display = '';
-    if(shelfSearchWrap) shelfSearchWrap.style.display = 'none';
+    if(omniboxWrap) omniboxWrap.style.display = '';
     if(yearLabelEl) yearLabelEl.style.display = 'none';
     if(spineNav) spineNav.style.display = 'none';
     hideAccountNudge();
@@ -752,8 +762,7 @@ function render(){
 
   emptyEl.style.display='none';
   if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
-  if(actionBarEl) actionBarEl.style.display = '';
-  if(shelfSearchWrap) shelfSearchWrap.style.display = '';
+  if(omniboxWrap) omniboxWrap.style.display = '';
   if(storageManager.isLoggedIn()) hideAccountNudge();
 
   // --- Search filtering + year grouping via shelf_filter ---
@@ -765,15 +774,9 @@ function render(){
   const yearList = getYearList(yearGroups);
 
   if(isSearching){
-    if(shelfSearchCount){
-      shelfSearchCount.textContent = matchCount === 0 ? 'No matches found' : `${matchCount} result${matchCount===1?'':'s'} across all years`;
-      shelfSearchCount.style.display = '';
-    }
     if(yearLabelEl) yearLabelEl.style.display = 'none';
     if(spineNav) spineNav.style.display = 'none';
   } else {
-    if(shelfSearchCount) shelfSearchCount.style.display = 'none';
-
     // Year label (simple text line below spine nav)
     if(yearLabelEl && activeYear){
       const count = displayEntries.length;
@@ -997,36 +1000,265 @@ function renderWtrDrawer(wantList){
   }).join('');
 }
 
-wtrCounter?.addEventListener('click', openWtrDrawer);
+wtrHeaderBtn?.addEventListener('click', openWtrDrawer);
 wtrBackdrop?.addEventListener('click', closeWtrDrawer);
 wtrClose?.addEventListener('click', closeWtrDrawer);
 wtrAddBtn?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
 wtrFooterAdd?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
 document.getElementById('shelfEmptyBrowse')?.addEventListener('click', openWtrDrawer);
 
-// --- Shelf search event handlers ---
-shelfSearchInput?.addEventListener('input', ()=>{
+// --- Omnibox event handlers ---
+let _omniboxApiDebounce = null;
+let _omniboxApiAbort = null;
+let _omniboxApiCounter = 0;
+
+function showOmniboxDropdown(){
+  if(!omniboxDropdown) return;
+  omniboxDropdown.style.display = '';
+  omniboxInput?.setAttribute('aria-expanded', 'true');
+  if(!omniboxBackdrop){
+    omniboxBackdrop = document.createElement('div');
+    omniboxBackdrop.className = 'omnibox-backdrop';
+    omniboxBackdrop.addEventListener('click', closeOmniboxDropdown);
+  }
+  if(!omniboxBackdrop.parentNode) document.body.appendChild(omniboxBackdrop);
+}
+
+function closeOmniboxDropdown(){
+  if(omniboxDropdown) omniboxDropdown.style.display = 'none';
+  omniboxInput?.setAttribute('aria-expanded', 'false');
+  if(omniboxBackdrop?.parentNode) omniboxBackdrop.remove();
+}
+
+function clearOmnibox(){
+  if(omniboxInput) omniboxInput.value = '';
+  searchQuery = '';
+  if(omniboxClear) omniboxClear.style.display = 'none';
+  closeOmniboxDropdown();
+  if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
+  if(omniboxShelfSection) omniboxShelfSection.style.display = 'none';
+  if(omniboxAddSection) omniboxAddSection.style.display = 'none';
+  if(omniboxManualAdd) omniboxManualAdd.style.display = 'none';
+  render();
+}
+
+function renderOmniboxShelfResults(query){
+  if(!omniboxShelfResults) return;
+  const visible = entries.filter(e => e.status !== 'tombstoned');
+  const allBooks = visible;
+  const matches = filterBySearch(allBooks, query).slice(0, 5);
+  if(!matches.length){
+    if(omniboxShelfSection) omniboxShelfSection.style.display = 'none';
+    return;
+  }
+  if(omniboxShelfSection) omniboxShelfSection.style.display = '';
+  omniboxShelfResults.innerHTML = matches.map(e => {
+    const key = e.txid || e.id || '';
+    const coverDataUrl = e.coverImage ? `data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}` : '';
+    const rs = normalizeReadingStatus(e);
+    let statusLabel = '', statusClass = '';
+    if(rs === READING_STATUS.READ){ statusLabel = 'Read'; statusClass = 'status-read'; }
+    else if(rs === READING_STATUS.READING){ statusLabel = 'Reading'; statusClass = 'status-reading'; }
+    else if(rs === READING_STATUS.WANT_TO_READ){ statusLabel = 'Want to Read'; statusClass = 'status-wtr'; }
+    const coverHtml = coverDataUrl
+      ? `<img src="${coverDataUrl}">`
+      : `<div class="omnibox-result-mini" style="background:${generatedCoverColor(e.title||'')}">${escapeHtml((e.title||'').slice(0,20))}</div>`;
+    return `<div class="omnibox-result" data-shelf-key="${escapeHtml(key)}">
+      <div class="omnibox-result-cover">${coverHtml}</div>
+      <div class="omnibox-result-info">
+        <div class="omnibox-result-title">${escapeHtml(e.title||'Untitled')}</div>
+        <div class="omnibox-result-author">${escapeHtml(e.author||'')}</div>
+      </div>
+      <span class="omnibox-result-status ${statusClass}">${statusLabel}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderOmniboxApiSkeletons(){
+  if(!omniboxAddResults) return;
+  if(omniboxAddSection) omniboxAddSection.style.display = '';
+  omniboxAddResults.innerHTML = Array(3).fill(`<div class="omnibox-skeleton">
+    <div class="omnibox-skeleton-cover"></div>
+    <div class="omnibox-skeleton-text"><div class="omnibox-skeleton-line"></div><div class="omnibox-skeleton-line"></div></div>
+  </div>`).join('');
+}
+
+function renderOmniboxApiResults(results){
+  if(!omniboxAddResults) return;
+  if(!results.length){
+    if(omniboxAddSection) omniboxAddSection.style.display = 'none';
+    return;
+  }
+  if(omniboxAddSection) omniboxAddSection.style.display = '';
+  omniboxAddResults.innerHTML = results.slice(0, 8).map(r => {
+    const coverHtml = r.coverUrl
+      ? `<img src="${r.coverUrl}">`
+      : `<div class="omnibox-result-mini" style="background:${generatedCoverColor(r.title||'')}">${escapeHtml((r.title||'').slice(0,20))}</div>`;
+    const meta = [r.year, r.publisher, r.duration].filter(Boolean).join(' \u00B7 ');
+    return `<div class="omnibox-result" data-add-json='${encodeURIComponent(JSON.stringify(r))}'>
+      <div class="omnibox-result-cover">${coverHtml}</div>
+      <div class="omnibox-result-info">
+        <div class="omnibox-result-title">${escapeHtml(r.title||'')}</div>
+        <div class="omnibox-result-author">${escapeHtml(r.author||'')}</div>
+        ${meta ? `<div class="omnibox-result-meta">${escapeHtml(meta)}</div>` : ''}
+      </div>
+      <button type="button" class="omnibox-result-add">+ Add</button>
+    </div>`;
+  }).join('');
+}
+
+function searchOmniboxApis(query){
+  if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
+  const controller = new AbortController();
+  _omniboxApiAbort = controller;
+  const signal = controller.signal;
+  const mySearch = ++_omniboxApiCounter;
+  const isStale = () => mySearch !== _omniboxApiCounter || signal.aborted;
+  const term = encodeURIComponent(query);
+  const fields = 'key,title,author_key,author_name,cover_i,first_publish_year,subtitle,physical_format';
+  const olUrl = `https://openlibrary.org/search.json?q=${term}&limit=15&fields=${fields}`;
+  const itUrl = `https://itunes.apple.com/search?media=audiobook&term=${term}&limit=8`;
+
+  renderOmniboxApiSkeletons();
+
+  let olResults = [];
+  let itResults = [];
+  let olDone = false;
+  let itDone = false;
+
+  function mergeAndShow(){
+    if(isStale()) return;
+    // Deduplicate: combine OL + iTunes, prefer one with cover
+    const combined = [];
+    const seen = new Set();
+    for(const r of [...itResults, ...olResults]){
+      const k = (r.title||'').toLowerCase().replace(/[^a-z0-9]/g,'') + '|' + (r.author||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+      if(seen.has(k)) continue;
+      seen.add(k);
+      combined.push(r);
+    }
+    renderOmniboxApiResults(combined);
+  }
+
+  fetch(olUrl, {signal}).then(r => r.json()).then(j => {
+    if(isStale()) return;
+    olResults = (j.docs || []).slice(0, 10).map(d => ({
+      title: d.title || '',
+      author: d.author_name?.[0] || '',
+      year: d.first_publish_year ? String(d.first_publish_year) : '',
+      coverUrl: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-S.jpg` : '',
+      publisher: '',
+      duration: '',
+      source: 'ol',
+      work_key: d.key,
+      cover_i: d.cover_i || ''
+    }));
+    olDone = true;
+    mergeAndShow();
+  }).catch(e => { if(e.name !== 'AbortError'){ olDone = true; mergeAndShow(); } });
+
+  fetch(itUrl, {signal}).then(r => r.json()).then(j => {
+    if(isStale()) return;
+    itResults = (j.results || []).slice(0, 6).map(i => ({
+      title: i.collectionName || i.trackName || '',
+      author: i.artistName || '',
+      year: '',
+      coverUrl: i.artworkUrl100 || '',
+      publisher: '',
+      duration: '',
+      source: 'itunes',
+      artwork: i.artworkUrl100 || ''
+    }));
+    itDone = true;
+    mergeAndShow();
+  }).catch(e => { if(e.name !== 'AbortError'){ itDone = true; mergeAndShow(); } });
+}
+
+omniboxInput?.addEventListener('input', ()=>{
+  const q = (omniboxInput.value || '').trim();
+  if(omniboxClear) omniboxClear.style.display = q ? '' : 'none';
+
+  // Always update shelf filter for card grid
   clearTimeout(_searchDebounce);
   _searchDebounce = setTimeout(()=>{
-    searchQuery = (shelfSearchInput.value || '').trim();
-    if(shelfSearchClear) shelfSearchClear.style.display = searchQuery ? '' : 'none';
+    searchQuery = q;
     render();
   }, 150);
+
+  // Dropdown: show immediately with shelf results, debounce API
+  if(q.length > 0){
+    showOmniboxDropdown();
+    renderOmniboxShelfResults(q);
+    if(omniboxManualAdd) omniboxManualAdd.style.display = '';
+
+    clearTimeout(_omniboxApiDebounce);
+    _omniboxApiDebounce = setTimeout(()=> searchOmniboxApis(q), 350);
+  } else {
+    closeOmniboxDropdown();
+    if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
+  }
 });
-shelfSearchClear?.addEventListener('click', ()=>{
-  if(shelfSearchInput) shelfSearchInput.value = '';
-  searchQuery = '';
-  if(shelfSearchClear) shelfSearchClear.style.display = 'none';
-  render();
-});
-shelfSearchInput?.addEventListener('keydown', (ev)=>{
+
+omniboxClear?.addEventListener('click', clearOmnibox);
+
+omniboxInput?.addEventListener('keydown', (ev)=>{
   if(ev.key === 'Escape'){
     ev.preventDefault();
-    if(shelfSearchInput) shelfSearchInput.value = '';
-    searchQuery = '';
-    if(shelfSearchClear) shelfSearchClear.style.display = 'none';
-    render();
+    if(omniboxDropdown && omniboxDropdown.style.display !== 'none'){
+      closeOmniboxDropdown();
+    } else {
+      clearOmnibox();
+    }
   }
+});
+
+// Omnibox dropdown click delegation
+omniboxDropdown?.addEventListener('click', (ev)=>{
+  // Shelf result clicked — open edit modal
+  const shelfRow = ev.target.closest('[data-shelf-key]');
+  if(shelfRow){
+    const key = shelfRow.dataset.shelfKey;
+    const entry = entries.find(e => (e.txid||e.id) === key);
+    if(entry){
+      closeOmniboxDropdown();
+      openModal(entry);
+    }
+    return;
+  }
+  // API result clicked — open add modal with pre-filled data
+  const addRow = ev.target.closest('[data-add-json]');
+  if(addRow){
+    try{
+      const meta = JSON.parse(decodeURIComponent(addRow.dataset.addJson));
+      closeOmniboxDropdown();
+      openModal(null, READING_STATUS.WANT_TO_READ);
+      // Pre-fill the modal form fields
+      setTimeout(()=>{
+        if(form.title) form.title.value = meta.title || '';
+        if(form.author) form.author.value = meta.author || '';
+        if(meta.source === 'itunes') form.format.value = 'audio';
+        // Trigger the in-modal book search to get cover + editions
+        const bsInput = document.getElementById('bookSearchInput');
+        if(bsInput){
+          bsInput.value = meta.title + (meta.author ? ' ' + meta.author : '');
+          bsInput.dispatchEvent(new Event('input', {bubbles:true}));
+        }
+        form.dispatchEvent(new Event('input', {bubbles:true}));
+      }, 50);
+    }catch(e){}
+    return;
+  }
+});
+
+omniboxManualAdd?.addEventListener('click', ()=>{
+  const q = (omniboxInput?.value || '').trim();
+  closeOmniboxDropdown();
+  openModal(null, READING_STATUS.WANT_TO_READ);
+  // Pre-fill title with search query
+  setTimeout(()=>{
+    if(form.title && q) form.title.value = q;
+    form.dispatchEvent(new Event('input', {bubbles:true}));
+  }, 50);
 });
 
 // --- Year navigation ---
@@ -1273,7 +1505,7 @@ deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value
 
 // header refresh removed; app auto-syncs
 
-newBtn?.addEventListener('click', ()=>openModal(null, READING_STATUS.WANT_TO_READ));
+// newBtn removed (omnibox replaces "+ Add a Book")
 
 // Phase 2: First-run experience event handlers
 emptyAddBookBtn?.addEventListener('click', ()=>openModal(null));
