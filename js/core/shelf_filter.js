@@ -85,6 +85,34 @@ export function getDefaultYear(yearGroups) {
 }
 
 /**
+ * Find the nearest populated year when the current year becomes empty.
+ * Prefers the next more-recent year, falls back to the next older year.
+ * @param {Map<string, Array>} yearGroups - from groupByYear()
+ * @param {string} emptyYear - the year that just became empty
+ * @returns {string|null} nearest populated year, or null if no years remain
+ */
+export function getNearestPopulatedYear(yearGroups, emptyYear) {
+  const years = [...yearGroups.keys()].filter(y => y !== emptyYear);
+  if (years.length === 0) return null;
+
+  // For 'Undated', just return the first (most recent) numeric year
+  if (emptyYear === 'Undated' || !/^\d{4}$/.test(emptyYear)) {
+    return years[0];
+  }
+
+  const numericYears = years.filter(y => /^\d{4}$/.test(y));
+  // Prefer a more-recent year first, then older, then 'Undated'
+  const moreRecent = numericYears.filter(y => y > emptyYear).sort((a, b) => a.localeCompare(b));
+  if (moreRecent.length) return moreRecent[0]; // closest newer year
+
+  const older = numericYears.filter(y => y < emptyYear).sort((a, b) => b.localeCompare(a));
+  if (older.length) return older[0]; // closest older year
+
+  // Only 'Undated' remains
+  return years.includes('Undated') ? 'Undated' : years[0];
+}
+
+/**
  * Build the display list for the shelf, handling search + year grouping + WTR merging
  * @param {Object} opts
  * @param {Array} opts.shelfEntries - reading + read entries (already sorted)

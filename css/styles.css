@@ -638,19 +638,96 @@ button.secondary:hover, .btn.secondary:hover{
 .omnibox-skeleton-line:first-child{width:70%}
 .omnibox-skeleton-line:last-child{width:45%}
 
-/* Year label line (below spine nav) */
-.year-label-line{
-  font-size:.8rem;
-  color:var(--color-text-secondary);
-  margin:0 0 10px 2px;
-}
-
-/* Spine navigator — vertical book spines on a wooden shelf */
-.spine-nav{
-  padding:0;
-  margin:0 0 6px;
+/* ── Year header — toggle line with arrows + chevron ── */
+.year-header{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:4px 0 6px;
   position:relative;
 }
+/* Shelf-edge shadow hint when panel is closed */
+.year-header::after{
+  content:'';
+  position:absolute;
+  bottom:0;left:10%;right:10%;
+  height:1px;
+  background:rgba(255,255,255,.06);
+  transition:opacity .2s;
+}
+.year-header.spine-open::after{opacity:0}
+
+.year-arrow{
+  background:none;
+  border:none;
+  color:var(--color-text-secondary);
+  font-size:.7rem;
+  cursor:pointer;
+  padding:4px 6px;
+  border-radius:4px;
+  line-height:1;
+  transition:color .15s,background .15s;
+}
+.year-arrow:hover{color:var(--color-text-primary);background:var(--color-bg-elevated)}
+.year-arrow:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
+.year-arrow[disabled]{opacity:.25;cursor:default;pointer-events:none}
+
+.year-toggle{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  background:none;
+  border:none;
+  color:var(--color-text-primary);
+  font-size:.85rem;
+  font-weight:500;
+  cursor:pointer;
+  padding:4px 8px;
+  border-radius:6px;
+  transition:background .15s;
+}
+.year-toggle:hover{background:var(--color-bg-elevated)}
+.year-toggle:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
+
+.year-toggle-label{pointer-events:none}
+
+.year-chevron{
+  font-size:.55rem;
+  transition:transform .2s ease;
+  pointer-events:none;
+}
+.year-header.spine-open .year-chevron{
+  transform:rotate(180deg);
+}
+
+/* Single-year mode: hide arrows and chevron */
+.year-header.single-year .year-arrow,
+.year-header.single-year .year-chevron{display:none}
+.year-header.single-year .year-toggle{cursor:default}
+.year-header.single-year .year-toggle:hover{background:none}
+
+/* ── Spine panel — collapsible shelf of book spines ── */
+.spine-panel{
+  max-height:0;
+  overflow:hidden;
+  transition:max-height 250ms ease-out,opacity 250ms ease-out;
+  opacity:0;
+  position:relative;
+}
+.spine-panel.open{
+  max-height:120px;
+  opacity:1;
+}
+.spine-panel.closing{
+  transition:max-height 200ms ease-in,opacity 200ms ease-in;
+}
+
+.spine-panel-inner{
+  position:relative;
+  padding:6px 0 0;
+}
+
 .spine-strip{
   display:flex;
   align-items:flex-end;
@@ -678,11 +755,14 @@ button.secondary:hover, .btn.secondary:hover{
 }
 
 .spine-btn{
-  height:28px;
+  height:68px;
   border:none;
   border-radius:2px 2px 0 0;
   cursor:pointer;
-  display:block;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
   flex-shrink:0;
   transition:filter .15s,box-shadow .15s,opacity .15s,transform .15s;
   position:relative;
@@ -691,19 +771,25 @@ button.secondary:hover, .btn.secondary:hover{
   padding:0;
   opacity:.5;
 }
-/* Vertical text label inside the spine */
+
+/* Horizontal text label inside the spine */
 .spine-label{
-  position:absolute;
-  top:50%;left:50%;
-  transform:translate(-50%,-50%) rotate(-90deg);
   font-family:'Georgia','Times New Roman',serif;
-  font-size:7px;
+  font-size:9px;
   font-weight:400;
   letter-spacing:.02em;
-  color:rgba(255,255,255,.55);
+  color:rgba(255,255,255,.7);
   text-shadow:0 0 2px rgba(0,0,0,.4);
   white-space:nowrap;
   pointer-events:none;
+  line-height:1.2;
+}
+.spine-count{
+  font-family:'Georgia','Times New Roman',serif;
+  font-size:7px;
+  color:rgba(255,255,255,.4);
+  pointer-events:none;
+  margin-top:1px;
 }
 
 /* Cloth texture overlay — fine horizontal weave */
@@ -774,8 +860,8 @@ button.secondary:hover, .btn.secondary:hover{
 .spine-btn[data-spine-color="undated"]{background:linear-gradient(160deg,#333,#2a2a2a)}
 
 /* Spine scroll fade indicators */
-.spine-nav .spine-fade-left,
-.spine-nav .spine-fade-right{
+.spine-panel-inner .spine-fade-left,
+.spine-panel-inner .spine-fade-right{
   position:absolute;
   top:0;bottom:0;width:20px;
   pointer-events:none;
@@ -783,10 +869,21 @@ button.secondary:hover, .btn.secondary:hover{
   opacity:0;
   transition:opacity .2s;
 }
-.spine-nav .spine-fade-left{left:0;background:linear-gradient(to right,var(--color-bg-base),transparent)}
-.spine-nav .spine-fade-right{right:0;background:linear-gradient(to left,var(--color-bg-base),transparent)}
-.spine-nav.fade-left .spine-fade-left{opacity:1}
-.spine-nav.fade-right .spine-fade-right{opacity:1}
+.spine-panel-inner .spine-fade-left{left:0;background:linear-gradient(to right,var(--color-bg-base),transparent)}
+.spine-panel-inner .spine-fade-right{right:0;background:linear-gradient(to left,var(--color-bg-base),transparent)}
+.spine-panel-inner.fade-left .spine-fade-left{opacity:1}
+.spine-panel-inner.fade-right .spine-fade-right{opacity:1}
+
+/* Reduced motion: instant panel show/hide */
+@media(prefers-reduced-motion:reduce){
+  .spine-panel,.spine-panel.closing{transition:none}
+  .year-chevron{transition:none}
+}
+
+/* Mobile: smaller spines */
+@media(max-width:600px){
+  .spine-btn{height:56px}
+}
 
 /* Year transition */
 .cards.year-fade-out{opacity:0;transition:opacity 150ms ease-out}

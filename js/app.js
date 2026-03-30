@@ -6,7 +6,7 @@ import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
-import { buildDisplayList, getYearList, filterBySearch } from './core/shelf_filter.js';
+import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
 import { fetchSyncStatus, ackSyncedTxids } from './browser_client.js';
 
 // --- Version logging (always visible in console) ---
@@ -86,13 +86,20 @@ const omniboxAddSection = document.getElementById('omniboxAddSection');
 const omniboxAddResults = document.getElementById('omniboxAddResults');
 const omniboxManualAdd = document.getElementById('omniboxManualAdd');
 let omniboxBackdrop = null; // created dynamically
+const yearHeader = document.getElementById('yearHeader');
 const yearLabelEl = document.getElementById('yearLabel');
-const spineNav = document.getElementById('spineNav');
+const yearToggle = document.getElementById('yearToggle');
+const yearChevron = document.getElementById('yearChevron');
+const yearPrevBtn = document.getElementById('yearPrev');
+const yearNextBtn = document.getElementById('yearNext');
+const spinePanel = document.getElementById('spinePanel');
+const spinePanelInner = spinePanel?.querySelector('.spine-panel-inner');
 const spineStrip = document.getElementById('spineStrip');
 let selectedYear = null; // null = default (current year or most recent)
 let searchQuery = '';
 let _searchDebounce = null;
 let _lastYearGroups = null; // cached for spine nav interactions
+let spineOpen = false; // spine panel expanded?
 
 function showStatusToast(msg) {
   const existing = document.getElementById('bookishStatusToast');
@@ -743,8 +750,8 @@ function render(){
     emptyEl.style.display='block';
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
     if(omniboxWrap) omniboxWrap.style.display = 'none';
-    if(yearLabelEl) yearLabelEl.style.display = 'none';
-    if(spineNav) spineNav.style.display = 'none';
+    if(yearHeader) yearHeader.style.display = 'none';
+    closeSpinePanel();
     hideAccountNudge();
     return;
   }
@@ -754,8 +761,8 @@ function render(){
     emptyEl.style.display='none';
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'block';
     if(omniboxWrap) omniboxWrap.style.display = '';
-    if(yearLabelEl) yearLabelEl.style.display = 'none';
-    if(spineNav) spineNav.style.display = 'none';
+    if(yearHeader) yearHeader.style.display = 'none';
+    closeSpinePanel();
     hideAccountNudge();
     return;
   }
@@ -774,27 +781,33 @@ function render(){
   const yearList = getYearList(yearGroups);
 
   if(isSearching){
-    if(yearLabelEl) yearLabelEl.style.display = 'none';
-    if(spineNav) spineNav.style.display = 'none';
+    if(yearHeader) yearHeader.style.display = 'none';
+    closeSpinePanel();
   } else {
-    // Year label (simple text line below spine nav)
-    if(yearLabelEl && activeYear){
+    // Year header toggle line
+    if(yearHeader && activeYear){
       const count = displayEntries.length;
       const yearDisplay = activeYear === 'Undated' ? 'Undated' : activeYear;
-      yearLabelEl.textContent = `${yearDisplay} \u00B7 ${count} book${count===1?'':'s'}`;
-      yearLabelEl.style.display = yearList.length > 0 ? '' : 'none';
-    } else if(yearLabelEl){
-      yearLabelEl.style.display = 'none';
-    }
+      if(yearLabelEl) yearLabelEl.textContent = `${yearDisplay} \u00B7 ${count} book${count===1?'':'s'}`;
+      yearHeader.style.display = yearList.length > 0 ? '' : 'none';
 
-    // Spine navigator (top position, hidden when single year)
-    if(spineNav && spineStrip){
-      if(yearList.length > 1){
-        spineNav.style.display = '';
-        renderSpineNav(yearList, activeYear);
-      } else {
-        spineNav.style.display = 'none';
+      // Single-year mode: no arrows, no chevron, no toggle
+      const isSingle = yearList.length <= 1;
+      yearHeader.classList.toggle('single-year', isSingle);
+
+      // Update prev/next arrow disabled state
+      if(!isSingle){
+        const idx = yearList.findIndex(y => y.year === activeYear);
+        if(yearPrevBtn) yearPrevBtn.disabled = idx <= 0;
+        if(yearNextBtn) yearNextBtn.disabled = idx >= yearList.length - 1;
       }
+
+      // Render spines into the panel (even if closed, so they're ready)
+      if(yearList.length > 1){
+        renderSpineNav(yearList, activeYear);
+      }
+    } else if(yearHeader){
+      yearHeader.style.display = 'none';
     }
   }
 
@@ -803,8 +816,14 @@ function render(){
     for(const e of displayEntries) e._showYearBadge = true;
   }
 
-  // Show empty year message when year has no books
+  // Auto-navigate away from empty year (e.g. after deleting last book)
   if(!isSearching && activeYear && displayEntries.length === 0 && yearGroups.size > 0){
+    const nearest = getNearestPopulatedYear(yearGroups, activeYear);
+    if(nearest){
+      navigateYear(nearest);
+      return;
+    }
+    // No populated years remain — show empty message
     cardsEl.innerHTML = `<div class="year-empty"><div class="year-empty-icon">\uD83D\uDCD6</div>No books in ${activeYear === 'Undated' ? 'Undated' : activeYear} yet</div>`;
     return;
   }
@@ -1278,24 +1297,65 @@ function navigateYear(year){
   }, 150);
 }
 
+/** Step to adjacent year using yearList from last render. */
+function stepYear(direction){
+  if(!_lastYearGroups) return;
+  const yearList = getYearList(_lastYearGroups);
+  const idx = yearList.findIndex(y => y.year === selectedYear);
+  const next = idx + direction;
+  if(next >= 0 && next < yearList.length){
+    navigateYear(yearList[next].year);
+  }
+}
+
+// --- Spine panel toggle ---
+function openSpinePanel(){
+  if(!spinePanel || spineOpen) return;
+  spineOpen = true;
+  spinePanel.classList.remove('closing');
+  spinePanel.classList.add('open');
+  yearHeader?.classList.add('spine-open');
+  yearToggle?.setAttribute('aria-expanded', 'true');
+}
+
+function closeSpinePanel(){
+  if(!spinePanel || !spineOpen) return;
+  spineOpen = false;
+  spinePanel.classList.add('closing');
+  spinePanel.classList.remove('open');
+  yearHeader?.classList.remove('spine-open');
+  yearToggle?.setAttribute('aria-expanded', 'false');
+  // Clean up closing class after transition
+  const onEnd = ()=>{ spinePanel.classList.remove('closing'); spinePanel.removeEventListener('transitionend', onEnd); };
+  spinePanel.addEventListener('transitionend', onEnd);
+}
+
+function toggleSpinePanel(){
+  spineOpen ? closeSpinePanel() : openSpinePanel();
+}
+
+// Year header button handlers
+yearToggle?.addEventListener('click', ()=>{
+  if(yearHeader?.classList.contains('single-year')) return;
+  toggleSpinePanel();
+});
+yearPrevBtn?.addEventListener('click', ()=> stepYear(-1));
+yearNextBtn?.addEventListener('click', ()=> stepYear(1));
+
+// Escape closes the spine panel
+document.addEventListener('keydown', (ev)=>{
+  if(ev.key === 'Escape' && spineOpen){
+    closeSpinePanel();
+    yearToggle?.focus();
+  }
+});
 
 // --- Spine navigator rendering ---
 const SPINE_COLORS = 8;
 
-/** Monotonic width + height: more books = bigger spine. */
+/** Spine width: clamp(48px, count * 3px, 96px) */
 function spineWidth(count){
-  if(count >= 20) return 28;
-  if(count >= 10) return 24;
-  if(count >= 5)  return 20;
-  if(count >= 2)  return 16;
-  return 14;
-}
-function spineHeight(count){
-  if(count >= 20) return 36;
-  if(count >= 10) return 34;
-  if(count >= 5)  return 32;
-  if(count >= 2)  return 30;
-  return 28;
+  return Math.max(48, Math.min(count * 3, 96));
 }
 
 function renderSpineNav(yearList, activeYear){
@@ -1329,7 +1389,6 @@ function renderSpineNav(yearList, activeYear){
     const colorKey = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
     btn.dataset.spineColor = colorKey;
     btn.style.width = `${spineWidth(count)}px`;
-    btn.style.height = `${spineHeight(count)}px`;
 
     // Bookmark ribbon on selected year
     if(year === activeYear){
@@ -1339,14 +1398,23 @@ function renderSpineNav(yearList, activeYear){
       btn.appendChild(ribbon);
     }
 
-    // Year text — full year vertical, or icon for special groups
+    // Year text — horizontal, full four-digit year
     const txt = document.createElement('span');
     txt.className = 'spine-label';
     txt.textContent = year === 'Undated' ? '?' : year;
     btn.appendChild(txt);
 
+    // Book count below year
+    const countEl = document.createElement('span');
+    countEl.className = 'spine-count';
+    countEl.textContent = `${count}`;
+    btn.appendChild(countEl);
+
     btn.tabIndex = year === activeYear ? 0 : -1;
-    btn.addEventListener('click', ()=> navigateYear(year));
+    btn.addEventListener('click', ()=>{
+      navigateYear(year);
+      closeSpinePanel(); // tapping a spine navigates and closes panel
+    });
     spineStrip.appendChild(btn);
   }
 
@@ -1365,12 +1433,12 @@ function renderSpineNav(yearList, activeYear){
 }
 
 function updateSpineFades(){
-  if(!spineNav || !spineStrip) return;
+  if(!spinePanelInner || !spineStrip) return;
   const { scrollLeft, scrollWidth, clientWidth } = spineStrip;
   const overflows = scrollWidth > clientWidth + 1;
   spineStrip.classList.toggle('overflow-scroll', overflows);
-  spineNav.classList.toggle('fade-left', overflows && scrollLeft > 2);
-  spineNav.classList.toggle('fade-right', overflows && scrollLeft + clientWidth < scrollWidth - 2);
+  spinePanelInner.classList.toggle('fade-left', overflows && scrollLeft > 2);
+  spinePanelInner.classList.toggle('fade-right', overflows && scrollLeft + clientWidth < scrollWidth - 2);
 }
 
 // Keyboard navigation within spine strip (arrow keys)
@@ -1384,7 +1452,15 @@ spineStrip?.addEventListener('keydown', (ev)=>{
   if(ev.key === 'ArrowRight' && current < spines.length - 1) next = current + 1;
   if(next !== current){
     spines[next].focus();
-    spines[next].click();
+    navigateYear(getYearList(_lastYearGroups)[next]?.year);
+  }
+});
+
+// Year header arrow keys: navigate without opening panel
+yearHeader?.addEventListener('keydown', (ev)=>{
+  if(ev.target === yearPrevBtn || ev.target === yearNextBtn || ev.target === yearToggle){
+    if(ev.key === 'ArrowLeft'){ ev.preventDefault(); stepYear(-1); }
+    if(ev.key === 'ArrowRight'){ ev.preventDefault(); stepYear(1); }
   }
 });
 

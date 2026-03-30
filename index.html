@@ -96,12 +96,21 @@
   <p class="shelf-empty-text">Books you're reading and have finished show up here.</p>
   <button type="button" id="shelfEmptyBrowse" class="shelf-empty-link">Browse My Reading List →</button>
 </div>
-<nav id="spineNav" class="spine-nav" role="tablist" aria-label="Browse reading years" style="display:none">
-  <div class="spine-fade-left"></div>
-  <div class="spine-strip" id="spineStrip"></div>
-  <div class="spine-fade-right"></div>
-</nav>
-<div id="yearLabel" class="year-label-line" style="display:none" aria-live="polite"></div>
+<div id="yearHeader" class="year-header" style="display:none" aria-live="polite">
+  <button type="button" id="yearPrev" class="year-arrow" aria-label="Previous year">&#9664;</button>
+  <button type="button" id="yearToggle" class="year-toggle" aria-expanded="false" aria-controls="spinePanel">
+    <span id="yearLabel" class="year-toggle-label"></span>
+    <span id="yearChevron" class="year-chevron" aria-hidden="true">&#9662;</span>
+  </button>
+  <button type="button" id="yearNext" class="year-arrow" aria-label="Next year">&#9654;</button>
+</div>
+<div id="spinePanel" class="spine-panel" role="tablist" aria-label="Browse reading years">
+  <div class="spine-panel-inner">
+    <div class="spine-fade-left"></div>
+    <div class="spine-strip" id="spineStrip"></div>
+    <div class="spine-fade-right"></div>
+  </div>
+</div>
 <div id="cards" class="cards"></div>
 <div id="empty" class="empty-state" style="display:none">
   <div class="empty-illustration">📚</div>
