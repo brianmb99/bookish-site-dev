@@ -539,9 +539,9 @@ button.secondary:hover, .btn.secondary:hover{
 }
 
 .spine-btn{
-  height:34px;
-  min-width:16px;
-  max-width:30px;
+  height:28px;
+  min-width:14px;
+  max-width:28px;
   border:none;
   border-radius:1px 1px 0 0;
   cursor:pointer;

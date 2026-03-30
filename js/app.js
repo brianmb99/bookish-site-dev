@@ -1050,11 +1050,20 @@ function navigateYear(year){
 // --- Spine navigator rendering ---
 const SPINE_COLORS = 8;
 
-/** Monotonic width: more books = wider spine. Three clean steps. */
+/** Monotonic width + height: more books = bigger spine. */
 function spineWidth(count){
-  if(count >= 10) return 28;
-  if(count >= 4)  return 22;
-  return 16;
+  if(count >= 20) return 28;
+  if(count >= 10) return 24;
+  if(count >= 5)  return 20;
+  if(count >= 2)  return 16;
+  return 14;
+}
+function spineHeight(count){
+  if(count >= 20) return 36;
+  if(count >= 10) return 34;
+  if(count >= 5)  return 32;
+  if(count >= 2)  return 30;
+  return 28;
 }
 
 function renderSpineNav(yearList, activeYear){
@@ -1088,6 +1097,7 @@ function renderSpineNav(yearList, activeYear){
     const colorKey = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
     btn.dataset.spineColor = colorKey;
     btn.style.width = `${spineWidth(count)}px`;
+    btn.style.height = `${spineHeight(count)}px`;
 
     // Bookmark ribbon on selected year
     if(year === activeYear){
