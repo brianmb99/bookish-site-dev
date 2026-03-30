@@ -1069,7 +1069,7 @@ function renderSpineNav(yearList, activeYear){
     btn.setAttribute('aria-label', `${year === 'Undated' ? 'Undated' : year}, ${count} book${count===1?'':'s'}`);
     btn.title = `${year} \u00B7 ${count} book${count===1?'':'s'}`;
     btn.dataset.spineColor = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
-    btn.style.width = `${Math.min(80, Math.max(32, count * 2.5))}px`;
+    btn.style.width = `${Math.min(96, Math.max(18, count * 3.5))}px`;
     btn.textContent = year === 'Undated' ? '?' : year.slice(2);
     btn.tabIndex = year === activeYear ? 0 : -1;
     btn.addEventListener('click', ()=> navigateYear(year));
