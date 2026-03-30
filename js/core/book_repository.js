@@ -12,7 +12,6 @@
 
 import { registerPendingTx, fetchPendingTxIds } from './pending_tx_bridge.js';
 import { pickWinner } from './cache_core.js';
-import { fetchSyncStatus } from '../browser_client.js';
 
 export const READING_STATUS = {
   WANT_TO_READ: 'want_to_read',
@@ -526,29 +525,8 @@ export class BookRepository {
     const client = this._getBrowserClient();
     if (!client) return { entries: [], tombstones: [], partial: false };
 
-    // Fetch bridge entries and dirty flag in parallel
-    const addr = await this._getWalletAddress();
-    const [bridgeResult, syncStatus] = await Promise.all([
-      this._fetchBridgeEntries(),
-      addr ? fetchSyncStatus(addr) : Promise.resolve(null),
-    ]);
-    const { entries: bridgeEntries, tombstones: bridgeTombstones } = bridgeResult;
-
-    // PR-034 Workstream D: Skip GraphQL when nothing has changed
-    const cachedEntries = this._cache ? await this._cache.listAllRaw() : [];
-    const isFirstSync = cachedEntries.filter(e => e.seenRemote).length === 0;
-    const canSkipGraphQL = !isFirstSync && syncStatus && !syncStatus.dirty && bridgeEntries.length === 0 && bridgeTombstones.length === 0;
-
-    let allEdges, gqlError;
-    if (canSkipGraphQL) {
-      console.log('[BookRepository] Dirty flag clean + no bridge entries → skipping GraphQL');
-      allEdges = [];
-      gqlError = null;
-    } else {
-      // Build set of known txids for early pagination termination
-      const knownTxids = new Set(cachedEntries.filter(e => e.txid && e.seenRemote).map(e => e.txid));
-      ({ edges: allEdges, error: gqlError } = await this._fetchGraphQLPages(isFirstSync ? null : knownTxids));
-    }
+    const { entries: bridgeEntries, tombstones: bridgeTombstones } = await this._fetchBridgeEntries();
+    const { edges: allEdges, error: gqlError } = await this._fetchGraphQLPages();
 
     let liveEdges = [], tombstones = [];
     if (allEdges.length > 0) {
@@ -558,6 +536,7 @@ export class BookRepository {
       tombstones = [...tombstones, ...bridgeTombstones];
     }
 
+    const cachedEntries = this._cache ? await this._cache.listAllRaw() : [];
     const { needsDecrypt, alreadySynced } = this._partitionEdges(liveEdges, cachedEntries);
 
     console.log('[BookRepository] Cache check:', alreadySynced.length, 'already synced,', needsDecrypt.length, 'need decrypt');
@@ -610,42 +589,27 @@ export class BookRepository {
     }
   }
 
-  async _fetchGraphQLPages(knownTxids = null) {
+  async _fetchGraphQLPages() {
     const client = this._getBrowserClient();
     const allEdges = [];
-    let cursor, pages = 0, safety = 0;
-    let shortCircuited = false;
+    let cursor, safety = 0;
 
     console.log('[BookRepository] Querying Arweave GraphQL for book entries...');
     const t0 = Date.now();
 
     for (;;) {
       const { edges, pageInfo, error } = await client.searchByOwner(null, { limit: 50, cursor });
-      pages++;
       if (error) {
         console.warn('[BookRepository] GraphQL unavailable:', error);
         return { edges: allEdges, error };
       }
       allEdges.push(...edges);
-
-      // PR-034: Short-circuit if all edges on this page are already known locally.
-      // GraphQL returns HEIGHT_DESC, so newest first. Once we hit a page where
-      // everything is known, older pages won't have anything new either.
-      if (knownTxids && edges.length > 0) {
-        const allKnown = edges.every(e => knownTxids.has(e.node.id));
-        if (allKnown) {
-          shortCircuited = true;
-          break;
-        }
-      }
-
       if (!pageInfo.hasNextPage) break;
       cursor = edges[edges.length - 1]?.cursor;
       if (++safety > 40) break;
     }
 
-    const label = shortCircuited ? `(short-circuited after ${pages} page(s))` : '';
-    console.log('[BookRepository] GraphQL completed in', Date.now() - t0, 'ms, found', allEdges.length, 'transactions', label);
+    console.log('[BookRepository] GraphQL completed in', Date.now() - t0, 'ms, found', allEdges.length, 'transactions');
     return { edges: allEdges, error: null };
   }
 
@@ -662,26 +626,19 @@ export class BookRepository {
   }
 
   async _decryptEdges(edges) {
-    const BATCH = 10;
     const t0 = Date.now();
     const client = this._getBrowserClient();
     const results = [];
-    for (let i = 0; i < edges.length; i += BATCH) {
-      const batch = edges.slice(i, i + BATCH);
-      const settled = await Promise.allSettled(batch.map(async (e) => {
+    for (const e of edges) {
+      try {
         const dec = await client.decryptTx(e.node.id);
         const prev = prevTag(e);
-        return { txid: e.node.id, ...dec, block: e.node.block, ...(prev && { prevTxid: prev }) };
-      }));
-      for (let j = 0; j < settled.length; j++) {
-        if (settled[j].status === 'fulfilled') {
-          results.push(settled[j].value);
-        } else {
-          console.warn('[BookRepository] Failed to decrypt', batch[j].node.id, settled[j].reason);
-        }
+        results.push({ txid: e.node.id, ...dec, block: e.node.block, ...(prev && { prevTxid: prev }) });
+      } catch (err) {
+        console.warn('[BookRepository] Failed to decrypt', e.node.id, err);
       }
     }
-    console.log('[BookRepository] Decrypted', results.length, '/', edges.length, 'entries in', Date.now() - t0, 'ms (batches of', BATCH + ')');
+    console.log('[BookRepository] Decrypted', edges.length, 'entries in', Date.now() - t0, 'ms');
     return results;
   }
 
