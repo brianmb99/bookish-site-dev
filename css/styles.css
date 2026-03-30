@@ -540,12 +540,18 @@ button.secondary:hover, .btn.secondary:hover{
 
 .spine-btn{
   height:28px;
-  min-width:0;
-  max-width:28px;
   border:none;
   border-radius:1px 1px 0 0;
   cursor:pointer;
-  /* Vertical text — bottom-to-top (English spine convention, tilt head right) */
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  transition:filter .15s,box-shadow .15s;
+  position:relative;
+  overflow:hidden;
+  box-sizing:border-box;
+}
+/* Vertical text label inside the spine */
+.spine-label{
   writing-mode:vertical-rl;
   text-orientation:mixed;
   transform:rotate(180deg);
@@ -556,13 +562,8 @@ button.secondary:hover, .btn.secondary:hover{
   letter-spacing:.02em;
   color:rgba(255,255,255,.75);
   text-shadow:0 0 2px rgba(0,0,0,.5);
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;
-  transition:filter .15s,box-shadow .15s;
-  position:relative;
-  overflow:hidden;
-  /* Prevent vertical text from expanding width */
-  box-sizing:border-box;
+  white-space:nowrap;
+  pointer-events:none;
 }
 
 /* Cloth texture overlay — fine horizontal weave */
@@ -580,11 +581,11 @@ button.secondary:hover, .btn.secondary:hover{
   pointer-events:none;
 }
 
-/* Gold foil edge — thin line along the visual top (CSS bottom due to 180deg rotation) */
+/* Gold foil edge — thin line along the top */
 .spine-btn::after{
   content:'';
   position:absolute;
-  bottom:0;left:3px;right:3px;
+  top:0;left:3px;right:3px;
   height:1px;
   background:rgba(212,175,55,.18);
   pointer-events:none;
@@ -595,25 +596,23 @@ button.secondary:hover, .btn.secondary:hover{
 }
 .spine-btn:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
 
-/* Selected spine: pulled up with bookmark ribbon.
-   Button is rotated 180deg, so translateY(+) moves it upward visually. */
+/* Selected spine: pulled up with bookmark ribbon */
 .spine-btn[aria-selected="true"]{
-  transform:rotate(180deg) translateY(3px);
+  transform:translateY(-3px);
   filter:brightness(1.2);
   z-index:1;
-  box-shadow:0 -3px 8px rgba(0,0,0,.4);
+  box-shadow:0 3px 8px rgba(0,0,0,.4);
 }
-/* Bookmark ribbon — visually at the top of the spine.
-   Since button is rotated 180deg, "bottom" in CSS is the visual top. */
+/* Bookmark ribbon at the top of the spine */
 .spine-btn[aria-selected="true"] .spine-ribbon{
   display:block;
 }
 .spine-ribbon{
   display:none;
   position:absolute;
-  bottom:-1px;
+  top:-1px;
   left:50%;
-  transform:translateX(-50%) rotate(180deg);
+  transform:translateX(-50%);
   width:4px;
   height:8px;
   background:#8b3a3a;

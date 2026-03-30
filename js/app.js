@@ -1109,6 +1109,7 @@ function renderSpineNav(yearList, activeYear){
 
     // Year text — full year vertical, or icon for special groups
     const txt = document.createElement('span');
+    txt.className = 'spine-label';
     txt.textContent = year === 'Undated' ? '?' : year;
     btn.appendChild(txt);
 
