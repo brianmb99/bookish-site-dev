@@ -204,8 +204,48 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
   return { address, uploadEntry, decryptTx, searchByOwner, computeLiveSets, tombstone, estimateEntryBytes };
 }
 
+// ============ Sync Status Helpers (dirty flag, PR-034) ============
+
+const UPLOAD_PROXY = window.BOOKISH_UPLOAD_PROXY || 'https://bookish-upload-proxy.bookish.workers.dev';
+
+/**
+ * Check the upload proxy for pending (unconfirmed) txids for a given wallet address.
+ * Returns { dirty: bool, pendingTxids: string[], count: number } or null on failure.
+ */
+export async function fetchSyncStatus(address) {
+  try {
+    const r = await fetch(`${UPLOAD_PROXY}/sync-status?address=${encodeURIComponent(address.toLowerCase())}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Acknowledge confirmed txids so the proxy removes them from the pending list.
+ * Returns { removed, remaining } or null on failure.
+ */
+export async function ackSyncedTxids(address, txids) {
+  if (!txids.length) return { removed: 0, remaining: 0 };
+  try {
+    const r = await fetch(`${UPLOAD_PROXY}/sync-ack`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: address.toLowerCase(), txids }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
 // Convenience global for ad-hoc debugging
-window.bookishBrowserClient = { createBrowserClient, deriveBookId };
+window.bookishBrowserClient = { createBrowserClient, deriveBookId, fetchSyncStatus, ackSyncedTxids };
 // expose estimator for non-module consumers
 window.bookishEstimate = window.bookishEstimate || {};
 window.bookishEstimate.entryBytes = async (entry)=>{
