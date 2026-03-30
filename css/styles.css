@@ -539,24 +539,25 @@ button.secondary:hover, .btn.secondary:hover{
 }
 
 .spine-btn{
-  height:44px;
-  min-width:22px;
-  max-width:38px;
+  height:34px;
+  min-width:16px;
+  max-width:30px;
   border:none;
   border-radius:1px 1px 0 0;
   cursor:pointer;
-  /* Vertical text — rotated so head tilts right to read (English spine convention) */
-  writing-mode:vertical-lr;
+  /* Vertical text — bottom-to-top (English spine convention, tilt head right) */
+  writing-mode:vertical-rl;
   text-orientation:mixed;
+  transform:rotate(180deg);
   font-family:'Georgia','Times New Roman',serif;
-  font-size:.55rem;
+  font-size:.5rem;
   font-weight:400;
   letter-spacing:.02em;
   color:rgba(255,255,255,.75);
   text-shadow:0 0 2px rgba(0,0,0,.5);
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;
-  transition:transform .15s ease,filter .15s,box-shadow .15s;
+  transition:filter .15s,box-shadow .15s;
   position:relative;
   overflow:hidden;
 }
@@ -576,11 +577,11 @@ button.secondary:hover, .btn.secondary:hover{
   pointer-events:none;
 }
 
-/* Gold foil edge — thin line along the top */
+/* Gold foil edge — thin line along the visual top (CSS bottom due to 180deg rotation) */
 .spine-btn::after{
   content:'';
   position:absolute;
-  top:0;left:3px;right:3px;
+  bottom:0;left:3px;right:3px;
   height:1px;
   background:rgba(212,175,55,.18);
   pointer-events:none;
@@ -588,36 +589,33 @@ button.secondary:hover, .btn.secondary:hover{
 
 .spine-btn:hover{
   filter:brightness(1.15);
-  transform:translateY(-1px);
 }
 .spine-btn:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
 
-/* Selected spine: pulled up with bookmark ribbon */
+/* Selected spine: pulled up with bookmark ribbon.
+   Button is rotated 180deg, so translateY(+) moves it upward visually. */
 .spine-btn[aria-selected="true"]{
-  transform:translateY(-4px);
+  transform:rotate(180deg) translateY(3px);
   filter:brightness(1.2);
   z-index:1;
-  box-shadow:0 4px 10px rgba(0,0,0,.4);
+  box-shadow:0 -3px 8px rgba(0,0,0,.4);
 }
-/* Bookmark ribbon */
+/* Bookmark ribbon — visually at the top of the spine.
+   Since button is rotated 180deg, "bottom" in CSS is the visual top. */
 .spine-btn[aria-selected="true"] .spine-ribbon{
   display:block;
 }
 .spine-ribbon{
   display:none;
   position:absolute;
-  top:-1px;
+  bottom:-1px;
   left:50%;
-  transform:translateX(-50%);
+  transform:translateX(-50%) rotate(180deg);
   width:4px;
-  height:10px;
+  height:8px;
   background:#8b3a3a;
   clip-path:polygon(0 0,100% 0,100% 100%,50% 70%,0 100%);
   z-index:2;
-}
-@media(prefers-reduced-motion:reduce){
-  .spine-btn[aria-selected="true"]{transform:none}
-  .spine-btn:hover{transform:none}
 }
 
 /* Spine color palette — dusty, muted hardcover colors */

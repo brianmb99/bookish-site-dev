@@ -1052,9 +1052,9 @@ const SPINE_COLORS = 8;
 
 /** Monotonic width: more books = wider spine. Three clean steps. */
 function spineWidth(count){
-  if(count >= 10) return 38;
-  if(count >= 4)  return 30;
-  return 22;
+  if(count >= 10) return 28;
+  if(count >= 4)  return 22;
+  return 16;
 }
 
 function renderSpineNav(yearList, activeYear){
