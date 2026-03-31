@@ -975,13 +975,14 @@ button.secondary:hover, .btn.secondary:hover{
 .nudge-cta:hover{color:#93c5fd;text-decoration:underline}
 .nudge-dismiss{background:transparent;border:none;color:#64748b;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:4px;line-height:1}
 .nudge-dismiss:hover{color:#94a3b8;background:#334155}
-/* PWA install banner */
-.pwa-install-banner{background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);border-radius:10px;padding:12px 16px;margin:12px 0;animation:fadeIn .3s ease-out}
-.pwa-install-content{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.pwa-install-text{font-size:.8rem;color:#e2e8f0;line-height:1.5}
-.pwa-install-text strong{font-weight:600}
-.pwa-install-dismiss{background:transparent;border:none;color:#64748b;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:4px;line-height:1;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center}
-.pwa-install-dismiss:hover{color:#94a3b8;background:#334155}
+/* Install popover (iOS/Android instructions) */
+.install-popover{position:absolute;top:100%;right:0;margin-top:8px;z-index:999;animation:fadeIn .2s ease-out}
+.install-popover-arrow{position:absolute;top:-6px;right:16px;width:12px;height:6px;overflow:hidden}
+.install-popover-arrow::before{content:'';position:absolute;top:3px;left:0;width:12px;height:12px;background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);transform:rotate(45deg);transform-origin:center}
+.install-popover-body{background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);border-radius:8px;padding:12px 16px;max-width:280px;box-shadow:0 4px 12px rgba(0,0,0,0.3);font-size:.85rem;color:var(--color-text-primary);line-height:1.5;position:relative}
+.install-popover-body strong{font-weight:600}
+.install-popover-dismiss{position:absolute;top:4px;right:4px;background:transparent;border:none;color:#64748b;font-size:1.1rem;cursor:pointer;padding:0;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;border-radius:4px;line-height:1}
+.install-popover-dismiss:hover{color:#94a3b8;background:#334155}
 /* Account modal styles */
 .modal-overlay{
   position:fixed;

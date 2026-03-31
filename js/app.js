@@ -579,40 +579,6 @@ export function hideAccountNudge(){
   }
 }
 
-// --- PWA install banner (iOS Safari, non-Chrome Android) ---
-let nativeInstallAvailable = false;
-window.addEventListener('beforeinstallprompt', (e) => { nativeInstallAvailable = true; });
-
-function showPwaInstallBanner() {
-  if (nativeInstallAvailable) return;
-  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) return;
-  if (localStorage.getItem('bookish.installBannerDismissed')) return;
-  if (entries.length < 1) return;
-
-  const banner = document.getElementById('pwaInstallBanner');
-  const textEl = document.getElementById('pwaInstallText');
-  if (!banner || !textEl) return;
-
-  const ua = navigator.userAgent;
-  const isIOS = /iPhone|iPad|iPod/.test(ua);
-  const isAndroid = /Android/.test(ua);
-
-  if (isIOS) {
-    textEl.innerHTML = 'Install Bookish on your phone: tap <strong>Share</strong> \u25a1\u2191 then <strong>Add to Home Screen</strong>';
-  } else if (isAndroid) {
-    textEl.innerHTML = 'Install Bookish: tap <strong>Menu</strong> \u22ee then <strong>Add to Home Screen</strong>';
-  } else {
-    return; // Desktop without native install — don't show
-  }
-
-  banner.style.display = 'block';
-}
-
-document.getElementById('pwaInstallDismiss')?.addEventListener('click', () => {
-  const banner = document.getElementById('pwaInstallBanner');
-  if (banner) banner.style.display = 'none';
-  localStorage.setItem('bookish.installBannerDismissed', 'true');
-});
 
 // --- Generated cover color palette ---
 const COVER_PALETTE=[
@@ -1512,7 +1478,7 @@ async function createServerless(payload) {
     if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('pulse'); setTimeout(() => el.classList.remove('pulse'), 1500); }
     return;
   }
-  if (entries.length === 1) { showCelebrationToast(); showPwaInstallBanner(); }
+  if (entries.length === 1) { showCelebrationToast(); }
   if (entries.length === 3) showAccountNudge();
 }
 
@@ -1604,7 +1570,6 @@ async function initCacheLayer(){
     console.log('[Bookish] Loaded', entries.length, 'books from cache');
     // Show account nudge on load if 3+ books and logged out (per FIRST_RUN_EXPERIENCE.md)
     showAccountNudge();
-    showPwaInstallBanner();
 
     // Initialize sync manager
     initSyncManager({
