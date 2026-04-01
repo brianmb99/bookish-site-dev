@@ -7,6 +7,7 @@ import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
 import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
+import { stripNoise } from './core/search_core.js';
 import { fetchSyncStatus, ackSyncedTxids } from './browser_client.js';
 
 // --- Version logging (always visible in console) ---
@@ -434,7 +435,11 @@ function closeModal(){ modal.classList.remove('active'); const inner=modal.query
   if(form.dateRead) form.dateRead.readOnly=false;
   const dateLabel = dateBlock?.querySelector('label');
   if(dateLabel) dateLabel.textContent='Completed';
-  if(window.bookSearch) window.bookSearch.handleModalOpen(true); }
+  if(window.bookSearch) window.bookSearch.handleModalOpen(true);
+  // Ensure omnibox is clean after modal dismiss (Fix 4)
+  if(omniboxInput && omniboxInput.value){ clearOmnibox(); }
+  closeOmniboxDropdown();
+}
 function clearBooks(){ if(bookRepo) bookRepo.clear(); else { entries=[]; render(); } }
 window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus };
 // Dirty tracking helpers
@@ -480,6 +485,14 @@ coverFileInput.addEventListener('change', async ()=>{ const f=coverFileInput.fil
 const closeModalBtn = document.getElementById('closeModal');
 closeModalBtn?.addEventListener('click', closeModal);
 cancelBtn?.addEventListener('click', closeModal);
+// Close modal on backdrop click (click on overlay outside modal-inner)
+modal?.addEventListener('click', (ev)=>{
+  if(ev.target === modal) closeModal();
+});
+// Close modal on Escape key
+document.addEventListener('keydown', (ev)=>{
+  if(ev.key === 'Escape' && modal?.classList.contains('active')) closeModal();
+});
 
 // --- Account modal logic ---
 // Account UI handles all updates via account_ui.js
@@ -979,6 +992,7 @@ document.getElementById('shelfEmptyBrowse')?.addEventListener('click', openWtrDr
 let _omniboxApiDebounce = null;
 let _omniboxApiAbort = null;
 let _omniboxApiCounter = 0;
+let _omniboxSelectionMade = false;
 
 function showOmniboxDropdown(){
   if(!omniboxDropdown) return;
@@ -996,6 +1010,15 @@ function closeOmniboxDropdown(){
   if(omniboxDropdown) omniboxDropdown.style.display = 'none';
   omniboxInput?.setAttribute('aria-expanded', 'false');
   if(omniboxBackdrop?.parentNode) omniboxBackdrop.remove();
+}
+
+function completeOmniboxSelection(){
+  _omniboxSelectionMade = true;
+  if(omniboxInput) omniboxInput.value = '';
+  searchQuery = '';
+  if(omniboxClear) omniboxClear.style.display = 'none';
+  closeOmniboxDropdown();
+  if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
 }
 
 function clearOmnibox(){
@@ -1054,10 +1077,9 @@ function renderOmniboxApiSkeletons(){
 function renderOmniboxApiResults(results){
   if(!omniboxAddResults) return;
   if(!results.length){
-    if(omniboxAddSection) omniboxAddSection.style.display = 'none';
+    omniboxAddResults.innerHTML = '';
     return;
   }
-  if(omniboxAddSection) omniboxAddSection.style.display = '';
   omniboxAddResults.innerHTML = results.slice(0, 8).map(r => {
     const coverHtml = r.coverUrl
       ? `<img src="${r.coverUrl}">`
@@ -1100,10 +1122,11 @@ function searchOmniboxApis(query){
     const combined = [];
     const seen = new Set();
     for(const r of [...itResults, ...olResults]){
-      const k = (r.title||'').toLowerCase().replace(/[^a-z0-9]/g,'') + '|' + (r.author||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+      const cleanTitle = stripNoise(r.title || '');
+      const k = cleanTitle.toLowerCase().replace(/[^a-z0-9]/g,'') + '|' + (r.author||'').toLowerCase().replace(/[^a-z0-9]/g,'');
       if(seen.has(k)) continue;
       seen.add(k);
-      combined.push(r);
+      combined.push({...r, title: cleanTitle});
     }
     renderOmniboxApiResults(combined);
   }
@@ -1143,6 +1166,9 @@ function searchOmniboxApis(query){
 }
 
 omniboxInput?.addEventListener('input', ()=>{
+  // If a selection was just made and the input fires because we cleared it, suppress
+  if(_omniboxSelectionMade) return;
+
   const q = (omniboxInput.value || '').trim();
   if(omniboxClear) omniboxClear.style.display = q ? '' : 'none';
 
@@ -1157,6 +1183,7 @@ omniboxInput?.addEventListener('input', ()=>{
   if(q.length > 0){
     showOmniboxDropdown();
     renderOmniboxShelfResults(q);
+    if(omniboxAddSection) omniboxAddSection.style.display = '';
     if(omniboxManualAdd) omniboxManualAdd.style.display = '';
 
     clearTimeout(_omniboxApiDebounce);
@@ -1168,6 +1195,10 @@ omniboxInput?.addEventListener('input', ()=>{
 });
 
 omniboxClear?.addEventListener('click', clearOmnibox);
+
+// Clear selection guard when user explicitly re-engages with omnibox
+omniboxInput?.addEventListener('mousedown', ()=>{ _omniboxSelectionMade = false; });
+omniboxInput?.addEventListener('focus', ()=>{ _omniboxSelectionMade = false; });
 
 omniboxInput?.addEventListener('keydown', (ev)=>{
   if(ev.key === 'Escape'){
@@ -1188,7 +1219,7 @@ omniboxDropdown?.addEventListener('click', (ev)=>{
     const key = shelfRow.dataset.shelfKey;
     const entry = entries.find(e => (e.txid||e.id) === key);
     if(entry){
-      closeOmniboxDropdown();
+      completeOmniboxSelection();
       openModal(entry);
     }
     return;
@@ -1198,7 +1229,7 @@ omniboxDropdown?.addEventListener('click', (ev)=>{
   if(addRow){
     try{
       const meta = JSON.parse(decodeURIComponent(addRow.dataset.addJson));
-      closeOmniboxDropdown();
+      completeOmniboxSelection();
       openModal(null, READING_STATUS.WANT_TO_READ);
       // Pre-fill the modal form fields
       setTimeout(()=>{
@@ -1220,7 +1251,7 @@ omniboxDropdown?.addEventListener('click', (ev)=>{
 
 omniboxManualAdd?.addEventListener('click', ()=>{
   const q = (omniboxInput?.value || '').trim();
-  closeOmniboxDropdown();
+  completeOmniboxSelection();
   openModal(null, READING_STATUS.WANT_TO_READ);
   // Pre-fill title with search query
   setTimeout(()=>{
