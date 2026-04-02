@@ -297,6 +297,13 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     uploadCoverBtn.addEventListener('click',(e)=>{ e.stopPropagation(); coverFileInput.click(); });
   }
 
+  // Re-display cached results on focus (Fix 3: focus event re-displays search results)
+  input.addEventListener('focus',()=>{
+    if(!input.value.trim()) return;
+    if(olDocs.length || itunesItems.length){ resultsEl.style.display='block'; }
+    else { searchTitle(input.value); }
+  });
+
   window.bookSearch={
     handleModalOpen(isEdit){ showUI(isEdit); hideCoverNav(); if(findCoversBtn) findCoversBtn.style.display='none'; if(uploadCoverBtn) uploadCoverBtn.style.display='block'; },
     showFindCoversBtn(hasCover){
@@ -305,6 +312,8 @@ import { resizeImageToBase64 } from './core/image_utils.js';
         findCoversBtn.classList.remove('loading');
         findCoversBtn.style.display='block';
       }
-    }
+    },
+    selectWork(meta){ selectWork(meta); },
+    selectItunes(payload){ selectItunes(payload); }
   };
 })();

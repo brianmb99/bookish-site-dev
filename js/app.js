@@ -1231,18 +1231,33 @@ omniboxDropdown?.addEventListener('click', (ev)=>{
       const meta = JSON.parse(decodeURIComponent(addRow.dataset.addJson));
       completeOmniboxSelection();
       openModal(null, READING_STATUS.WANT_TO_READ);
-      // Pre-fill the modal form fields
+      // Directly select the book via book_search module (no search dropdown)
       setTimeout(()=>{
-        if(form.title) form.title.value = meta.title || '';
-        if(form.author) form.author.value = meta.author || '';
-        if(meta.source === 'itunes') form.format.value = 'audio';
-        // Trigger the in-modal book search to get cover + editions
+        // Pre-fill search input so it's ready if user wants to search later
         const bsInput = document.getElementById('bookSearchInput');
         if(bsInput){
           bsInput.value = meta.title + (meta.author ? ' ' + meta.author : '');
-          bsInput.dispatchEvent(new Event('input', {bubbles:true}));
         }
-        form.dispatchEvent(new Event('input', {bubbles:true}));
+        if(meta.source === 'itunes' && window.bookSearch?.selectItunes){
+          window.bookSearch.selectItunes({
+            title: meta.title || '',
+            author: meta.author || '',
+            artwork: meta.artwork || meta.coverUrl || ''
+          });
+        } else if(meta.source === 'ol' && window.bookSearch?.selectWork){
+          window.bookSearch.selectWork({
+            title: meta.title || '',
+            author: meta.author || '',
+            cover_i: meta.cover_i || '',
+            work_key: meta.work_key || ''
+          });
+        } else {
+          // Fallback: populate form fields directly
+          if(form.title) form.title.value = meta.title || '';
+          if(form.author) form.author.value = meta.author || '';
+          if(meta.source === 'itunes') form.format.value = 'audio';
+          form.dispatchEvent(new Event('input', {bubbles:true}));
+        }
       }, 50);
     }catch(e){}
     return;
