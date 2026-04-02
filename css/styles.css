@@ -933,9 +933,9 @@ button.secondary:hover, .btn.secondary:hover{
 .wtr-footer-add:hover{color:var(--color-text-secondary)}
 
 /* WTR drag-to-reorder */
-.wtr-drag-handle{flex-shrink:0;width:24px;display:flex;align-items:center;justify-content:center;color:var(--color-text-muted);cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;padding:4px 0}
-.wtr-drag-handle:hover{color:var(--color-text-secondary)}
-.wtr-drag-handle:active{cursor:grabbing}
+.wtr-item[draggable="true"]{cursor:grab;-webkit-user-select:none;user-select:none}
+.wtr-item[draggable="true"]:active{cursor:grabbing}
+.wtr-item.wtr-long-press{transform:scale(1.02);box-shadow:0 2px 8px rgba(0,0,0,.15);transition:transform .15s,box-shadow .15s}
 .wtr-item.wtr-dragging{opacity:.3}
 .wtr-drag-placeholder{border:2px dashed var(--color-border-subtle);border-radius:8px;margin:4px 0;box-sizing:border-box}
 .wtr-drag-clone{position:fixed;z-index:10000;pointer-events:none;opacity:.9;background:var(--color-bg-card,var(--color-bg-surface));border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);padding:10px 0}

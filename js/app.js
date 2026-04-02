@@ -674,7 +674,7 @@ function render(){
   // Sort each list
   readingList.sort((a,b)=> (b.readingStartedAt||b.createdAt||0) - (a.readingStartedAt||a.createdAt||0));
   readList.sort((a,b)=>{ const da=a.dateRead||''; const db=b.dateRead||''; if(da!==db) return db.localeCompare(da); return (b.createdAt||0)-(a.createdAt||0); });
-  wantList.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+  sortWtrList(wantList);
 
   // Main grid shows: reading first, then read
   const shelfEntries = [...readingList, ...readList];
@@ -986,9 +986,7 @@ function renderWtrDrawer(wantList){
     const coverHtml = coverDataUrl
       ? `<img src="${coverDataUrl}">`
       : `<div class="wtr-mini-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="wtr-mini-title">${escapeHtml(e.title||'')}</span></div>`;
-    const handleHtml = showHandle ? `<div class="wtr-drag-handle" aria-label="Drag to reorder"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>` : '';
     return `<div class="wtr-item" data-key="${escapeHtml(key)}" draggable="${showHandle}">
-      ${handleHtml}
       <div class="wtr-item-cover">${coverHtml}</div>
       <div class="wtr-item-info">
         <div class="wtr-item-title">${escapeHtml(e.title||'Untitled')}</div>
@@ -1009,12 +1007,13 @@ function renderWtrDrawer(wantList){
   let dragClone = null;
   let isDragging = false;
   let startedFromHandle = false;
+  let longPressTimer = null;
+  let longPressReady = false;
 
   // --- Mouse drag (uses native HTML5 drag API) ---
   wtrListEl.addEventListener('dragstart', (e) => {
-    const handle = e.target.closest('.wtr-drag-handle');
     const item = e.target.closest('.wtr-item');
-    if (!handle || !item) { e.preventDefault(); return; }
+    if (!item) { e.preventDefault(); return; }
     dragItem = item;
     item.classList.add('wtr-dragging');
     e.dataTransfer.effectAllowed = 'move';
@@ -1045,25 +1044,43 @@ function renderWtrDrawer(wantList){
     }
   });
 
-  // --- Touch drag (custom implementation) ---
+  // --- Touch drag (custom implementation with long-press) ---
   wtrListEl.addEventListener('touchstart', (e) => {
-    const handle = e.target.closest('.wtr-drag-handle');
-    if (!handle) { startedFromHandle = false; return; }
-    const item = handle.closest('.wtr-item');
-    if (!item) return;
+    const item = e.target.closest('.wtr-item');
+    if (!item || e.target.closest('.wtr-start-btn')) { startedFromHandle = false; return; }
     startedFromHandle = true;
+    longPressReady = false;
     dragItem = item;
     touchStartY = e.touches[0].clientY;
     touchCurrentY = touchStartY;
+    // Require 300ms hold before drag activates — allows normal scrolling
+    longPressTimer = setTimeout(() => {
+      longPressReady = true;
+      if (dragItem) dragItem.classList.add('wtr-long-press');
+    }, 300);
   }, { passive: true });
 
   wtrListEl.addEventListener('touchmove', (e) => {
     if (!startedFromHandle || !dragItem) return;
-    e.preventDefault();
     touchCurrentY = e.touches[0].clientY;
+
+    // If long-press hasn't fired yet, cancel on movement (it's a scroll)
+    if (!longPressReady) {
+      if (Math.abs(touchCurrentY - touchStartY) > 4) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+        startedFromHandle = false;
+        dragItem.classList.remove('wtr-long-press');
+        dragItem = null;
+      }
+      return;
+    }
+
+    e.preventDefault();
 
     if (!isDragging) {
       if (Math.abs(touchCurrentY - touchStartY) < 8) return;
+      dragItem.classList.remove('wtr-long-press');
       isDragging = true;
       const rect = dragItem.getBoundingClientRect();
       // Create placeholder
@@ -1100,7 +1117,11 @@ function renderWtrDrawer(wantList){
   }, { passive: false });
 
   function finishTouchDrag() {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+    longPressReady = false;
     if (!isDragging || !dragItem) {
+      if (dragItem) dragItem.classList.remove('wtr-long-press');
       isDragging = false;
       startedFromHandle = false;
       dragItem = null;
