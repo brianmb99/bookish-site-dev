@@ -43,6 +43,7 @@ function buildPayloadFromEntry(entry) {
   if (entry.readingStartedAt) payload.readingStartedAt = entry.readingStartedAt;
   if (entry.createdAt) payload.createdAt = entry.createdAt;
   if (entry.modifiedAt) payload.modifiedAt = entry.modifiedAt;
+  if (entry.wtrPosition != null) payload.wtrPosition = entry.wtrPosition;
   return payload;
 }
 
@@ -344,6 +345,42 @@ export class BookRepository {
     }
 
     return { entry };
+  }
+
+  /**
+   * Reorder want-to-read entries. Accepts an array of keys (txid or id) in
+   * the desired display order. Assigns wtrPosition 0, 1, 2, … and queues
+   * Arweave uploads only for entries whose position actually changed.
+   * @param {string[]} orderedKeys - entry keys in desired order
+   */
+  async reorderWtr(orderedKeys) {
+    const changed = [];
+    for (let i = 0; i < orderedKeys.length; i++) {
+      const entry = this.getById(orderedKeys[i]);
+      if (!entry) continue;
+      if (entry.wtrPosition === i) continue;
+      entry.wtrPosition = i;
+      entry.modifiedAt = Date.now();
+      if (this._cache) await this._cache.putEntry(entry);
+      changed.push(entry);
+    }
+
+    if (!changed.length) return;
+    this._onDirty();
+    this._emitChange();
+
+    for (const entry of changed) {
+      if (!entry.txid) continue;
+      const entryKey = entry.bookId || entry.id;
+      const queueEntry = this._editQueue.get(entryKey);
+      if (queueEntry?.uploading) {
+        queueEntry.hasPendingEdit = true;
+      } else {
+        this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
+        const snapshot = { ...entry };
+        this._doEditUpload(entryKey, entry, entry.txid, snapshot).catch(() => {});
+      }
+    }
   }
 
   // --- Sync pipeline ---

@@ -932,6 +932,14 @@ button.secondary:hover, .btn.secondary:hover{
 .wtr-footer-add{background:transparent;border:none;color:var(--color-text-muted);font-size:.8rem;font-weight:500;cursor:pointer;padding:10px 0;width:100%;text-align:center;transition:color .2s;font-family:var(--font-body);min-height:44px;box-shadow:none}
 .wtr-footer-add:hover{color:var(--color-text-secondary)}
 
+/* WTR drag-to-reorder */
+.wtr-drag-handle{flex-shrink:0;width:24px;display:flex;align-items:center;justify-content:center;color:var(--color-text-muted);cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;padding:4px 0}
+.wtr-drag-handle:hover{color:var(--color-text-secondary)}
+.wtr-drag-handle:active{cursor:grabbing}
+.wtr-item.wtr-dragging{opacity:.3}
+.wtr-drag-placeholder{border:2px dashed var(--color-border-subtle);border-radius:8px;margin:4px 0;box-sizing:border-box}
+.wtr-drag-clone{position:fixed;z-index:10000;pointer-events:none;opacity:.9;background:var(--color-bg-card,var(--color-bg-surface));border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);padding:10px 0}
+
 /* Unified status selector (add + edit modal) */
 .status-selector{display:flex;gap:0;background:var(--color-bg-deep);border-radius:10px;padding:3px;margin-bottom:16px}
 .status-option{flex:1;padding:10px 8px;font-size:.75rem;font-weight:600;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--color-text-muted);transition:all .2s;min-height:40px;font-family:var(--font-body);box-shadow:none;white-space:nowrap}

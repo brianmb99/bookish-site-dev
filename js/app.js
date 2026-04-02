@@ -947,9 +947,24 @@ async function probeAndUpdateEntry(entry) {
 }
 
 // --- WTR drawer logic ---
+function sortWtrList(wantList) {
+  const hasPositions = wantList.some(e => e.wtrPosition != null);
+  if (hasPositions) {
+    wantList.sort((a, b) => {
+      const pa = a.wtrPosition != null ? a.wtrPosition : Infinity;
+      const pb = b.wtrPosition != null ? b.wtrPosition : Infinity;
+      if (pa !== pb) return pa - pb;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+  } else {
+    wantList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
+  return wantList;
+}
+
 function openWtrDrawer(){
   const wantList = entries.filter(e => e.status !== 'tombstoned' && normalizeReadingStatus(e) === READING_STATUS.WANT_TO_READ);
-  wantList.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+  sortWtrList(wantList);
   renderWtrDrawer(wantList);
   if(wtrOverlay) wtrOverlay.style.display = 'block';
 }
@@ -964,13 +979,16 @@ function renderWtrDrawer(wantList){
     return;
   }
   if(wtrEmptyEl) wtrEmptyEl.style.display = 'none';
+  const showHandle = wantList.length > 1;
   wtrListEl.innerHTML = wantList.map(e => {
     const key = e.txid || e.id || '';
     const coverDataUrl = e.coverImage ? `data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}` : '';
     const coverHtml = coverDataUrl
       ? `<img src="${coverDataUrl}">`
       : `<div class="wtr-mini-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="wtr-mini-title">${escapeHtml(e.title||'')}</span></div>`;
-    return `<div class="wtr-item" data-key="${escapeHtml(key)}">
+    const handleHtml = showHandle ? `<div class="wtr-drag-handle" aria-label="Drag to reorder"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>` : '';
+    return `<div class="wtr-item" data-key="${escapeHtml(key)}" draggable="${showHandle}">
+      ${handleHtml}
       <div class="wtr-item-cover">${coverHtml}</div>
       <div class="wtr-item-info">
         <div class="wtr-item-title">${escapeHtml(e.title||'Untitled')}</div>
@@ -980,6 +998,150 @@ function renderWtrDrawer(wantList){
     </div>`;
   }).join('');
 }
+
+// --- WTR drag-to-reorder ---
+(function initWtrDragReorder() {
+  if (!wtrListEl) return;
+  let dragItem = null;
+  let touchStartY = 0;
+  let touchCurrentY = 0;
+  let placeholder = null;
+  let dragClone = null;
+  let isDragging = false;
+  let startedFromHandle = false;
+
+  // --- Mouse drag (uses native HTML5 drag API) ---
+  wtrListEl.addEventListener('dragstart', (e) => {
+    const handle = e.target.closest('.wtr-drag-handle');
+    const item = e.target.closest('.wtr-item');
+    if (!handle || !item) { e.preventDefault(); return; }
+    dragItem = item;
+    item.classList.add('wtr-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+  });
+
+  wtrListEl.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (!dragItem) return;
+    const target = getDragTarget(e.clientY);
+    if (target && target !== dragItem) {
+      const rect = target.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (e.clientY < mid) {
+        wtrListEl.insertBefore(dragItem, target);
+      } else {
+        wtrListEl.insertBefore(dragItem, target.nextSibling);
+      }
+    }
+  });
+
+  wtrListEl.addEventListener('dragend', (e) => {
+    if (dragItem) {
+      dragItem.classList.remove('wtr-dragging');
+      commitReorder();
+      dragItem = null;
+    }
+  });
+
+  // --- Touch drag (custom implementation) ---
+  wtrListEl.addEventListener('touchstart', (e) => {
+    const handle = e.target.closest('.wtr-drag-handle');
+    if (!handle) { startedFromHandle = false; return; }
+    const item = handle.closest('.wtr-item');
+    if (!item) return;
+    startedFromHandle = true;
+    dragItem = item;
+    touchStartY = e.touches[0].clientY;
+    touchCurrentY = touchStartY;
+  }, { passive: true });
+
+  wtrListEl.addEventListener('touchmove', (e) => {
+    if (!startedFromHandle || !dragItem) return;
+    e.preventDefault();
+    touchCurrentY = e.touches[0].clientY;
+
+    if (!isDragging) {
+      if (Math.abs(touchCurrentY - touchStartY) < 8) return;
+      isDragging = true;
+      const rect = dragItem.getBoundingClientRect();
+      // Create placeholder
+      placeholder = document.createElement('div');
+      placeholder.className = 'wtr-drag-placeholder';
+      placeholder.style.height = rect.height + 'px';
+      dragItem.parentNode.insertBefore(placeholder, dragItem);
+      // Create floating clone
+      dragClone = dragItem.cloneNode(true);
+      dragClone.className = 'wtr-item wtr-drag-clone';
+      dragClone.style.width = rect.width + 'px';
+      document.body.appendChild(dragClone);
+      dragItem.classList.add('wtr-dragging');
+    }
+
+    // Position clone at touch point
+    if (dragClone) {
+      const rect = dragClone.getBoundingClientRect();
+      dragClone.style.top = (touchCurrentY - rect.height / 2) + 'px';
+      dragClone.style.left = dragItem.getBoundingClientRect().left + 'px';
+    }
+
+    // Move placeholder to drop position
+    const target = getDragTarget(touchCurrentY);
+    if (target && target !== dragItem && target !== placeholder) {
+      const targetRect = target.getBoundingClientRect();
+      const mid = targetRect.top + targetRect.height / 2;
+      if (touchCurrentY < mid) {
+        wtrListEl.insertBefore(placeholder, target);
+      } else {
+        wtrListEl.insertBefore(placeholder, target.nextSibling);
+      }
+    }
+  }, { passive: false });
+
+  function finishTouchDrag() {
+    if (!isDragging || !dragItem) {
+      isDragging = false;
+      startedFromHandle = false;
+      dragItem = null;
+      return;
+    }
+    // Move actual item to placeholder position
+    if (placeholder && placeholder.parentNode) {
+      placeholder.parentNode.insertBefore(dragItem, placeholder);
+      placeholder.remove();
+    }
+    if (dragClone) { dragClone.remove(); dragClone = null; }
+    dragItem.classList.remove('wtr-dragging');
+    commitReorder();
+    isDragging = false;
+    startedFromHandle = false;
+    placeholder = null;
+    dragItem = null;
+  }
+
+  wtrListEl.addEventListener('touchend', finishTouchDrag);
+  wtrListEl.addEventListener('touchcancel', finishTouchDrag);
+
+  function getDragTarget(clientY) {
+    const items = [...wtrListEl.querySelectorAll('.wtr-item:not(.wtr-dragging):not(.wtr-drag-clone)')];
+    for (const item of items) {
+      const rect = item.getBoundingClientRect();
+      if (clientY >= rect.top && clientY <= rect.bottom) return item;
+    }
+    return null;
+  }
+
+  function commitReorder() {
+    if (!bookRepo) return;
+    const items = wtrListEl.querySelectorAll('.wtr-item');
+    const keys = [];
+    items.forEach(item => {
+      if (item.dataset.key) keys.push(item.dataset.key);
+    });
+    if (keys.length > 1) bookRepo.reorderWtr(keys);
+  }
+})();
 
 wtrHeaderBtn?.addEventListener('click', openWtrDrawer);
 wtrBackdrop?.addEventListener('click', closeWtrDrawer);
