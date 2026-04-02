@@ -1,5 +1,5 @@
 // search_core.js - Pure search logic extracted from book_search.js
-// Tokenization, scoring, filtering, sorting, OpenLibrary merge
+// Tokenization, scoring, filtering, sorting, book result merge
 
 const STOPWORDS = new Set(['the', 'and', 'of', 'a', 'an', 'to', 'in', 'on', 'for', 'by', 'with', 'at', 'from']);
 
@@ -16,8 +16,8 @@ export function baseTitle(query) {
   return idx > 2 ? query.slice(0, idx).trim() : query.trim();
 }
 
-// Merge two OpenLibrary doc lists, deduplicating by key
-export function mergeOpenLibrary(listA, listB) {
+// Merge two book doc lists, deduplicating by key
+export function mergeBookResults(listA, listB) {
   const map = new Map();
 
   function add(doc, src) {
@@ -120,29 +120,30 @@ export function passesFilter(item, activeFilter) {
 }
 
 // Deduplicate documents by normalized title+author key.
-// Groups variants, picks best display names, collects all covers/work keys.
+// Groups variants, picks best display names, collects all covers/work keys/editions.
 export function deduplicateByDisplay(docs) {
   const groups = new Map();
   docs.forEach(d => {
-    const key = displayKeyOpenLibrary(d);
+    const key = displayKeyBook(d);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(d);
   });
   return Array.from(groups.values()).map(group => {
-    group.sort((a, b) => (b._score || 0) - (a._score || 0) || (b.cover_i ? 1 : 0) - (a.cover_i ? 1 : 0));
+    group.sort((a, b) => (b._score || 0) - (a._score || 0) || ((b.cover_url || b.cover_i) ? 1 : 0) - ((a.cover_url || a.cover_i) ? 1 : 0));
     const rep = { ...group[0] };
     const authors = group.map(d => (d.author_name && d.author_name[0]) || '').filter(Boolean);
     if (authors.length) rep._bestAuthor = pickBestName(authors, 3);
     const titles = group.map(d => cleanTitle(d.title || '')).filter(Boolean);
     if (titles.length) rep._bestTitle = pickBestName(titles);
-    rep._allCovers = [...new Set(group.map(d => d.cover_i).filter(Boolean))];
+    rep._allCoverUrls = [...new Set(group.map(d => d.cover_url || d.cover_i).filter(Boolean))];
     rep._allWorkKeys = [...new Set(group.map(d => d.key).filter(Boolean))];
+    rep._editions = group.slice();
     return rep;
   });
 }
 
-/** Normalized title|author key for an OpenLibrary work. */
-export function displayKeyOpenLibrary(doc) {
+/** Normalized title|author key for a book result. */
+export function displayKeyBook(doc) {
   const title = normalizeTitleKey(doc.title || '');
   const author = normalizeAuthorKey((doc.author_name && doc.author_name[0]) || '');
   return `${title}|${author}`;
@@ -175,12 +176,12 @@ export function deduplicateItunesByDisplay(items) {
 }
 
 /**
- * Drop OpenLibrary works that match any iTunes result.
- * Full key match (title+author), or title-only match when OL has no author.
- * Transfers _allWorkKeys and _allCovers from suppressed OL docs to the
+ * Drop book results that match any iTunes result.
+ * Full key match (title+author), or title-only match when book has no author.
+ * Transfers _allWorkKeys and _allCoverUrls from suppressed book docs to the
  * matching iTunes item so cover browsing can use them.
  */
-export function filterOlSupersededByItunes(olDocs, itunesItems) {
+export function filterBooksSupersededByItunes(bookDocs, itunesItems) {
   const keyToItunes = new Map();
   const titleToItunes = new Map();
   (itunesItems || []).forEach(i => {
@@ -190,27 +191,27 @@ export function filterOlSupersededByItunes(olDocs, itunesItems) {
     if (!titleToItunes.has(tk)) titleToItunes.set(tk, i);
   });
 
-  function transferOlData(olDoc, itItem) {
+  function transferBookData(bookDoc, itItem) {
     if (!itItem) return;
     if (!itItem._olWorkKeys) itItem._olWorkKeys = [];
-    if (!itItem._olCovers) itItem._olCovers = [];
-    const wks = olDoc._allWorkKeys && olDoc._allWorkKeys.length ? olDoc._allWorkKeys : (olDoc.key ? [olDoc.key] : []);
-    const cvs = olDoc._allCovers && olDoc._allCovers.length ? olDoc._allCovers : (olDoc.cover_i ? [olDoc.cover_i] : []);
+    if (!itItem._olCoverUrls) itItem._olCoverUrls = [];
+    const wks = bookDoc._allWorkKeys && bookDoc._allWorkKeys.length ? bookDoc._allWorkKeys : (bookDoc.key ? [bookDoc.key] : []);
+    const cvs = bookDoc._allCoverUrls && bookDoc._allCoverUrls.length ? bookDoc._allCoverUrls : (bookDoc.cover_url ? [bookDoc.cover_url] : bookDoc.cover_i ? [bookDoc.cover_i] : []);
     wks.forEach(k => { if (!itItem._olWorkKeys.includes(k)) itItem._olWorkKeys.push(k); });
-    cvs.forEach(c => { if (!itItem._olCovers.includes(c)) itItem._olCovers.push(c); });
+    cvs.forEach(c => { if (!itItem._olCoverUrls.includes(c)) itItem._olCoverUrls.push(c); });
   }
 
-  return (olDocs || []).filter(d => {
-    const olKey = displayKeyOpenLibrary(d);
-    if (keyToItunes.has(olKey)) {
-      transferOlData(d, keyToItunes.get(olKey));
+  return (bookDocs || []).filter(d => {
+    const bookKey = displayKeyBook(d);
+    if (keyToItunes.has(bookKey)) {
+      transferBookData(d, keyToItunes.get(bookKey));
       return false;
     }
     const authorRaw = (d.author_name && d.author_name[0]) || '';
     if (!authorRaw.trim()) {
       const tk = normalizeTitleKey(d.title || '');
       if (titleToItunes.has(tk)) {
-        transferOlData(d, titleToItunes.get(tk));
+        transferBookData(d, titleToItunes.get(tk));
         return false;
       }
     }
@@ -288,17 +289,54 @@ export function cleanTitle(title) {
 }
 
 // Detect if query is an ISBN (10 or 13 digits, with optional hyphens/spaces)
-// Returns { isISBN, isbn, isbnUrl } or { isISBN: false }
+// Returns { isISBN, isbn } or { isISBN: false }
 export function detectISBN(query) {
   const digits = query.replace(/[\s-]/g, '');
   if (/^\d{10}$/.test(digits) || /^\d{13}$/.test(digits)) {
-    return {
-      isISBN: true,
-      isbn: digits,
-      isbnUrl: `https://openlibrary.org/isbn/${digits}.json`
-    };
+    return { isISBN: true, isbn: digits };
   }
   return { isISBN: false };
+}
+
+/**
+ * Normalize a Google Books API volume item into the internal shape
+ * expected by the scoring/dedup/rendering pipeline.
+ */
+export function normalizeGoogleBook(item) {
+  if (!item || !item.volumeInfo) return null;
+  const vi = item.volumeInfo;
+  const ids = vi.industryIdentifiers || [];
+  const isbn13 = ids.find(id => id.type === 'ISBN_13');
+  const isbn10 = ids.find(id => id.type === 'ISBN_10');
+  const isbn = isbn13 ? isbn13.identifier : isbn10 ? isbn10.identifier : '';
+  return {
+    key: item.id || '',
+    title: vi.title || '',
+    subtitle: vi.subtitle || '',
+    author_name: vi.authors || [],
+    first_publish_year: vi.publishedDate ? parseInt(vi.publishedDate.slice(0, 4), 10) || 0 : 0,
+    publish_year: vi.publishedDate ? [parseInt(vi.publishedDate.slice(0, 4), 10) || 0].filter(Boolean) : [],
+    language: vi.language ? [vi.language] : [],
+    cover_url: getGoogleBooksCoverUrl(vi, 1),
+    isbn,
+    _pageCount: vi.pageCount || 0,
+    _categories: vi.categories || []
+  };
+}
+
+/**
+ * Get a cover URL from Google Books volumeInfo, with configurable zoom level.
+ * Upgrades to HTTPS, removes edge=curl for clean images.
+ */
+export function getGoogleBooksCoverUrl(volumeInfo, zoom) {
+  if (!volumeInfo || !volumeInfo.imageLinks) return '';
+  const thumb = volumeInfo.imageLinks.thumbnail || volumeInfo.imageLinks.smallThumbnail || '';
+  if (!thumb) return '';
+  let url = thumb.replace(/^http:/, 'https:').replace(/&edge=curl/gi, '');
+  if (zoom) {
+    url = url.replace(/zoom=\d+/, `zoom=${zoom}`);
+  }
+  return url;
 }
 
 // Parse "Title by Author" or natural language queries into components
