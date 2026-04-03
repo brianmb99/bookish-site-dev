@@ -339,6 +339,28 @@ export function getGoogleBooksCoverUrl(volumeInfo, zoom) {
   return url;
 }
 
+/**
+ * Filter normalized book docs to those with unique covers matching the given title.
+ * Deduplicates by cover URL (ignoring zoom parameter) so the same cover image
+ * from different editions isn't shown twice. Requires ≥75% token overlap with title.
+ */
+export function filterCoverMatches(docs, title) {
+  const workTokens = tokenize(title || '');
+  const seen = new Set();
+  return (docs || []).filter(e => {
+    if (!e.cover_url) return false;
+    // Deduplicate by cover URL (strip zoom param to compare base image)
+    const coverKey = e.cover_url.replace(/&?zoom=\d+/, '');
+    if (seen.has(coverKey)) return false;
+    seen.add(coverKey);
+    if (!workTokens.length) return true;
+    const edLower = ((e.title || '') + (e.subtitle ? ' ' + e.subtitle : '')).toLowerCase();
+    let hits = 0;
+    workTokens.forEach(t => { if (edLower.includes(t)) hits++; });
+    return hits / workTokens.length >= 0.75;
+  });
+}
+
 // Parse "Title by Author" or natural language queries into components
 // Returns { title, author } where author may be null
 export function parseAuthorTitle(query) {

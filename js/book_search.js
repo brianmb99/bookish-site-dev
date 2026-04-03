@@ -1,6 +1,6 @@
 // book_search.js
 // Lightweight module to search Google Books and populate the entry form
-import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeBookResults as coreMerge, enrichWithYear, enrichItunesWithYear, scoreDocument as coreScoreDocument, filterAndSort as coreFilterAndSort, deduplicateByDisplay as coreDedup, deduplicateItunesByDisplay as coreDedupItunes, filterBooksSupersededByItunes as coreBooksMinusItunes, detectISBN, parseAuthorTitle, cleanTitle, normalizeGoogleBook, getGoogleBooksCoverUrl } from './core/search_core.js';
+import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeBookResults as coreMerge, enrichWithYear, enrichItunesWithYear, scoreDocument as coreScoreDocument, filterAndSort as coreFilterAndSort, deduplicateByDisplay as coreDedup, deduplicateItunesByDisplay as coreDedupItunes, filterBooksSupersededByItunes as coreBooksMinusItunes, detectISBN, parseAuthorTitle, cleanTitle, normalizeGoogleBook, getGoogleBooksCoverUrl, filterCoverMatches } from './core/search_core.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
@@ -43,8 +43,8 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     const isStale=()=>mySearch!==searchCounter||signal.aborted;
     resultsEl.style.display='block'; showSkeletonCards();
     const termFull=encodeURIComponent(q); const base=coreBaseTitle(q);
-    let titleUrl='https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(base)+'&maxResults=20';
-    let broadUrl='https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(q)+'&maxResults=20';
+    let titleUrl='https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(base)+'&maxResults=30';
+    let broadUrl='https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(q)+'&maxResults=30';
     const itunesUrl='https://itunes.apple.com/search?media=audiobook&term='+termFull+'&limit=25';
     let skipBroad=false;
     const isbn=detectISBN(q);
@@ -103,15 +103,17 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     const engOnly=group.filter(e=>isEnglishBook(e));
     editions=(engOnly.length?engOnly:group).slice();
     editions.sort(editionCoverSort);
+    // Deduplicate editions with identical cover URLs (keep first, which has highest score)
+    const seenCovers=new Set();
+    editions=editions.filter(e=>{
+      if(!e.cover_url) return true; // keep no-cover editions for metadata
+      const coverKey=e.cover_url.replace(/&?zoom=\d+/,'');
+      if(seenCovers.has(coverKey)) return false;
+      seenCovers.add(coverKey);
+      return true;
+    });
     if(coverOnlyMode){
-      const workTokens=coreTokenize(meta.title||'');
-      editions=editions.filter(e=>{
-        if(!e.cover_url) return false;
-        if(!workTokens.length) return true;
-        const edLower=((e.title||'')+(e.subtitle?' '+e.subtitle:'')).toLowerCase();
-        let hits=0; workTokens.forEach(t=>{ if(edLower.includes(t)) hits++; });
-        return hits/workTokens.length>=0.5;
-      });
+      editions=filterCoverMatches(editions, meta.title);
       if(editions.length){ editions.unshift({_itunesArtwork:true}); editionIndex=0; showCoverNav(); editionInfo.textContent=`Cover 1 of ${editions.length}`; prevBtn.disabled=true; nextBtn.disabled=editions.length<=1; }
     } else if(editions.length){ editionIndex=0; showCoverNav(); applyEdition(); }
   }
@@ -218,17 +220,36 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   nextBtn.addEventListener('click',(e)=>{ e.stopPropagation(); if(editionIndex<editions.length-1){ editionIndex++; applyEdition(); }});
 
   // --- "Find covers" for edit mode ---
+  /** Fetch Google Books results, returning normalized docs. Returns [] on failure. */
+  async function fetchGBCovers(query, maxResults){
+    try{
+      const r=await fetch('https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(query)+'&maxResults='+(maxResults||20));
+      if(!r.ok) return [];
+      const j=await r.json();
+      return (j.items||[]).map(normalizeGoogleBook).filter(Boolean);
+    }catch{ return []; }
+  }
+  // filterCoverMatches imported from search_core.js
   async function findCoversForEntry(title, author){
     if(!title) return;
     editions=[]; editionIndex=0; coverOnlyMode=true; itunesCoverState=null;
     if(findCoversBtn){ findCoversBtn.textContent='Searching\u2026'; findCoversBtn.classList.add('loading'); findCoversBtn.style.display='block'; }
-    const q=author?`${title} ${author}`:title;
     try{
-      const [gbRes, itRes]=await Promise.all([
-        fetch('https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(q)+'&maxResults=20').then(r=>r.json()).catch(()=>({items:[]})),
-        fetch('https://itunes.apple.com/search?media=audiobook&term='+encodeURIComponent(q)+'&limit=5').then(r=>r.json()).catch(()=>({results:[]}))
+      // Multiple search strategies to find diverse covers
+      const queries=[];
+      if(author) queries.push(`intitle:${title}+inauthor:${author}`);
+      queries.push(author?`${title} ${author}`:title);
+      queries.push(`intitle:${title}`);
+      const itunesQ=author?`${title} ${author}`:title;
+      const [allGBDocs, itRes]=await Promise.all([
+        Promise.all(queries.map(q=>fetchGBCovers(q,20))).then(arrays=>{
+          // Merge all results, dedup by volume ID
+          const seen=new Map();
+          for(const arr of arrays){ for(const d of arr){ if(!seen.has(d.key)) seen.set(d.key,d); }}
+          return Array.from(seen.values());
+        }),
+        fetch('https://itunes.apple.com/search?media=audiobook&term='+encodeURIComponent(itunesQ)+'&limit=5').then(r=>r.json()).catch(()=>({results:[]}))
       ]);
-      const docs=(gbRes.items||[]).map(normalizeGoogleBook).filter(Boolean);
       const itItems=itRes.results||[];
       const bestIt=itItems[0];
       // Capture current cover as first option so user can always go back
@@ -241,15 +262,8 @@ import { resizeImageToBase64 } from './core/image_utils.js';
           if(resp.ok){ const blob=await resp.blob(); const { base64, mime, dataUrl }=await resizeImageToBase64(blob); itunesCoverState={dataUrl,base64,mime}; }
         }catch{}
       }
-      // Filter to editions with covers, matching title
-      const workTokens=coreTokenize(title||'');
-      editions=docs.filter(e=>{
-        if(!e.cover_url) return false;
-        if(!workTokens.length) return true;
-        const edLower=((e.title||'')+(e.subtitle?' '+e.subtitle:'')).toLowerCase();
-        let hits=0; workTokens.forEach(t=>{ if(edLower.includes(t)) hits++; });
-        return hits/workTokens.length>=0.5;
-      });
+      // Filter to editions with unique covers matching title
+      editions=filterCoverMatches(allGBDocs, title);
       // Add iTunes artwork as an option
       if(itunesCoverState && editions.length){ editions.unshift({_itunesArtwork:true}); }
       // Prepend current cover as option 0 so user can always go back
