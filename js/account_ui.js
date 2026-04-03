@@ -7,7 +7,7 @@ import { stopSync, startSync, markInitialSyncDone } from './sync_manager.js';
 import { resetKeyState } from './app.js';
 import { uploadAccountMetadata, downloadAccountMetadata } from './core/account_arweave.js';
 import { deriveAndStoreSymmetricKey, hexToBytes, storeSessionEncryptedSeed, getSessionEncryptedSeed, clearSessionEncryptedSeed, importAesKey, bytesToBase64, base64ToBytes } from './core/crypto_core.js';
-import { ACCOUNT_STORAGE_KEY, SEED_SHOWN_KEY, CREDENTIAL_STORAGE_KEY, PENDING_CREDENTIAL_MAPPING_KEY, PENDING_ESCROW_MAPPING_KEY } from './core/storage_constants.js';
+import { ACCOUNT_STORAGE_KEY, SEED_SHOWN_KEY, CREDENTIAL_STORAGE_KEY, PENDING_CREDENTIAL_MAPPING_KEY } from './core/storage_constants.js';
 import * as storageManager from './core/storage_manager.js';
 import { openOnrampWidget, isCoinbaseOnrampConfigured } from './core/coinbase_onramp.js';
 import { formatBalanceAsBooks, getBalanceStatus } from './core/balance_display.js';
@@ -427,19 +427,6 @@ async function handleCreateAccount() {
         <span class="field-match" id="passwordMatch" aria-live="polite"></span>
       </div>
 
-      <div class="form-group" style="margin-top:20px;">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.8rem;color:var(--color-text-secondary);">
-          <input type="checkbox" id="escrowOptIn" checked style="width:16px;height:16px;accent-color:var(--color-primary);cursor:pointer;">
-          Enable account recovery
-        </label>
-        <div id="escrowDetails" style="display:none;margin-top:8px;font-size:.75rem;line-height:1.5;color:var(--color-text-muted);padding:10px 12px;background:var(--color-bg-base);border:1px solid var(--color-border-subtle);border-radius:6px;">
-          If you forget your password, the Bookish team can help you recover your account.
-          This means we store an encrypted backup that only we can access.
-          <strong style="display:block;margin-top:6px;color:#f59e0b;">Turning this off means nobody can help if you forget your password.</strong>
-        </div>
-        <button type="button" id="escrowLearnMore" class="link-btn" style="font-size:.7rem;margin-top:4px;color:rgba(255,255,255,.6);">Learn more</button>
-      </div>
-
       <button type="submit" id="createAccountSubmitBtn" class="btn primary" style="width:100%;padding:14px 20px;margin-top:16px;" disabled>Create Account</button>
     </form>
 
@@ -557,19 +544,6 @@ async function handleCreateAccount() {
     document.getElementById('togglePassword2').setAttribute('aria-label', type === 'password' ? 'Show password' : 'Hide password');
   });
 
-  // Escrow "Learn more" toggle
-  document.getElementById('escrowLearnMore').addEventListener('click', () => {
-    const details = document.getElementById('escrowDetails');
-    const btn = document.getElementById('escrowLearnMore');
-    if (details.style.display === 'none') {
-      details.style.display = 'block';
-      btn.textContent = 'Hide details';
-    } else {
-      details.style.display = 'none';
-      btn.textContent = 'Learn more';
-    }
-  });
-
   // Switch to sign-in
   document.getElementById('switchToSignIn').addEventListener('click', () => {
     closeHelperModal();
@@ -584,13 +558,11 @@ async function handleCreateAccount() {
     const email = normalizeUsername(emailInput.value);
     const displayName = displayNameInput.value.trim();
     const password = passwordInput.value;
-    const escrowEnabled = document.getElementById('escrowOptIn').checked;
-
     submitBtn.disabled = true;
     submitBtn.textContent = 'Creating...';
 
     try {
-      await runAccountCreationFlow(email, displayName, password, escrowEnabled);
+      await runAccountCreationFlow(email, displayName, password);
     } catch (error) {
       console.error('[Bookish:AccountUI] Account creation failed:', error);
       submitBtn.disabled = false;
@@ -615,9 +587,8 @@ async function handleCreateAccount() {
  * @param {string} email - Normalized email
  * @param {string} displayName - User display name
  * @param {string} password - User password
- * @param {boolean} escrowEnabled - Whether to send escrow recovery record
  */
-async function runAccountCreationFlow(email, displayName, password, escrowEnabled = true) {
+async function runAccountCreationFlow(email, displayName, password) {
   // Frame A2: Setting up - Creating account
   showAccountModal(`
     <div class="modal-content-enter" style="text-align:center;padding:20px 0;">
@@ -708,19 +679,12 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
 
     // Store credential metadata
     localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify({
-      lookupKey,
-      hasEscrow: false
+      lookupKey
     }));
 
     // Persist pending credential mapping to localStorage (survives page reload)
     const pendingMapping = { lookupKey, encryptedPayloadB64: bytesToBase64(encryptedPayload) };
     localStorage.setItem(PENDING_CREDENTIAL_MAPPING_KEY, JSON.stringify(pendingMapping));
-
-    // Prepare escrow mapping (worker encrypts with admin key, we upload to Arweave)
-    // Done early so it's ready to upload alongside credential-mapping after funding
-    if (escrowEnabled) {
-      await prepareEscrowMapping(account.seed, email, displayName);
-    }
 
     // Mark step 1 complete
     updateProgressStep('createStep1', 'complete', '✓', 'Account created');
@@ -792,35 +756,6 @@ async function runAccountCreationFlow(email, displayName, password, escrowEnable
         createdAt: accountData.created
       });
       console.log('[Bookish:AccountUI] Account metadata uploaded:', metaTxId);
-
-      // Upload escrow mapping to Arweave (if prepared earlier)
-      const pendingEscrowRaw = localStorage.getItem(PENDING_ESCROW_MAPPING_KEY);
-      if (pendingEscrowRaw) {
-        try {
-          const pendingEscrow = JSON.parse(pendingEscrowRaw);
-          if (pendingEscrow.lookupKey && pendingEscrow.encryptedPayloadB64) {
-            const escrowPayload = base64ToBytes(pendingEscrow.encryptedPayloadB64);
-            const escrowTxId = await uploadCredentialMapping({
-              lookupKey: pendingEscrow.lookupKey,
-              encryptedPayload: escrowPayload
-            });
-            console.log('[Bookish:AccountUI] Escrow mapping uploaded to Arweave:', escrowTxId);
-            localStorage.removeItem(PENDING_ESCROW_MAPPING_KEY);
-
-            const credStore = JSON.parse(localStorage.getItem(CREDENTIAL_STORAGE_KEY) || '{}');
-            credStore.hasEscrow = true;
-            credStore.escrowTxId = escrowTxId;
-            localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify(credStore));
-          }
-        } catch (escrowErr) {
-          console.warn('[Bookish:AccountUI] Escrow upload failed (non-fatal):', escrowErr);
-        }
-      } else if (!escrowEnabled) {
-        console.log('[Bookish:AccountUI] Escrow skipped (user opted out for privacy)');
-        const credStore = JSON.parse(localStorage.getItem(CREDENTIAL_STORAGE_KEY) || '{}');
-        credStore.hasEscrow = false;
-        localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify(credStore));
-      }
 
       // Update local state with Arweave tx IDs
       const storedAccount = JSON.parse(localStorage.getItem(ACCOUNT_STORAGE_KEY));
@@ -1001,39 +936,6 @@ function showCreationFallbackSuccess(displayName, email) {
 
 // storeAccountInfo removed — account storage is now handled inline in creation flow
 
-/**
- * Request escrow encryption from the worker and store pending escrow mapping.
- * Worker derives keys from (email + ESCROW_MASTER_KEY), encrypts seed, returns
- * { lookupKey, encryptedPayload }. Client stores this for upload to Arweave.
- * Same format as credential-mapping — uses the same uploadCredentialMapping function.
- *
- * @param {string} seed - User's BIP39 seed phrase
- * @param {string} email - User's email
- * @param {string} displayName - User's display name
- * @returns {Promise<{lookupKey: string, encryptedPayloadB64: string}|null>} - Escrow data or null on failure
- */
-async function prepareEscrowMapping(seed, email, displayName) {
-  try {
-    console.log('[Bookish:AccountUI] Requesting escrow encryption from worker...');
-
-    const { requestEscrowEncryption } = await import('./core/escrow_client.js');
-    const { lookupKey, encryptedPayload } = await requestEscrowEncryption(email, seed, displayName);
-
-    // Store as pending for Arweave upload (same pattern as pending credential mapping)
-    const pendingEscrow = {
-      lookupKey,
-      encryptedPayloadB64: bytesToBase64(encryptedPayload)
-    };
-    localStorage.setItem(PENDING_ESCROW_MAPPING_KEY, JSON.stringify(pendingEscrow));
-
-    console.log('[Bookish:AccountUI] Escrow mapping prepared, pending Arweave upload');
-    return pendingEscrow;
-  } catch (error) {
-    // Non-fatal: escrow failure shouldn't block account creation
-    console.warn('[Bookish:AccountUI] Escrow preparation failed:', error.message);
-    return null;
-  }
-}
 
 /**
  * Handle login
@@ -1280,8 +1182,7 @@ async function runSignInFlow(email, password) {
 
   // Store credential metadata
   localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify({
-    lookupKey,
-    hasEscrow: true // Assume true since they have an Arweave mapping
+    lookupKey
   }));
 
   console.log('[Bookish:AccountUI] Sign-in complete, local state restored');
@@ -2462,30 +2363,6 @@ export async function handlePersistAccountToArweave(isAutoTrigger = false) {
         }
       }
 
-      // Upload pending escrow mapping to Arweave (same format as credential-mapping)
-      const pendingEscrowRaw = localStorage.getItem(PENDING_ESCROW_MAPPING_KEY);
-      if (pendingEscrowRaw) {
-        try {
-          const pendingEscrow = JSON.parse(pendingEscrowRaw);
-          if (pendingEscrow.lookupKey && pendingEscrow.encryptedPayloadB64) {
-            console.log('[Bookish:AccountUI] Uploading pending escrow mapping...');
-            const escrowPayload = base64ToBytes(pendingEscrow.encryptedPayloadB64);
-            const escrowTxId = await uploadCredentialMapping({
-              lookupKey: pendingEscrow.lookupKey,
-              encryptedPayload: escrowPayload
-            });
-            console.log('[Bookish:AccountUI] Escrow mapping uploaded:', escrowTxId);
-            localStorage.removeItem(PENDING_ESCROW_MAPPING_KEY);
-
-            const credStore = JSON.parse(localStorage.getItem(CREDENTIAL_STORAGE_KEY) || '{}');
-            credStore.hasEscrow = true;
-            credStore.escrowTxId = escrowTxId;
-            localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify(credStore));
-          }
-        } catch (escrowErr) {
-          console.warn('[Bookish:AccountUI] Escrow mapping upload failed (non-fatal):', escrowErr);
-        }
-      }
     }
 
     // Update account storage with tx IDs
