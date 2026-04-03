@@ -17,7 +17,7 @@ export const STORAGE_KEYS = {
   EVM_WALLET: 'bookish.evmWallet.v1',       // Encrypted EVM wallet (Base)
 
   // Credential-based auth (email+password)
-  CREDENTIAL: 'bookish.credential',          // Credential metadata: {lookupKey, hasEscrow}
+  CREDENTIAL: 'bookish.credential',          // Credential metadata: {lookupKey}
 
   // Pending credential mapping (survives page reload until uploaded to Arweave)
   PENDING_CREDENTIAL_MAPPING: 'bookish.credential.pending'  // Base64 encrypted payload + lookupKey
@@ -176,7 +176,7 @@ export function setWalletRecord(record) {
 
 /**
  * Set credential metadata (email+password auth)
- * @param {Object} credential - Credential object {lookupKey, hasEscrow}
+ * @param {Object} credential - Credential object {lookupKey}
  */
 export function setCredential(credential) {
   if (!credential || typeof credential !== 'object') {
