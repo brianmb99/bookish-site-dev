@@ -403,7 +403,7 @@ async function handleCreateAccount() {
 
       <div class="form-group">
         <label for="acctDisplayName">Display Name</label>
-        <input type="text" id="acctDisplayName" placeholder="Your name" required>
+        <input type="text" id="acctDisplayName" autocomplete="name" placeholder="Your name" required>
       </div>
 
       <div class="form-group">
@@ -427,6 +427,13 @@ async function handleCreateAccount() {
         <span class="field-match" id="passwordMatch" aria-live="polite"></span>
       </div>
 
+      <div class="form-group" style="margin-top: 12px;">
+        <label class="checkbox-label">
+          <input type="checkbox" id="recoveryConsent" required>
+          <span>I understand that if I lose my email and password, my cloud data cannot be recovered. Bookish cannot reset my credentials.</span>
+        </label>
+      </div>
+
       <button type="submit" id="createAccountSubmitBtn" class="btn primary" style="width:100%;padding:14px 20px;margin-top:16px;" disabled>Create Account</button>
     </form>
 
@@ -440,6 +447,7 @@ async function handleCreateAccount() {
   const displayNameInput = document.getElementById('acctDisplayName');
   const passwordInput = document.getElementById('acctPassword');
   const confirmInput = document.getElementById('acctConfirmPassword');
+  const consentCheckbox = document.getElementById('recoveryConsent');
   const submitBtn = document.getElementById('createAccountSubmitBtn');
   const emailPreview = document.getElementById('emailPreview');
   const emailError = document.getElementById('emailError');
@@ -453,7 +461,8 @@ async function handleCreateAccount() {
     const nameOk = displayNameInput.value.trim().length > 0;
     const passOk = passwordInput.value.length >= 8;
     const matchOk = confirmInput.value.length > 0 && passwordInput.value === confirmInput.value;
-    submitBtn.disabled = !(emailOk && nameOk && passOk && matchOk);
+    const consentOk = consentCheckbox.checked;
+    submitBtn.disabled = !(emailOk && nameOk && passOk && matchOk && consentOk);
   }
 
   // Email normalization preview on blur
@@ -531,6 +540,9 @@ async function handleCreateAccount() {
     updatePasswordMatch();
     validateForm();
   });
+
+  // Consent checkbox
+  consentCheckbox.addEventListener('change', validateForm);
 
   // Password visibility toggles
   document.getElementById('togglePassword1').addEventListener('click', () => {
@@ -875,6 +887,9 @@ function showCreationFullSuccess(displayName, email) {
         <div class="status-item"><span class="status-dot"></span> Cloud backup: Active</div>
         <div class="status-item"><span class="status-dot"></span> Account recovery: On</div>
       </div>
+      <p style="font-size:0.875rem;line-height:1.6;color:var(--color-text-secondary);margin:16px 0 0 0;">
+        Tip: If your browser offered to save your password, we recommend accepting — it's the easiest way to access your account on other devices.
+      </p>
       <button id="startBooksBtn" class="btn primary" style="width:100%;padding:14px 20px;">Start Adding Books →</button>
       <div class="signed-in-as">Signed in as ${email}</div>
     </div>
@@ -913,6 +928,9 @@ function showCreationFallbackSuccess(displayName, email) {
           Cloud backup is still finishing up. This usually completes within a few minutes. Your books are safe on this device in the meantime.
         </p>
       </div>
+      <p style="font-size:0.875rem;line-height:1.6;color:var(--color-text-secondary);margin:16px 0 0 0;">
+        Tip: If your browser offered to save your password, we recommend accepting — it's the easiest way to access your account on other devices.
+      </p>
       <button id="startBooksBtn" class="btn primary" style="width:100%;padding:14px 20px;">Start Adding Books →</button>
       <div class="signed-in-as">Signed in as ${email}</div>
     </div>

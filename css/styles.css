@@ -1699,6 +1699,8 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 /* Checkbox confirmation styling */
 .checkbox-confirm{display:flex;align-items:center;gap:8px;font-size:.875rem;cursor:pointer}
 .checkbox-confirm input[type="checkbox"]{width:18px;height:18px;accent-color:#2563eb;cursor:pointer}
+.checkbox-label{display:flex;align-items:flex-start;gap:8px;font-size:.875rem;line-height:1.5;cursor:pointer}
+.checkbox-label input[type="checkbox"]{width:18px;height:18px;min-width:18px;margin-top:2px;accent-color:#2563eb;cursor:pointer}
 
 /* Success checkmark animation */
 .success-checkmark{
