@@ -1337,7 +1337,7 @@ function searchOmniboxApis(query){
   fetch(itUrl, {signal}).then(r => r.json()).then(j => {
     if(isStale()) return;
     itResults = (j.results || []).slice(0, 6).map(i => ({
-      title: i.collectionName || i.trackName || '',
+      title: stripNoise(i.collectionName || i.trackName || ''),
       author: i.artistName || '',
       year: '',
       coverUrl: i.artworkUrl100 || '',
