@@ -2,6 +2,7 @@
 // Lightweight module to search OpenLibrary and populate the entry form
 import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeBookResults as coreMerge, enrichWithYear, enrichItunesWithYear, scoreDocument as coreScoreDocument, filterAndSort as coreFilterAndSort, deduplicateByDisplay as coreDedup, deduplicateItunesByDisplay as coreDedupItunes, filterBooksSupersededByItunes as coreBooksMinusItunes, detectISBN, parseAuthorTitle, cleanTitle, filterCoverMatches, extractISBN10s, amazonCoverUrl, olCoverByISBN, rankCover } from './core/search_core.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
+import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions, insertByRank, buildCoverEdition, fetchAndValidateCover, MIN_COVER_BYTES } from './core/cover_pipeline.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
   const ui=document.getElementById('bookSearchUI'); const input=document.getElementById('bookSearchInput'); const resultsEl=document.getElementById('bookSearchResults');
@@ -59,16 +60,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     }
     let titleDocs=[]; let broadDocs=[]; let failTitle=false; let failBroad=false;
     let titleDone=false; let broadDone=skipBroad; let itunesDone=false;
-    function parseOLResponse(j){ return (j.docs||[]).map(d=>({
-      key: d.key||'',
-      title: d.title||'',
-      subtitle: d.subtitle||'',
-      author_name: d.author_name||[],
-      first_publish_year: d.first_publish_year||0,
-      cover_url: d.cover_i?`https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg`:'',
-      isbn: d.isbn||[],
-      language: d.language||[]
-    })).filter(Boolean); }
+    const parseOLResponse=parseOLSearchResponse;
     function mergeAndRender(){ if(isStale()) return; olDocs=coreMerge(titleDocs,broadDocs); computeScoring(); renderCombined({failTitle,failBroad,partial:!titleDone||!broadDone||!itunesDone}); }
     fetch(titleUrl,{signal}).then(r=>r.json().then(j=>({ok:r.ok,...j})).catch(()=>({ok:false,docs:[]}))).catch(e=>{if(e.name==='AbortError')return null;return{ok:false,docs:[]};})
       .then(r=>{if(!r||isStale())return;failTitle=!r.ok;titleDocs=parseOLResponse(r);titleDone=true;mergeAndRender();});
@@ -103,27 +95,10 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   function selectWork(meta){ currentAudio=null; currentWork=meta; editions=[]; editionIndex=0; coverOnlyMode=false; hideCoverNav();
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
     populateFromBasic(meta); loadEditionsFromSearch(meta); }
-  const MIN_COVER_BYTES=2000;
-  async function fetchAndValidateCover(url, source){
-    try{
-      const controller=new AbortController();
-      const timeoutId=setTimeout(()=>controller.abort(),8000);
-      const resp=await fetch(url,{signal:controller.signal});
-      clearTimeout(timeoutId);
-      if(!resp.ok) return null;
-      const blob=await resp.blob();
-      if(blob.size<MIN_COVER_BYTES) return null;
-      const { base64, mime, wasResized, dataUrl }=await resizeImageToBase64(blob);
-      // Check dimensions via image load
-      const dims=await new Promise(resolve=>{
-        const img=new Image();
-        img.onload=()=>resolve({w:img.naturalWidth,h:img.naturalHeight});
-        img.onerror=()=>resolve(null);
-        img.src=dataUrl;
-      });
-      if(!dims||dims.w<=10||dims.h<=10) return null;
-      return { url, source, base64, mime, dataUrl, width:dims.w, height:dims.h };
-    }catch{ return null; }
+  // fetchAndValidateCover and MIN_COVER_BYTES imported from cover_pipeline.js
+  // Wrap to inject resizeFn dependency
+  function fetchAndValidateCoverLocal(url, source){
+    return fetchAndValidateCover(url, source, { resizeFn: resizeImageToBase64 });
   }
   async function loadEditionsFromSearch(meta){
     const workKey=meta.key;
@@ -145,42 +120,15 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       rawEntries=j.entries||[];
     }catch{ if(ph) ph.classList.remove('cover-skeleton-pulse'); return; }
     // Build OL cover editions (non-Amazon)
-    const olEditions=rawEntries.map(e=>({
-      title: e.title||'',
-      author_name: [],
-      cover_url: e.covers&&e.covers.length?`https://covers.openlibrary.org/b/id/${e.covers[0]}-L.jpg`:'',
-      language: e.languages?e.languages.map(l=>(l.key||'').replace('/languages/','')):[]
-    }));
-    const engOnly=olEditions.filter(e=>isEnglishBook(e));
-    let baseEditions=(engOnly.length?engOnly:olEditions).slice();
-    // Deduplicate OL editions by cover URL
-    const seenCovers=new Set();
-    baseEditions=baseEditions.filter(e=>{
-      if(!e.cover_url) return true;
-      if(seenCovers.has(e.cover_url)) return false;
-      seenCovers.add(e.cover_url);
-      return true;
-    });
-    baseEditions.sort(editionCoverSort);
+    const { editions: baseEditions, seenCovers } = buildOLEditions(rawEntries);
     // Extract ISBN-10s and fetch Amazon covers progressively
     const isbn10s=extractISBN10s(rawEntries);
     const amazonPromises=isbn10s.map(isbn=>{
       const url=amazonCoverUrl(isbn);
-      return fetchAndValidateCover(url,'amazon').then(result=>{
+      return fetchAndValidateCoverLocal(url,'amazon').then(result=>{
         if(!result) return;
-        const ed={
-          title: meta.title||'',
-          author_name: [],
-          cover_url: url,
-          _coverData: result,
-          _rank: rankCover(result)
-        };
-        // Insert into editions sorted by rank (best first)
-        let inserted=false;
-        for(let i=0;i<editions.length;i++){
-          if((editions[i]._rank||0)<ed._rank){ editions.splice(i,0,ed); inserted=true; break; }
-        }
-        if(!inserted) editions.push(ed);
+        const ed=buildCoverEdition(result, meta);
+        insertByRank(editions, ed);
         // Auto-select first portrait cover if none shown yet
         if(!coverFirstShown && result.height/result.width>=1.18){
           coverFirstShown=true;
@@ -211,21 +159,11 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     const olIsbnPromises=isbn10s.slice(0,10).map(isbn=>{
       const url=olCoverByISBN(isbn);
       if(seenCovers.has(url)) return Promise.resolve();
-      return fetchAndValidateCover(url,'ol').then(result=>{
+      return fetchAndValidateCoverLocal(url,'ol').then(result=>{
         if(!result) return;
         seenCovers.add(url);
-        const ed={
-          title: meta.title||'',
-          author_name: [],
-          cover_url: url,
-          _coverData: result,
-          _rank: rankCover(result)
-        };
-        let inserted=false;
-        for(let i=0;i<editions.length;i++){
-          if((editions[i]._rank||0)<ed._rank){ editions.splice(i,0,ed); inserted=true; break; }
-        }
-        if(!inserted) editions.push(ed);
+        const ed=buildCoverEdition(result, meta);
+        insertByRank(editions, ed);
         if(!coverFirstShown && result.height/result.width>=1.18){
           coverFirstShown=true;
           editionIndex=editions.indexOf(ed);
@@ -276,15 +214,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       setCoverPlaceholder(ph,'no-cover');
     }
   }
-  function isEnglishBook(doc){
-    if(!doc.language||!Array.isArray(doc.language)||!doc.language.length) return true;
-    return doc.language.some(l=>l==='eng'||l==='en'||l==='English');
-  }
-  function editionCoverSort(a,b){
-    const aCover=a.cover_url?0:1;
-    const bCover=b.cover_url?0:1;
-    return aCover-bCover;
-  }
+  // isEnglishBook and editionCoverSort imported from cover_pipeline.js
   async function selectItunes(payload){ currentWork=null; editions=[]; editionIndex=0; hideCoverNav(); currentAudio=payload;
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
     form.title.value = cleanTitle(payload.title || '');
@@ -436,7 +366,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
             const edJ=await edR.json();
             const isbn10s=extractISBN10s(edJ.entries||[]);
             const amazonResults=await Promise.allSettled(isbn10s.map(isbn=>
-              fetchAndValidateCover(amazonCoverUrl(isbn),'amazon')
+              fetchAndValidateCoverLocal(amazonCoverUrl(isbn),'amazon')
             ));
             for(const r of amazonResults){
               if(r.status==='fulfilled'&&r.value) amazonCovers.push(r.value);
@@ -445,13 +375,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
         }catch{}
       }
       // Build editions: Amazon covers first (ranked), then OL covers
-      const amazonEditions=amazonCovers.map(c=>({
-        title: title,
-        author_name: [],
-        cover_url: c.url,
-        _coverData: c,
-        _rank: rankCover(c)
-      }));
+      const amazonEditions=amazonCovers.map(c=>buildCoverEdition(c, { title }));
       amazonEditions.sort((a,b)=>(b._rank||0)-(a._rank||0));
       const olEditions=filterCoverMatches(allOLDocs, title);
       // Merge: Amazon first, then OL, dedup by cover URL
