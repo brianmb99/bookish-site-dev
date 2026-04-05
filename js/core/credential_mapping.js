@@ -47,11 +47,11 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
   console.log('[Bookish:CredentialMapping] Uploading credential mapping...');
 
   const tags = [
-    { name: 'App-Name', value: 'Bookish' },
-    { name: 'Type', value: 'credential-mapping' },
-    { name: 'Credential-Lookup-Key', value: lookupKey },
+    { name: 'App', value: 'bookish' },
+    { name: 'Type', value: 'cred' },
+    { name: 'Lk', value: lookupKey },
     { name: 'Enc', value: 'aes-256-gcm' },
-    { name: 'Schema-Version', value: '0.1.0' }
+    { name: 'V', value: '0.2.0' }
   ];
 
   if (!window.bookishUpload) {
@@ -105,9 +105,9 @@ async function findCredentialMappingTx(lookupKey) {
   const query = `query {
     transactions(
       tags: [
-        {name: "App-Name", values: ["Bookish"]},
-        {name: "Type", values: ["credential-mapping"]},
-        {name: "Credential-Lookup-Key", values: ["${lookupKey}"]}
+        {name: "App", values: ["bookish"]},
+        {name: "Type", values: ["cred"]},
+        {name: "Lk", values: ["${lookupKey}"]}
       ],
       first: 1,
       sort: HEIGHT_DESC

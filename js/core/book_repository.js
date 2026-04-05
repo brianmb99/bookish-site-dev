@@ -13,6 +13,7 @@
 import { registerPendingTx, fetchPendingTxIds } from './pending_tx_bridge.js';
 import { pickWinner } from './cache_core.js';
 import { fetchSyncStatus } from '../browser_client.js';
+import { fetchEntriesFromAPI } from './api_data_source.js';
 
 export const READING_STATUS = {
   WANT_TO_READ: 'want_to_read',
@@ -59,8 +60,9 @@ export class BookRepository {
    * @param {Function} deps.ensureWallet - async () => void
    * @param {Function} [deps.deriveBookId] - async (payload) => string
    * @param {Function} [deps.onDirty] - () => void; signals sync manager
+   * @param {string} [deps.dataSource='arweave'] - 'arweave' for direct Arweave reads, 'api' for bookish-api cache layer
    */
-  constructor({ cache, ensureKeys, getBrowserClient, getWalletAddress, ensureWallet, deriveBookId, onDirty }) {
+  constructor({ cache, ensureKeys, getBrowserClient, getWalletAddress, ensureWallet, deriveBookId, onDirty, dataSource }) {
     this._cache = cache;
     this._ensureKeys = ensureKeys;
     this._getBrowserClient = getBrowserClient;
@@ -68,6 +70,7 @@ export class BookRepository {
     this._ensureWallet = ensureWallet || (() => {});
     this._deriveBookId = deriveBookId;
     this._onDirty = onDirty || (() => {});
+    this._dataSource = dataSource || 'arweave';
 
     this._entries = [];
     this._editQueue = new Map();
@@ -400,8 +403,9 @@ export class BookRepository {
       return;
     }
 
-    console.log('[BookRepository] Starting book sync from Arweave...');
-    const { entries: remoteEntries, tombstones, partial } = await this._fetchRemoteEntries();
+    console.log('[BookRepository] Starting book sync via', this._dataSource, '...');
+    const fetchFn = this._dataSource === 'api' ? () => this._fetchFromAPI() : () => this._fetchRemoteEntries();
+    const { entries: remoteEntries, tombstones, partial } = await fetchFn();
     console.log('[BookRepository] Fetched', remoteEntries.length, 'remote entries,', tombstones.length, 'tombstones', partial ? '(partial)' : '');
 
     const remote = remoteEntries.map(e => ({ ...e, status: 'confirmed', id: e.txid }));
@@ -557,7 +561,21 @@ export class BookRepository {
     }
   }
 
-  // --- Internal: remote fetch pipeline ---
+  // --- Internal: API-based fetch (bookish-api cache layer) ---
+
+  async _fetchFromAPI() {
+    const client = this._getBrowserClient();
+    if (!client) return { entries: [], tombstones: [], partial: false };
+
+    const addr = await this._getWalletAddress();
+    return fetchEntriesFromAPI(addr, {
+      app: 'bookish',
+      type: 'entry',
+      decryptFn: (txid) => client.decryptTx(txid),
+    });
+  }
+
+  // --- Internal: remote fetch pipeline (Arweave-direct, legacy) ---
 
   async _fetchRemoteEntries() {
     const client = this._getBrowserClient();

@@ -27,10 +27,6 @@ export function pickWinner(a, b) {
   if (aTime !== bTime) return aTime > bTime ? a : b;
   if (a.status === 'confirmed' && b.status !== 'confirmed') return a;
   if (b.status === 'confirmed' && a.status !== 'confirmed') return b;
-  // Tiebreaker: prefer higher block height (more recently uploaded on Arweave)
-  const aBlock = a.block?.height || 0;
-  const bBlock = b.block?.height || 0;
-  if (aBlock !== bBlock) return aBlock > bBlock ? a : b;
   return a;
 }
 

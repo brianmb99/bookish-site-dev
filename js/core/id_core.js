@@ -1,14 +1,8 @@
 // Core ID & size helpers extracted from browser_client.js (pure logic)
 // No DOM or global side-effects.
 
-export async function deriveBookId({ isbn, title, author, edition, createdAt }) {
-  const ts = createdAt ? String(createdAt) : String(Date.now());
-  if (isbn && isbn.trim()) return `isbn:${isbn.trim()}:${ts}`;
-  const s = `${title ?? ''}|${author ?? ''}|${edition ?? ''}|${ts}`.toLowerCase();
-  const enc = new TextEncoder().encode(s);
-  const digest = await crypto.subtle.digest('SHA-256', enc);
-  const hex = [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
-  return `hash:${hex}`;
+export async function deriveBookId() {
+  return crypto.randomUUID();
 }
 
 export function detectMime(raw){
@@ -21,7 +15,7 @@ export function detectMime(raw){
 // Estimate encrypted payload size for a prospective entry (AES-GCM adds 12 iv + 16 tag)
 export async function estimateEntryBytes(entry){
   const e = { ...entry };
-  e.schema='reading'; e.version='0.1.0';
+  e.schema='reading'; e.version='0.2.0';
   if(!e.bookId){ e.bookId = await deriveBookId(e); }
   const pt = new TextEncoder().encode(JSON.stringify(e));
   return 12 + 16 + pt.length; // iv + tag + ciphertext

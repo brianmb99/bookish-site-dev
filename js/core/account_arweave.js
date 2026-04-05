@@ -61,11 +61,11 @@ export async function uploadAccountMetadata({ address, displayName, symKey, crea
     .join('');
 
   const tags = [
-    { name: 'App-Name', value: 'Bookish' },
-    { name: 'Type', value: 'account-metadata' },
-    { name: 'Account-Lookup-Key', value: hashedLookupKey },
+    { name: 'App', value: 'bookish' },
+    { name: 'Type', value: 'acct' },
+    { name: 'Lk', value: hashedLookupKey },
     { name: 'Enc', value: 'aes-256-gcm' },
-    { name: 'Schema-Version', value: '0.1.0' }
+    { name: 'V', value: '0.2.0' }
   ];
 
   console.log('[Bookish:AccountArweave] Uploading to Arweave via Turbo...');
@@ -107,9 +107,9 @@ export async function downloadAccountMetadata(walletAddress, symKey) {
   const query = `query {
     transactions(
       tags: [
-        {name: "App-Name", values: ["Bookish"]},
-        {name: "Type", values: ["account-metadata"]},
-        {name: "Account-Lookup-Key", values: ["${hashedLookupKey}"]}
+        {name: "App", values: ["bookish"]},
+        {name: "Type", values: ["acct"]},
+        {name: "Lk", values: ["${hashedLookupKey}"]}
       ],
       first: 1,
       sort: HEIGHT_DESC
@@ -205,9 +205,9 @@ export async function accountMetadataExists(walletAddress) {
     const query = `query {
       transactions(
         tags: [
-          {name: "App-Name", values: ["Bookish"]},
-          {name: "Type", values: ["account-metadata"]},
-          {name: "Account-Lookup-Key", values: ["${hashedLookupKey}"]}
+          {name: "App", values: ["bookish"]},
+          {name: "Type", values: ["acct"]},
+          {name: "Lk", values: ["${hashedLookupKey}"]}
         ],
         first: 1
       ) {

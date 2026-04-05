@@ -23,7 +23,7 @@ export async function deriveBookId({ isbn, title, author, edition, createdAt }) 
   return `hash:${hex}`;
 }
 
-export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookish', schemaVersion='0.1.0', keyId='default' }={}){
+export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookish', schemaVersion='0.2.0' }={}){
   if(!symKeyHex) throw new Error('missing symKeyHex');
   const symKey = hexToBytes(symKeyHex.trim());
   const aesKey = await importAesKey(symKey);
@@ -42,13 +42,10 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
   }
 
   function addCommonTags(tx){
-    tx.addTag('App-Name', appName);
-    tx.addTag('Schema-Name', 'reading');
-    tx.addTag('Schema-Version', schemaVersion);
-    tx.addTag('Visibility', 'private');
+    tx.addTag('App', appName);
+    tx.addTag('Type', 'entry');
+    tx.addTag('V', schemaVersion);
     tx.addTag('Enc', 'aes-256-gcm');
-    tx.addTag('Key-Id', keyId);
-    tx.addTag('Content-Type','application/octet-stream');
   }
 
   function detectMime(raw){
@@ -111,7 +108,7 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
     const tags = [];
     // Build tags array in a portable form for proxy (and we also add to tx for direct path)
     addCommonTags({ addTag: (n,v)=> tags.push({ name:n, value:v }) });
-    try{ const pubAddr = await (window.bookishWallet?.getAddress?.()); if(pubAddr) tags.push({ name:'Pub-Addr', value: String(pubAddr).toLowerCase() }); }catch{}
+    try{ const pubAddr = await (window.bookishWallet?.getAddress?.()); if(pubAddr) tags.push({ name:'Addr', value: String(pubAddr).toLowerCase() }); }catch{}
     extraTags.forEach(t=> tags.push({ name:t.name, value:t.value }));
 
     const isEdit = extraTags.some(t => t.name === 'Prev' && t.value);
@@ -194,7 +191,7 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
     const content = await encJson({ op:'tombstone', ref:priorTxid, note:note||'' });
     const tags = []; addCommonTags({ addTag:(n,v)=>tags.push({name:n,value:v}) });
     tags.push({ name:'Op', value:'tombstone' }); tags.push({ name:'Ref', value: priorTxid });
-    try{ const pubAddr = await (window.bookishWallet?.getAddress?.()); if(pubAddr) tags.push({ name:'Pub-Addr', value: String(pubAddr).toLowerCase() }); }catch{}
+    try{ const pubAddr = await (window.bookishWallet?.getAddress?.()); if(pubAddr) tags.push({ name:'Addr', value: String(pubAddr).toLowerCase() }); }catch{}
     if(!window.bookishUpload) try { await import('./turbo_client.js'); } catch {}
     if(!window.bookishUpload) { const e = new Error('Upload client required'); e.code='upload-required'; throw e; }
     const res = await window.bookishUpload.upload(content, tags, { skipFee: true });

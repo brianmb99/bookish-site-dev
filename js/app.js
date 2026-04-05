@@ -7,7 +7,7 @@ import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
 import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
-import { stripNoise, normalizeGoogleBook } from './core/search_core.js';
+import { stripNoise } from './core/search_core.js';
 import { fetchSyncStatus, ackSyncedTxids } from './browser_client.js';
 
 // --- Version logging (always visible in console) ---
@@ -1288,22 +1288,23 @@ function searchOmniboxApis(query){
   const mySearch = ++_omniboxApiCounter;
   const isStale = () => mySearch !== _omniboxApiCounter || signal.aborted;
   const term = encodeURIComponent(query);
-  const gbUrl = `https://www.googleapis.com/books/v1/volumes?q=${term}&maxResults=15`;
+  const fields = 'key,title,author_name,cover_i,first_publish_year,isbn,subtitle';
+  const olUrl = `https://openlibrary.org/search.json?q=${term}&limit=15&fields=${fields}`;
   const itUrl = `https://itunes.apple.com/search?media=audiobook&term=${term}&limit=8`;
 
   renderOmniboxApiSkeletons();
 
-  let gbResults = [];
+  let olResults = [];
   let itResults = [];
-  let gbDone = false;
+  let olDone = false;
   let itDone = false;
 
   function mergeAndShow(){
     if(isStale()) return;
-    // Deduplicate: combine GB + iTunes, prefer one with cover
+    // Deduplicate: combine OL + iTunes, prefer one with cover
     const combined = [];
     const seen = new Set();
-    for(const r of [...itResults, ...gbResults]){
+    for(const r of [...itResults, ...olResults]){
       const cleanTitle = stripNoise(r.title || '');
       const k = cleanTitle.toLowerCase().replace(/[^a-z0-9]/g,'') + '|' + (r.author||'').toLowerCase().replace(/[^a-z0-9]/g,'');
       if(seen.has(k)) continue;
@@ -1313,26 +1314,22 @@ function searchOmniboxApis(query){
     renderOmniboxApiResults(combined);
   }
 
-  fetch(gbUrl, {signal}).then(r => r.json()).then(j => {
+  fetch(olUrl, {signal}).then(r => r.json()).then(j => {
     if(isStale()) return;
-    gbResults = (j.items || []).slice(0, 10).map(item => {
-      const norm = normalizeGoogleBook(item);
-      if(!norm) return null;
-      return {
-        title: norm.title || '',
-        author: norm.author_name?.[0] || '',
-        year: norm.first_publish_year ? String(norm.first_publish_year) : '',
-        coverUrl: norm.cover_url || '',
-        publisher: '',
-        duration: '',
-        source: 'gb',
-        key: norm.key,
-        cover_url: norm.cover_url || ''
-      };
-    }).filter(Boolean);
-    gbDone = true;
+    olResults = (j.docs || []).slice(0, 10).map(d => ({
+      title: d.title || '',
+      author: d.author_name?.[0] || '',
+      year: d.first_publish_year ? String(d.first_publish_year) : '',
+      coverUrl: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : '',
+      publisher: '',
+      duration: '',
+      source: 'ol',
+      work_key: d.key || '',
+      isbn: (d.isbn || [])[0] || ''
+    }));
+    olDone = true;
     mergeAndShow();
-  }).catch(e => { if(e.name !== 'AbortError'){ gbDone = true; mergeAndShow(); } });
+  }).catch(e => { if(e.name !== 'AbortError'){ olDone = true; mergeAndShow(); } });
 
   fetch(itUrl, {signal}).then(r => r.json()).then(j => {
     if(isStale()) return;
@@ -1430,12 +1427,12 @@ omniboxDropdown?.addEventListener('click', (ev)=>{
             author: meta.author || '',
             artwork: meta.artwork || meta.coverUrl || ''
           });
-        } else if(meta.source === 'gb' && window.bookSearch?.selectWork){
+        } else if(meta.source === 'ol' && window.bookSearch?.selectWork){
           window.bookSearch.selectWork({
             title: meta.title || '',
             author: meta.author || '',
-            cover_url: meta.cover_url || '',
-            key: meta.key || ''
+            cover_url: meta.coverUrl || '',
+            key: meta.work_key || ''
           });
         } else {
           // Fallback: populate form fields directly
