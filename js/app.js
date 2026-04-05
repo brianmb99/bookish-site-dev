@@ -1301,15 +1301,21 @@ function searchOmniboxApis(query){
 
   function mergeAndShow(){
     if(isStale()) return;
-    // Deduplicate: combine OL + iTunes, prefer one with cover
+    // Deduplicate: combine OL + iTunes, transfer OL metadata to surviving entry
     const combined = [];
-    const seen = new Set();
+    const seen = new Map();
     for(const r of [...itResults, ...olResults]){
       const cleanTitle = stripNoise(r.title || '');
       const k = cleanTitle.toLowerCase().replace(/[^a-z0-9]/g,'') + '|' + (r.author||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-      if(seen.has(k)) continue;
-      seen.add(k);
-      combined.push({...r, title: cleanTitle});
+      if(seen.has(k)){
+        const existing = seen.get(k);
+        if(r.work_key && !existing.work_key) existing.work_key = r.work_key;
+        if(r.isbn && !existing.isbn) existing.isbn = r.isbn;
+        continue;
+      }
+      const entry = {...r, title: cleanTitle};
+      seen.set(k, entry);
+      combined.push(entry);
     }
     renderOmniboxApiResults(combined);
   }
@@ -1425,7 +1431,8 @@ omniboxDropdown?.addEventListener('click', (ev)=>{
           window.bookSearch.selectItunes({
             title: meta.title || '',
             author: meta.author || '',
-            artwork: meta.artwork || meta.coverUrl || ''
+            artwork: meta.artwork || meta.coverUrl || '',
+            olWorkKeys: meta.work_key ? [meta.work_key] : []
           });
         } else if(meta.source === 'ol' && window.bookSearch?.selectWork){
           window.bookSearch.selectWork({
