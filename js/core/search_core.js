@@ -320,6 +320,77 @@ export function filterCoverMatches(docs, title) {
   });
 }
 
+/**
+ * Convert an ISBN-13 (978-prefix) to ISBN-10.
+ * Returns the 10-char string or null if not a 978-prefix ISBN-13.
+ */
+export function convertISBN13to10(isbn13) {
+  if (!isbn13) return null;
+  const digits = isbn13.replace(/[\s-]/g, '');
+  if (digits.length !== 13 || !digits.startsWith('978')) return null;
+  const body = digits.slice(3, 12); // 9 digits
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(body[i], 10) * (10 - i);
+  }
+  const rem = (11 - (sum % 11)) % 11;
+  const check = rem === 10 ? 'X' : String(rem);
+  return body + check;
+}
+
+/**
+ * Extract unique ISBN-10 values from an array of OL edition objects.
+ * Handles isbn_10 and isbn_13 fields, deduplicates results.
+ */
+export function extractISBN10s(editions) {
+  if (!editions || !editions.length) return [];
+  const set = new Set();
+  for (const ed of editions) {
+    if (Array.isArray(ed.isbn_10)) {
+      for (const raw of ed.isbn_10) {
+        const clean = (raw || '').replace(/[\s-]/g, '');
+        if (clean.length === 10) set.add(clean);
+      }
+    }
+    if (Array.isArray(ed.isbn_13)) {
+      for (const raw of ed.isbn_13) {
+        const converted = convertISBN13to10(raw);
+        if (converted) set.add(converted);
+      }
+    }
+  }
+  return Array.from(set);
+}
+
+/**
+ * Build an Amazon CDN cover URL from an ISBN-10.
+ */
+export function amazonCoverUrl(isbn10) {
+  return `https://images-na.ssl-images-amazon.com/images/P/${isbn10}.01._SCLZZZZZZZ_.jpg`;
+}
+
+/**
+ * Build an OpenLibrary cover-by-ISBN URL.
+ */
+export function olCoverByISBN(isbn10) {
+  return `https://covers.openlibrary.org/b/isbn/${isbn10}-L.jpg`;
+}
+
+/**
+ * Rank a cover object { url, width, height, source } for quality sorting.
+ * Higher score = better. Portrait Amazon covers ranked highest.
+ * Aspect ratio threshold: height/width >= 1.18 (~2:3 ratio) counts as portrait.
+ */
+export function rankCover(cover) {
+  if (!cover) return 0;
+  const isPortrait = cover.width && cover.height && (cover.height / cover.width) >= 1.18;
+  const isAmazon = cover.source === 'amazon';
+  if (isPortrait && isAmazon) return 4;
+  if (isPortrait) return 3;
+  if (isAmazon) return 2;
+  return 1;
+}
+
 // Parse "Title by Author" or natural language queries into components
 // Returns { title, author } where author may be null
 export function parseAuthorTitle(query) {

@@ -1453,6 +1453,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .tile-cover:hover .cover-remove-btn[style*="inline"]{opacity:1}
 .cover-remove-btn:hover{background:rgba(239,68,68,.8)!important}
 .placeholder-loading{font-size:.6rem;opacity:.4;animation:pulse-opacity 1.5s ease-in-out infinite}
+.cover-skeleton-pulse{background:linear-gradient(135deg,#1a1f25 0%,#252d35 50%,#1a1f25 100%);background-size:200% 200%;animation:pulse-opacity 1.5s ease-in-out infinite}
 @keyframes pulse-opacity{0%,100%{opacity:.3}50%{opacity:.7}}
 .modal-inner .fields-cluster{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
 .modal-inner .field-block{display:flex;flex-direction:column;gap:4px}
