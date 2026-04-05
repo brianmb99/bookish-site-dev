@@ -106,7 +106,10 @@ import { resizeImageToBase64 } from './core/image_utils.js';
   const MIN_COVER_BYTES=2000;
   async function fetchAndValidateCover(url, source){
     try{
-      const resp=await fetch(url);
+      const controller=new AbortController();
+      const timeoutId=setTimeout(()=>controller.abort(),8000);
+      const resp=await fetch(url,{signal:controller.signal});
+      clearTimeout(timeoutId);
       if(!resp.ok) return null;
       const blob=await resp.blob();
       if(blob.size<MIN_COVER_BYTES) return null;
@@ -133,7 +136,10 @@ import { resizeImageToBase64 } from './core/image_utils.js';
     let coverFirstShown=false;
     let rawEntries=[];
     try{
-      const r=await fetch(`https://openlibrary.org${workKey}/editions.json?limit=50`);
+      const edController=new AbortController();
+      const edTimeout=setTimeout(()=>edController.abort(),8000);
+      const r=await fetch(`https://openlibrary.org${workKey}/editions.json?limit=50`,{signal:edController.signal});
+      clearTimeout(edTimeout);
       if(!r.ok){ if(ph) ph.classList.remove('cover-skeleton-pulse'); return; }
       const j=await r.json();
       rawEntries=j.entries||[];
@@ -245,8 +251,10 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       editions=baseEditions.slice();
       editions.forEach(e=>{ e._rank=e.cover_url?1:0; });
     }
-    // Wait for all Amazon + OL-ISBN fetches
-    await Promise.allSettled([...amazonPromises,...olIsbnPromises]);
+    // Wait for all Amazon + OL-ISBN fetches, with 15s overall timeout
+    const allFetches=Promise.allSettled([...amazonPromises,...olIsbnPromises]);
+    const pipelineTimeout=new Promise(resolve=>setTimeout(resolve,15000));
+    await Promise.race([allFetches,pipelineTimeout]);
     // Remove skeleton if still showing
     if(ph){ ph.classList.remove('cover-skeleton-pulse'); }
     if(coverOnlyMode){
@@ -420,7 +428,10 @@ import { resizeImageToBase64 } from './core/image_utils.js';
       if(workKeys.length){
         // Fetch editions for first work key to get ISBNs
         try{
-          const edR=await fetch(`https://openlibrary.org${workKeys[0]}/editions.json?limit=50`);
+          const edController=new AbortController();
+          const edTimeout=setTimeout(()=>edController.abort(),8000);
+          const edR=await fetch(`https://openlibrary.org${workKeys[0]}/editions.json?limit=50`,{signal:edController.signal});
+          clearTimeout(edTimeout);
           if(edR.ok){
             const edJ=await edR.json();
             const isbn10s=extractISBN10s(edJ.entries||[]);
