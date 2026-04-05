@@ -299,47 +299,6 @@ export function detectISBN(query) {
 }
 
 /**
- * Normalize a Google Books API volume item into the internal shape
- * expected by the scoring/dedup/rendering pipeline.
- */
-export function normalizeGoogleBook(item) {
-  if (!item || !item.volumeInfo) return null;
-  const vi = item.volumeInfo;
-  const ids = vi.industryIdentifiers || [];
-  const isbn13 = ids.find(id => id.type === 'ISBN_13');
-  const isbn10 = ids.find(id => id.type === 'ISBN_10');
-  const isbn = isbn13 ? isbn13.identifier : isbn10 ? isbn10.identifier : '';
-  return {
-    key: item.id || '',
-    title: vi.title || '',
-    subtitle: vi.subtitle || '',
-    author_name: vi.authors || [],
-    first_publish_year: vi.publishedDate ? parseInt(vi.publishedDate.slice(0, 4), 10) || 0 : 0,
-    publish_year: vi.publishedDate ? [parseInt(vi.publishedDate.slice(0, 4), 10) || 0].filter(Boolean) : [],
-    language: vi.language ? [vi.language] : [],
-    cover_url: getGoogleBooksCoverUrl(vi, 1),
-    isbn,
-    _pageCount: vi.pageCount || 0,
-    _categories: vi.categories || []
-  };
-}
-
-/**
- * Get a cover URL from Google Books volumeInfo, with configurable zoom level.
- * Upgrades to HTTPS, removes edge=curl for clean images.
- */
-export function getGoogleBooksCoverUrl(volumeInfo, zoom) {
-  if (!volumeInfo || !volumeInfo.imageLinks) return '';
-  const thumb = volumeInfo.imageLinks.thumbnail || volumeInfo.imageLinks.smallThumbnail || '';
-  if (!thumb) return '';
-  let url = thumb.replace(/^http:/, 'https:').replace(/&edge=curl/gi, '');
-  if (zoom) {
-    url = url.replace(/zoom=\d+/, `zoom=${zoom}`);
-  }
-  return url;
-}
-
-/**
  * Filter normalized book docs to those with unique covers matching the given title.
  * Deduplicates by cover URL (ignoring zoom parameter) so the same cover image
  * from different editions isn't shown twice. Requires ≥75% token overlap with title.
