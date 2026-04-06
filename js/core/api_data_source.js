@@ -7,7 +7,7 @@
 // The API returns metadata only (txids + tags); this module fetches encrypted
 // bytes from the gateway and decrypts them client-side.
 
-const API_BASE = window.BOOKISH_API_BASE || 'https://api.getbookish.app';
+const API_BASE = window.BOOKISH_API_BASE || 'https://api.tarn.dev';
 const BATCH_SIZE = 10;
 
 /**
