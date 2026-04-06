@@ -95,17 +95,17 @@ export function blobToBase64(blob) {
  */
 export async function resizeImageToBase64(blob, options = {}) {
   try {
-    const { blob: resizedBlob, wasResized } = await resizeImage(blob, options);
+    const { blob: resizedBlob, width, height, wasResized } = await resizeImage(blob, options);
     const dataUrl = await blobToBase64(resizedBlob);
     const base64 = dataUrl.split(',')[1];
     const mime = resizedBlob.type || 'image/jpeg';
-    return { base64, mime, wasResized, dataUrl };
+    return { base64, mime, wasResized, dataUrl, width, height };
   } catch (err) {
     // Fallback: return original un-resized
     console.warn('[Bookish:Image] Resize failed, using original:', err?.message || err);
     const dataUrl = await blobToBase64(blob);
     const base64 = dataUrl.split(',')[1];
     const mime = blob.type || 'image/jpeg';
-    return { base64, mime, wasResized: false, dataUrl };
+    return { base64, mime, wasResized: false, dataUrl, width: 0, height: 0 };
   }
 }

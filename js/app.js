@@ -353,7 +353,7 @@ function openModal(entry, forceIntent){
     const coverDataUrl='data:'+(entry.mimeType||'image/*')+';base64,'+entry.coverImage;
     coverPreview.src=coverDataUrl;
     coverPreview.style.display='block'; coverPlaceholder.style.display='none';
-    coverPreview.dataset.b64=entry.coverImage; if(entry.mimeType) coverPreview.dataset.mime=entry.mimeType;
+    coverPreview.dataset.b64=entry.coverImage; if(entry.mimeType) coverPreview.dataset.mime=entry.mimeType; if(entry.coverFit) coverPreview.dataset.fit=entry.coverFit;
     tileCoverClick.style.setProperty('--cover-url',`url('${coverDataUrl}')`);
     showCoverLoaded();
   } else { clearCoverPreview(); }
@@ -476,9 +476,10 @@ coverFileInput.addEventListener('change', async ()=>{ const f=coverFileInput.fil
     coverPreview.dataset.mime = mime;
     tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`);
     showCoverLoaded();
+    updateDirty();
   } catch(err) {
     // Fallback to original if resize fails
-    const r = new FileReader(); r.onload = e => { const b64full = e.target.result; const b64 = b64full.split(',')[1]; coverPreview.src = b64full; coverPreview.style.display = 'block'; coverPlaceholder.style.display = 'none'; coverPreview.dataset.b64 = b64; coverPreview.dataset.mime = f.type || 'image/jpeg'; tileCoverClick.style.setProperty('--cover-url',`url('${b64full}')`); showCoverLoaded(); }; r.readAsDataURL(f);
+    const r = new FileReader(); r.onload = e => { const b64full = e.target.result; const b64 = b64full.split(',')[1]; coverPreview.src = b64full; coverPreview.style.display = 'block'; coverPlaceholder.style.display = 'none'; coverPreview.dataset.b64 = b64; coverPreview.dataset.mime = f.type || 'image/jpeg'; tileCoverClick.style.setProperty('--cover-url',`url('${b64full}')`); showCoverLoaded(); updateDirty(); }; r.readAsDataURL(f);
   }
 });
 
@@ -630,7 +631,7 @@ function buildCardHTML(e, isWtrResult){
   const wtrLabel = isWtrResult ? '<div class="card-wtr-label">Want to Read</div>' : '';
   const yearBadge = e._showYearBadge && e.dateRead ? `<span class="card-year-badge">${escapeHtml(e.dateRead.slice(0,4))}</span>` : '';
   return `
-      <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
+      <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}" data-fit="${e.coverFit||'contain'}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
       <div class="meta">
         <p class="title">${e.title||'<i>Untitled</i>'}</p>
         <p class="author">${e.author||''}</p>
@@ -1733,7 +1734,7 @@ async function deleteServerless(priorTxid) {
 
 // --- Form handlers ---
 let _formSubmitting = false;
-form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) return; _formSubmitting=true; const priorTxid=form.priorTxid.value||undefined; const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ; const dateVal = form.dateRead.value; const payload={ title:form.title.value.trim(), author:form.author.value.trim(), format:form.format.value, dateRead:'', readingStatus:rsValue }; if(rsValue === READING_STATUS.READ){ payload.dateRead = dateVal; } else if(rsValue === READING_STATUS.READING){ payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now(); } if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; } else if(priorTxid){ payload.coverImage=''; payload.mimeType=''; } const notesVal=(notesInput?.value||'').trim(); if(notesVal) payload.notes=notesVal; const optVals=getOptionalFieldValues(); if(priorTxid){ payload.rating=optVals.rating||0; payload.owned=!!optVals.owned; payload.tags=optVals.tags||''; if(!notesVal) payload.notes=''; } else { if(optVals.rating) payload.rating=optVals.rating; if(optVals.owned) payload.owned=optVals.owned; if(optVals.tags) payload.tags=optVals.tags; } uiStatusManager.refresh();
+form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) return; _formSubmitting=true; const priorTxid=form.priorTxid.value||undefined; const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ; const dateVal = form.dateRead.value; const payload={ title:form.title.value.trim(), author:form.author.value.trim(), format:form.format.value, dateRead:'', readingStatus:rsValue }; if(rsValue === READING_STATUS.READ){ payload.dateRead = dateVal; } else if(rsValue === READING_STATUS.READING){ payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now(); } if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; if(coverPreview.dataset.fit) payload.coverFit=coverPreview.dataset.fit; } else if(priorTxid){ payload.coverImage=''; payload.mimeType=''; } const notesVal=(notesInput?.value||'').trim(); if(notesVal) payload.notes=notesVal; const optVals=getOptionalFieldValues(); if(priorTxid){ payload.rating=optVals.rating||0; payload.owned=!!optVals.owned; payload.tags=optVals.tags||''; if(!notesVal) payload.notes=''; } else { if(optVals.rating) payload.rating=optVals.rating; if(optVals.owned) payload.owned=optVals.owned; if(optVals.tags) payload.tags=optVals.tags; } uiStatusManager.refresh();
   const toastMsg = rsValue === READING_STATUS.WANT_TO_READ ? 'Added to Want to Read' : rsValue === READING_STATUS.READING ? 'Added to Currently Reading' : (!priorTxid ? 'Added to Shelf' : null);
   if(priorTxid){
   closeModal();
@@ -1780,7 +1781,8 @@ async function initCacheLayer(){
       getWalletAddress: async () => window.bookishWallet?.getAddress?.(),
       ensureWallet: async () => { if (window.bookishWallet?.ensure) await window.bookishWallet.ensure(); },
       deriveBookId: (payload) => window.bookishBrowserClient?.deriveBookId?.(payload),
-      onDirty: markDirty
+      onDirty: markDirty,
+      dataSource: 'api'
     });
 
     // Wire repository events to UI

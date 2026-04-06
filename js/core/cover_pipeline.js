@@ -140,6 +140,11 @@ export async function fetchAndValidateCover(url, source, deps = {}) {
     const { base64, mime, wasResized, dataUrl } = await resizeFn(blob);
     const dims = await getImageDims(dataUrl);
     if (!dims || dims.w <= 10 || dims.h <= 10) return null;
-    return { url, source, base64, mime, dataUrl, width: dims.w, height: dims.h };
-  } catch { return null; }
+    // Skip JPEG/ICC header (~1500 bytes = ~2000 base64 chars) to reach actual pixel data
+    const fingerprint = base64.length > 2200 ? base64.substring(2000, 2200) : base64.substring(base64.length - 200);
+    return { url, source, base64, mime, dataUrl, width: dims.w, height: dims.h, fingerprint };
+  } catch (err) {
+    if (err?.name !== 'AbortError') console.warn('[Bookish:Covers] fetchAndValidate failed for', source, ':', err?.message || err);
+    return null;
+  }
 }

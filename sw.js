@@ -1,5 +1,5 @@
 // sw.js - basic PWA service worker
-const VERSION='v176';
+const VERSION='v184';
 const CACHE_NAME='bookish-precache-'+VERSION;
 const PRECACHE=[
   '/',
@@ -17,6 +17,8 @@ const PRECACHE=[
   '/js/wallet.js',
   '/js/core/storage_manager.js',
   '/js/core/image_utils.js',
+  '/js/core/search_core.js',
+  '/js/core/cover_pipeline.js',
   '/js/core/crypto_core.js',
   '/js/core/account_creation.js',
   '/js/core/account_arweave.js',

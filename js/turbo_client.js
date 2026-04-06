@@ -42,7 +42,7 @@ async function signFeeTx(feeSchedule) {
   const wallet = new Wallet(pk, provider);
 
   const feeWei = BigInt(feeSchedule.fee);
-  const chainNonce = await provider.getTransactionCount(wallet.address, 'latest');
+  const chainNonce = await provider.getTransactionCount(wallet.address, 'pending');
   const nonce = (_pendingNonce !== null && _pendingNonce >= chainNonce)
     ? _pendingNonce
     : chainNonce;
@@ -87,6 +87,7 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
 
   if (!skipFee && response.status === 402) {
     console.warn('[Bookish:Upload] 402 received, re-fetching fee schedule and retrying');
+    if (_pendingNonce !== null) _pendingNonce--;
     const feeSchedule = await getFeeSchedule(true);
     if (feeSchedule) {
       payment = await signFeeTx(feeSchedule);
@@ -95,7 +96,7 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
   }
 
   if (!response.ok) {
-    _pendingNonce = null;
+    if (response.status === 402) _pendingNonce = null;
     const errBody = await response.json().catch(() => ({}));
     const err = new Error(errBody.error || `Upload proxy returned ${response.status}`);
     err.code = errBody.code || `proxy-${response.status}`;

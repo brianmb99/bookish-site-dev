@@ -391,6 +391,44 @@ export function rankCover(cover) {
   return 1;
 }
 
+/**
+ * Card aspect ratio (height / width) for the 2:3 cover display.
+ */
+export const CARD_RATIO = 1.5;
+
+/**
+ * Compute how well a cover fills the 2:3 card with object-fit:contain.
+ * Returns 0.0–1.0 where 1.0 = perfect fill (no letterboxing).
+ */
+export function coverFitScore(width, height) {
+  if (!width || !height) return 0;
+  const ratio = height / width;
+  return ratio >= CARD_RATIO ? CARD_RATIO / ratio : ratio / CARD_RATIO;
+}
+
+/**
+ * Determine CSS object-fit mode for a cover.
+ * Returns 'cover' if ≥90% fill (safe to crop), else 'contain'.
+ */
+export function coverFitMode(width, height) {
+  return coverFitScore(width, height) >= 0.90 ? 'cover' : 'contain';
+}
+
+/**
+ * Sort comparator for editions: rank desc → fit score desc → resolution desc.
+ */
+export function coverSortComparator(a, b) {
+  const rankDiff = (b._rank || 0) - (a._rank || 0);
+  if (rankDiff !== 0) return rankDiff;
+  const fitA = a._coverData ? coverFitScore(a._coverData.width, a._coverData.height) : 0;
+  const fitB = b._coverData ? coverFitScore(b._coverData.width, b._coverData.height) : 0;
+  const fitDiff = fitB - fitA;
+  if (Math.abs(fitDiff) > 0.001) return fitDiff;
+  const resA = (a._coverData?.width || 0) * (a._coverData?.height || 0);
+  const resB = (b._coverData?.width || 0) * (b._coverData?.height || 0);
+  return resB - resA;
+}
+
 // Parse "Title by Author" or natural language queries into components
 // Returns { title, author } where author may be null
 export function parseAuthorTitle(query) {
