@@ -37,6 +37,7 @@ body{
   color:var(--color-text-primary);
   min-height:100vh;
   position:relative;
+  overflow-x:hidden;
 }
 body::before{
   content:'';
@@ -67,7 +68,7 @@ h1,h2,h3,.headline{
     transition-duration:.01ms!important;
   }
 }
-#app{width:100%;max-width:1200px;padding:16px} /* widened for desktop grid */
+#app{width:100%;max-width:1200px;padding:16px;box-sizing:border-box} /* widened for desktop grid */
 header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 header h1{
   font-family:var(--font-display);
