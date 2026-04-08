@@ -3,19 +3,9 @@
 // Separated from account_ui.js for cleaner architecture
 
 import { encryptJsonToBytes, decryptBytesToJson, hexToBytes } from './crypto_core.js';
-import { registerPendingTxByKey, fetchPendingTxIdsByKey } from './pending_tx_bridge.js';
-import { queryGraphQL } from './arweave_query.js';
 
 const TX_CACHE_PREFIX = 'bookish.txcache.acct.';
-
-// Derive a bridge key that won't collide with the book sync bridge key.
-// Books use SHA-256(wallet + 'bookish'); we namespace account metadata
-// so its tx IDs don't appear in book sync results.
-async function acctBridgeKey(hashedLookupKey) {
-  const input = hashedLookupKey + 'acctmeta';
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+const TARN_API = window.BOOKISH_API_BASE || 'https://api.tarn.dev';
 
 function cacheTxId(hashedLookupKey, txId) {
   try { localStorage.setItem(TX_CACHE_PREFIX + hashedLookupKey, txId); } catch {}
@@ -65,10 +55,11 @@ export async function uploadAccountMetadata({ address, displayName, symKey, crea
     { name: 'Type', value: 'acct' },
     { name: 'Lk', value: hashedLookupKey },
     { name: 'Enc', value: 'aes-256-gcm' },
-    { name: 'V', value: '0.2.0' }
+    { name: 'V', value: '0.2.0' },
+    { name: 'Addr', value: address.toLowerCase() }
   ];
 
-  console.log('[Bookish:AccountArweave] Uploading to Arweave via Turbo...');
+  console.log('[Bookish:AccountArweave] Uploading to Arweave via Tarn API...');
 
   if (!window.bookishUpload) try { await import('../turbo_client.js'); } catch {}
   if (!window.bookishUpload) {
@@ -80,7 +71,6 @@ export async function uploadAccountMetadata({ address, displayName, symKey, crea
 
   console.log('[Bookish:AccountArweave] Account metadata uploaded:', txId);
   cacheTxId(hashedLookupKey, txId);
-  acctBridgeKey(hashedLookupKey).then(bk => registerPendingTxByKey(bk, txId)).catch(() => {});
   return txId;
 }
 
@@ -104,54 +94,41 @@ export async function downloadAccountMetadata(walletAddress, symKey) {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 
-  const query = `query {
-    transactions(
-      tags: [
-        {name: "App", values: ["bookish"]},
-        {name: "Type", values: ["acct"]},
-        {name: "Lk", values: ["${hashedLookupKey}"]}
-      ],
-      first: 1,
-      sort: HEIGHT_DESC
-    ) {
-      edges {
-        node {
-          id
-        }
-      }
-    }
-  }`;
-
   try {
-    // Check local tx ID cache first (instant, avoids GraphQL indexing delay)
+    // Check local tx ID cache first (instant, avoids API round-trip)
     let txId = getCachedTxId(hashedLookupKey);
     if (txId) {
       console.log(`[Bookish:AccountArweave] Using cached tx: ${txId}`);
     }
     if (!txId) {
+      // Query Tarn API lookup (covers write-through cache + Arweave backfill)
       try {
-        const bk = await acctBridgeKey(hashedLookupKey);
-        const bridgeIds = await fetchPendingTxIdsByKey(bk);
-        if (bridgeIds.length > 0) {
-          txId = bridgeIds[bridgeIds.length - 1];
-          console.log(`[Bookish:AccountArweave] Found via bridge: ${txId}`);
-          cacheTxId(hashedLookupKey, txId);
+        const r = await fetch(
+          `${TARN_API}/api/v1/lookup?app=bookish&type=acct&key=${hashedLookupKey}`,
+          { signal: AbortSignal.timeout(10000) }
+        );
+        if (r.ok) {
+          const data = await r.json();
+          if (data.txid) {
+            txId = data.txid;
+            console.log(`[Bookish:AccountArweave] Found via API: ${txId}`);
+            cacheTxId(hashedLookupKey, txId);
+          }
+        } else if (r.status === 404) {
+          console.log('[Bookish:AccountArweave] No account metadata found');
+          return null;
+        } else {
+          console.warn('[Bookish:AccountArweave] API lookup returned', r.status);
+          return null;
         }
-      } catch { /* bridge unavailable — fall through to GraphQL */ }
+      } catch (err) {
+        console.warn('[Bookish:AccountArweave] API lookup failed:', err.message);
+        return null;
+      }
     }
     if (!txId) {
-      const { data, error } = await queryGraphQL(query);
-      if (error) {
-        console.warn('[Bookish:AccountArweave] GraphQL unavailable:', error);
-        return null;
-      }
-      const edges = data?.transactions?.edges || [];
-      if (edges.length === 0) {
-        console.log('[Bookish:AccountArweave] No account metadata found');
-        return null;
-      }
-      txId = edges[0].node.id;
-      cacheTxId(hashedLookupKey, txId);
+      console.log('[Bookish:AccountArweave] No account metadata found');
+      return null;
     }
     console.log(`[Bookish:AccountArweave] Found metadata: ${txId}`);
 
@@ -202,22 +179,16 @@ export async function accountMetadataExists(walletAddress) {
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
 
-    const query = `query {
-      transactions(
-        tags: [
-          {name: "App", values: ["bookish"]},
-          {name: "Type", values: ["acct"]},
-          {name: "Lk", values: ["${hashedLookupKey}"]}
-        ],
-        first: 1
-      ) {
-        edges { node { id } }
-      }
-    }`;
+    // Check local cache first
+    const cached = getCachedTxId(hashedLookupKey);
+    if (cached) return true;
 
-    const { data, error } = await queryGraphQL(query);
-    if (error) return false;
-    return (data?.transactions?.edges || []).length > 0;
+    // Query Tarn API lookup
+    const r = await fetch(
+      `${TARN_API}/api/v1/lookup?app=bookish&type=acct&key=${hashedLookupKey}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    return r.ok;
   } catch (error) {
     console.error('[Bookish:AccountPersistence] Existence check failed:', error);
     return false;

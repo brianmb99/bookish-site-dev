@@ -2,8 +2,7 @@
 // Handles upload/download of credential-mapping entries on Arweave
 
 import { bytesToBase64, base64ToBytes, encryptJsonToBytes, decryptBytesToJson } from './crypto_core.js';
-import { registerPendingTxByKey, fetchPendingTxIdsByKey } from './pending_tx_bridge.js';
-import { queryGraphQL, ARWEAVE_GATEWAY, TURBO_GATEWAY } from './arweave_query.js';
+import { ARWEAVE_GATEWAY, TURBO_GATEWAY } from './arweave_query.js';
 
 /**
  * Validate that a lookup key is a 64-char hex string (SHA-256 output)
@@ -53,6 +52,10 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
     { name: 'Enc', value: 'aes-256-gcm' },
     { name: 'V', value: '0.2.0' }
   ];
+  try {
+    const pubAddr = await window.bookishWallet?.getAddress?.();
+    if (pubAddr) tags.push({ name: 'Addr', value: String(pubAddr).toLowerCase() });
+  } catch {}
 
   if (!window.bookishUpload) {
     try {
@@ -70,7 +73,6 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
 
     console.log(`[Bookish:CredentialMapping] Mapping uploaded: ${result.id}`);
     cacheTxId(lookupKey, result.id);
-    registerPendingTxByKey(lookupKey, result.id).catch(() => {});
     return result.id;
   } catch (error) {
     console.error('[Bookish:CredentialMapping] Upload failed:', error);
@@ -84,6 +86,8 @@ export async function uploadCredentialMapping({ lookupKey, encryptedPayload }) {
  * @param {string} lookupKey - Hex-encoded credential lookup key (64 chars)
  * @returns {Promise<string|null>} - Transaction ID or null if not found
  */
+const TARN_API = window.BOOKISH_API_BASE || 'https://api.tarn.dev';
+
 async function findCredentialMappingTx(lookupKey) {
   const cached = getCachedTxId(lookupKey);
   if (cached) {
@@ -91,45 +95,27 @@ async function findCredentialMappingTx(lookupKey) {
     return cached;
   }
 
-  // Check bridge for recently uploaded mappings (before Arweave indexes them)
+  // Query Tarn API lookup (covers write-through cache + Arweave backfill)
   try {
-    const bridgeIds = await fetchPendingTxIdsByKey(lookupKey);
-    if (bridgeIds.length > 0) {
-      const txId = bridgeIds[bridgeIds.length - 1]; // newest
-      console.log(`[Bookish:CredentialMapping] Found via bridge: ${txId}`);
-      cacheTxId(lookupKey, txId);
-      return txId;
-    }
-  } catch { /* bridge unavailable — fall through to GraphQL */ }
-
-  const query = `query {
-    transactions(
-      tags: [
-        {name: "App", values: ["bookish"]},
-        {name: "Type", values: ["cred"]},
-        {name: "Lk", values: ["${lookupKey}"]}
-      ],
-      first: 1,
-      sort: HEIGHT_DESC
-    ) {
-      edges {
-        node { id }
+    const r = await fetch(
+      `${TARN_API}/api/v1/lookup?app=bookish&type=cred&key=${lookupKey}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (r.ok) {
+      const data = await r.json();
+      if (data.txid) {
+        console.log(`[Bookish:CredentialMapping] Found via API: ${data.txid}`);
+        cacheTxId(lookupKey, data.txid);
+        return data.txid;
       }
     }
-  }`;
+    if (r.status !== 404) {
+      console.warn('[Bookish:CredentialMapping] API lookup returned', r.status);
+    }
+  } catch (err) {
+    console.warn('[Bookish:CredentialMapping] API lookup failed:', err.message);
+  }
 
-  const { data, error } = await queryGraphQL(query);
-  if (error) {
-    console.warn('[Bookish:CredentialMapping] Arweave query failed:', error);
-    return null;
-  }
-  const edges = data?.transactions?.edges || [];
-  if (edges.length > 0) {
-    const txId = edges[0].node.id;
-    console.log(`[Bookish:CredentialMapping] Found mapping: ${txId}`);
-    cacheTxId(lookupKey, txId);
-    return txId;
-  }
   return null;
 }
 

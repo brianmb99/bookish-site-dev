@@ -203,15 +203,15 @@ export async function createBrowserClient({ jwk=null, symKeyHex, appName='bookis
 
 // ============ Sync Status Helpers (dirty flag, PR-034) ============
 
-const UPLOAD_PROXY = window.BOOKISH_UPLOAD_PROXY || 'https://bookish-upload-proxy.bookish.workers.dev';
+const TARN_API = window.BOOKISH_API_BASE || 'https://api.tarn.dev';
 
 /**
- * Check the upload proxy for pending (unconfirmed) txids for a given wallet address.
+ * Check the Tarn API for pending (unconfirmed) txids for a given wallet address.
  * Returns { dirty: bool, pendingTxids: string[], count: number } or null on failure.
  */
 export async function fetchSyncStatus(address) {
   try {
-    const r = await fetch(`${UPLOAD_PROXY}/sync-status?address=${encodeURIComponent(address.toLowerCase())}`, {
+    const r = await fetch(`${TARN_API}/api/v1/sync/status?addr=${encodeURIComponent(address.toLowerCase())}`, {
       signal: AbortSignal.timeout(5000),
     });
     if (!r.ok) return null;
@@ -222,16 +222,22 @@ export async function fetchSyncStatus(address) {
 }
 
 /**
- * Acknowledge confirmed txids so the proxy removes them from the pending list.
+ * Acknowledge confirmed txids so the API removes them from the pending list.
+ * Requires JWT auth.
  * Returns { removed, remaining } or null on failure.
  */
 export async function ackSyncedTxids(address, txids) {
   if (!txids.length) return { removed: 0, remaining: 0 };
   try {
-    const r = await fetch(`${UPLOAD_PROXY}/sync-ack`, {
+    const { ensureAuth } = await import('./core/tarn_auth.js');
+    const jwt = await ensureAuth();
+    const r = await fetch(`${TARN_API}/api/v1/sync/ack`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: address.toLowerCase(), txids }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${jwt}`,
+      },
+      body: JSON.stringify({ txids }),
       signal: AbortSignal.timeout(5000),
     });
     if (!r.ok) return null;

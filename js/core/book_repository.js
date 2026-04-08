@@ -10,7 +10,6 @@
 //   repo.on('progress', (items) => updateDiagnostics(items));
 //   await repo.loadFromCache();
 
-import { registerPendingTx, fetchPendingTxIds } from './pending_tx_bridge.js';
 import { pickWinner } from './cache_core.js';
 import { fetchSyncStatus } from '../browser_client.js';
 import { fetchEntriesFromAPI } from './api_data_source.js';
@@ -164,9 +163,6 @@ export class BookRepository {
 
       const client = this._getBrowserClient();
       const res = await client.uploadEntry(buildPayloadFromEntry(rec), {});
-      const addr = await this._getWalletAddress();
-      registerPendingTx(addr, res.txid).catch(() => {});
-
       const oldId = rec.id;
       rec.txid = res.txid; rec.id = res.txid;
       rec.pending = false; rec.status = 'confirmed'; rec.seenRemote = true; rec.onArweave = false;
@@ -246,8 +242,6 @@ export class BookRepository {
 
       const client = this._getBrowserClient();
       const tombRes = await client.tombstone(id, { note: 'user delete' });
-      const addr = await this._getWalletAddress();
-      registerPendingTx(addr, tombRes?.txid).catch(() => {});
 
       entry.status = 'tombstoned';
       entry.tombstonedAt = Date.now();
@@ -451,8 +445,6 @@ export class BookRepository {
           try {
             const payload = buildPayloadFromEntry(local);
             const res = await client.uploadEntry(payload, {});
-            const addr = await this._getWalletAddress();
-            registerPendingTx(addr, res.txid).catch(() => {});
             const oldId = local.id;
             local.txid = res.txid; local.id = res.txid;
             local.pending = false; local.status = 'confirmed'; local.seenRemote = true;
@@ -469,8 +461,6 @@ export class BookRepository {
           try {
             const payload = buildPayloadFromEntry(local);
             const res = await client.uploadEntry(payload, { extraTags: [{ name: 'Prev', value: op.priorTxid }] });
-            const addr = await this._getWalletAddress();
-            registerPendingTx(addr, res.txid).catch(() => {});
             local.txid = res.txid; local.id = res.txid;
             local.pending = false; local.status = 'confirmed'; local.seenRemote = true;
             await this._cache.replaceProvisional(op.priorTxid, local);
@@ -505,8 +495,6 @@ export class BookRepository {
       this._emitProgress(['Saving to Arweave\u2026']);
       const client = this._getBrowserClient();
       const res = await client.uploadEntry(payload, { extraTags: [{ name: 'Prev', value: prevTxid }] });
-      const addr = await this._getWalletAddress();
-      registerPendingTx(addr, res.txid).catch(() => {});
 
       entry.txid = res.txid; entry.id = res.txid;
       entry.pending = false; entry.status = 'confirmed'; entry.seenRemote = true;
@@ -636,6 +624,7 @@ export class BookRepository {
     try {
       const addr = await this._getWalletAddress();
       if (!addr) return { entries: [], tombstones: [] };
+      const { fetchPendingTxIds } = await import('./pending_tx_bridge.js');
       const pendingIds = await fetchPendingTxIds(addr);
       if (pendingIds.length === 0) return { entries: [], tombstones: [] };
 

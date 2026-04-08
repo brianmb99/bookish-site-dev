@@ -1,10 +1,12 @@
-// turbo_client.js - Bookish upload client via Upload Proxy (Cloudflare Worker)
-// Creates client-signed ANS-104 data items and sends them through the proxy to Turbo.
+// turbo_client.js - Bookish upload client via Tarn API
+// Creates client-signed ANS-104 data items and sends them through the Tarn API.
+// The API handles fee validation, Turbo forwarding, write-through cache, and pending tx tracking.
 
 import { createSignedDataItem } from './core/ans104_signer.js';
 import { append as logAppend } from './core/log_local.js';
+import { ensureAuth } from './core/tarn_auth.js';
 
-const UPLOAD_PROXY = window.BOOKISH_UPLOAD_PROXY || 'https://bookish-upload-proxy.bookish.workers.dev';
+const TARN_API = window.BOOKISH_API_BASE || 'https://api.tarn.dev';
 const BASE_RPC = window.BOOKISH_BASE_RPC || 'https://mainnet.base.org';
 
 let _feeSchedule = null;
@@ -13,7 +15,7 @@ let _pendingNonce = null;
 async function getFeeSchedule(forceRefresh = false) {
   if (_feeSchedule && !forceRefresh) return _feeSchedule;
   try {
-    const r = await fetch(`${UPLOAD_PROXY}/info`);
+    const r = await fetch(`${TARN_API}/api/v1/fees`);
     if (r.ok) _feeSchedule = await r.json();
   } catch { /* use cached or null */ }
   return _feeSchedule;
@@ -62,6 +64,19 @@ async function signFeeTx(feeSchedule) {
   return { signedTx: tx };
 }
 
+// ============ Route selection ============
+
+function determineEndpoint(tags) {
+  const isTombstone = tags.some(t => t.name === 'Op' && t.value === 'tombstone');
+  const refTag = tags.find(t => t.name === 'Ref')?.value;
+  if (isTombstone && refTag) return { method: 'DELETE', path: `/api/v1/entries/${refTag}` };
+
+  const prevTag = tags.find(t => t.name === 'Prev')?.value;
+  if (prevTag) return { method: 'PUT', path: `/api/v1/entries/${prevTag}` };
+
+  return { method: 'POST', path: '/api/v1/entries' };
+}
+
 // ============ Upload ============
 
 async function upload(dataBytes, tags, { skipFee = false } = {}) {
@@ -70,36 +85,41 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
   if (!hasCT) dtTags.unshift({ name: 'Content-Type', value: 'application/octet-stream' });
 
   const payloadBytes = dataBytes instanceof Uint8Array ? dataBytes.length : (dataBytes?.byteLength || 0);
-  console.info('[Bookish:Upload] uploading via proxy', { bytes: payloadBytes, tags: dtTags.length, skipFee });
-  logAppend('upload', 'proxy-start', { bytes: payloadBytes, skipFee });
+  const { method, path } = determineEndpoint(dtTags);
+  console.info('[Bookish:Upload] uploading via Tarn API', { bytes: payloadBytes, tags: dtTags.length, skipFee, method, path });
+  logAppend('upload', 'tarn-start', { bytes: payloadBytes, skipFee, method });
 
   const pk = await window.bookishWallet.getPrivateKey();
   const signedBytes = await createSignedDataItem(pk, dataBytes, dtTags);
 
+  // Fee handling — only for creates (POST) that aren't fee-exempt
   let payment = null;
-  if (!skipFee) {
+  if (!skipFee && method === 'POST') {
     let feeSchedule = await getFeeSchedule();
-    if (!feeSchedule) throw new Error('Unable to fetch fee schedule from upload proxy');
+    if (!feeSchedule) throw new Error('Unable to fetch fee schedule from Tarn API');
     payment = await signFeeTx(feeSchedule);
   }
 
-  let response = await doUpload(signedBytes, dtTags, payment);
+  // Authenticate with Tarn API
+  const jwt = await ensureAuth();
 
-  if (!skipFee && response.status === 402) {
+  let response = await doUpload(signedBytes, dtTags, payment, jwt, method, path);
+
+  if (!skipFee && method === 'POST' && response.status === 402) {
     console.warn('[Bookish:Upload] 402 received, re-fetching fee schedule and retrying');
     if (_pendingNonce !== null) _pendingNonce--;
     const feeSchedule = await getFeeSchedule(true);
     if (feeSchedule) {
       payment = await signFeeTx(feeSchedule);
-      response = await doUpload(signedBytes, dtTags, payment);
+      response = await doUpload(signedBytes, dtTags, payment, jwt, method, path);
     }
   }
 
   if (!response.ok) {
     if (response.status === 402) _pendingNonce = null;
     const errBody = await response.json().catch(() => ({}));
-    const err = new Error(errBody.error || `Upload proxy returned ${response.status}`);
-    err.code = errBody.code || `proxy-${response.status}`;
+    const err = new Error(errBody.error || `Tarn API returned ${response.status}`);
+    err.code = errBody.code || `tarn-${response.status}`;
     err.status = response.status;
     throw err;
   }
@@ -108,26 +128,27 @@ async function upload(dataBytes, tags, { skipFee = false } = {}) {
   const id = result.id;
   if (!id) throw new Error('missing-id');
 
-  if (!skipFee && !result.feeTxHash) {
+  if (!skipFee && method === 'POST' && !result.feeTxHash) {
     _pendingNonce = null;
     console.warn('[Bookish:Upload] Fee broadcast may have failed (feeTxHash missing)', { feeError: result.feeError });
   }
 
   console.info('[Bookish:Upload] upload success', { id, feeTxHash: result.feeTxHash });
-  logAppend('upload', 'proxy-success', { id, feeTxHash: result.feeTxHash, feeError: result.feeError || null });
+  logAppend('upload', 'tarn-success', { id, feeTxHash: result.feeTxHash, feeError: result.feeError || null });
   return { id };
 }
 
-async function doUpload(signedBytes, tags, payment) {
+async function doUpload(signedBytes, tags, payment, jwt, method, path) {
   const headers = {
     'Content-Type': 'application/octet-stream',
     'X-Arweave-Tags': JSON.stringify(tags),
     'X-Signed-DataItem': 'true',
+    'Authorization': `Bearer ${jwt}`,
   };
   if (payment) headers['X-Payment'] = JSON.stringify(payment);
 
-  return fetch(`${UPLOAD_PROXY}/upload`, {
-    method: 'POST',
+  return fetch(`${TARN_API}${path}`, {
+    method,
     headers,
     body: signedBytes,
   });

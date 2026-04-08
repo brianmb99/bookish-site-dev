@@ -290,6 +290,7 @@ let bookRepo = null;
 export function resetKeyState() {
   keyState.loaded = false;
   browserClient = null;
+  import('./core/tarn_auth.js').then(m => m.clearAuth()).catch(() => {});
 }
 let walletError = null; // Track wallet errors for UI status manager
 window.BOOKISH_DEBUG=true; function dbg(...a){ if(window.BOOKISH_DEBUG) console.debug('[Bookish]',...a); }
