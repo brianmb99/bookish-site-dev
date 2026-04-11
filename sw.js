@@ -1,5 +1,5 @@
 // sw.js - basic PWA service worker
-const VERSION='v187';
+const VERSION='v188';
 const CACHE_NAME='bookish-precache-'+VERSION;
 const PRECACHE=[
   '/',
@@ -7,27 +7,18 @@ const PRECACHE=[
   '/css/styles.css',
   '/js/app.js',
   '/js/cache.js',
-  '/js/browser_client.js',
   '/js/book_search.js',
   '/js/date_picker.js',
   '/js/sync_manager.js',
   '/js/account_ui.js',
   '/js/ui_status_manager.js',
-  '/js/turbo_client.js',
-  '/js/wallet.js',
-  '/js/core/storage_manager.js',
+  '/js/core/tarn_service.js',
   '/js/core/image_utils.js',
   '/js/core/search_core.js',
   '/js/core/cover_pipeline.js',
-  '/js/core/crypto_core.js',
-  '/js/core/account_creation.js',
-  '/js/core/account_arweave.js',
-  '/js/core/credential_mapping.js',
-  '/js/core/seed_core.js',
-  '/js/core/wallet_core.js',
   '/js/core/id_core.js',
-  '/js/core/storage_constants.js',
-  '/js/core/ans104_signer.js',
+  '/js/lib/tarn/tarn.js',
+  '/js/lib/tarn/crypto.js',
   '/manifest.json'
 ];
 self.addEventListener('install',e=>{

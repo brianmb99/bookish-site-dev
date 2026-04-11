@@ -30,17 +30,17 @@ class UIStatusManager {
     // Status provider functions (set by init())
     this.getAccountStatus = null;
     this.getSyncStatus = null;
-    this.getBalanceStatus = null;
+    this.getAppErrorStatus = null;
   }
 
   /**
    * Initialize with status provider functions
-   * @param {Object} providers - { getAccountStatus, getSyncStatus, getBalanceStatus }
+   * @param {Object} providers - { getAccountStatus, getSyncStatus, getAppErrorStatus }
    */
   init(providers) {
     this.getAccountStatus = providers.getAccountStatus || (() => ({}));
     this.getSyncStatus = providers.getSyncStatus || (() => ({}));
-    this.getBalanceStatus = providers.getBalanceStatus || (() => ({}));
+    this.getAppErrorStatus = providers.getAppErrorStatus || (() => ({}));
 
     // Initial status calculation
     this._recalculateStatus();
@@ -71,7 +71,7 @@ class UIStatusManager {
     // Query current state from all providers (with null safety)
     const account = this.getAccountStatus ? this.getAccountStatus() : {};
     const sync = this.getSyncStatus ? this.getSyncStatus() : {};
-    const balance = this.getBalanceStatus ? this.getBalanceStatus() : {};
+    const balance = this.getAppErrorStatus ? this.getAppErrorStatus() : {};
 
     // Decision tree: evaluate in priority order
     const status = this._determineStatus(account, sync, balance);

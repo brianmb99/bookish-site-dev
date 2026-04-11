@@ -1,14 +1,13 @@
 // Bookish app.js (pure serverless variant)
 
-import { initSyncManager, startSync, stopSync, getSyncStatusForUI, triggerPersistenceCheck, triggerSyncNow, markDirty } from './sync_manager.js';
-import * as storageManager from './core/storage_manager.js';
+import { initSyncManager, startSync, stopSync, getSyncStatusForUI, triggerSyncNow, markDirty } from './sync_manager.js';
+import * as tarnService from './core/tarn_service.js';
 import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
 import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
 import { stripNoise } from './core/search_core.js';
-import { fetchSyncStatus, ackSyncedTxids } from './browser_client.js';
 
 // --- Version logging (always visible in console) ---
 {
@@ -281,26 +280,22 @@ function showCoverLoaded(){ if(coverRemoveBtn) coverRemoveBtn.style.display='inl
 
 // --- State ---
 let entries=[];
-let browserClient; let keyState={ loaded:false };
-
 // Book repository — single owner of all book data operations
 let bookRepo = null;
 
-// Export reset function for logout
+// Export for any external callers that need to force-clear auth state
 export function resetKeyState() {
-  keyState.loaded = false;
-  browserClient = null;
-  import('./core/tarn_auth.js').then(m => m.clearAuth()).catch(() => {});
+  tarnService.logout();
 }
-let walletError = null; // Track wallet errors for UI status manager
+let appError = null; // Track errors for UI status manager
 window.BOOKISH_DEBUG=true; function dbg(...a){ if(window.BOOKISH_DEBUG) console.debug('[Bookish]',...a); }
 
 /**
- * Get balance status for UI status manager
+ * Get app error status for UI status manager
  * @returns {Object} { error }
  */
-function getBalanceStatus() {
-  return { error: walletError };
+function getAppErrorStatus() {
+  return { error: appError };
 }
 
 // --- Utility / ordering ---
@@ -574,7 +569,7 @@ export function showCelebrationToast(){
 }
 
 export function showAccountNudge(){
-  if(storageManager.isLoggedIn()) return;
+  if(tarnService.isLoggedIn()) return;
 
   // Don't show if user has ever had an account (they know what it is)
   if(localStorage.getItem('bookish.hasHadAccount') === 'true') return;
@@ -701,7 +696,7 @@ function render(){
 
   if(!shelfEntries.length && !wantList.length){
     const syncStatus = getSyncStatusForUI();
-    const isLoading = storageManager.isLoggedIn() && !syncStatus.initialSynced;
+    const isLoading = tarnService.isLoggedIn() && !syncStatus.initialSynced;
 
     const headline = emptyEl.querySelector('.empty-headline');
     const subtext = emptyEl.querySelector('.empty-subtext');
@@ -719,7 +714,7 @@ function render(){
       if(headline) headline.textContent = 'Your reading journey starts here';
       if(subtext) subtext.textContent = 'Track what you read. Keep it forever. Access it anywhere.';
       if(addBtn) addBtn.style.display = '';
-      if(signInDiv) signInDiv.style.display = storageManager.isLoggedIn() ? 'none' : '';
+      if(signInDiv) signInDiv.style.display = tarnService.isLoggedIn() ? 'none' : '';
       if(illustration) illustration.textContent = '\uD83D\uDCDA';
     }
 
@@ -747,7 +742,7 @@ function render(){
   emptyEl.style.display='none';
   if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
   if(omniboxWrap) omniboxWrap.style.display = '';
-  if(storageManager.isLoggedIn()) hideAccountNudge();
+  if(tarnService.isLoggedIn()) hideAccountNudge();
 
   // --- Search filtering + year grouping via shelf_filter ---
   const { displayEntries, matchCount, isSearching, yearGroups, activeYear } = buildDisplayList({
@@ -861,91 +856,6 @@ function render(){
     }
   }
 
-  setTimeout(probePendingArweaveConfirmations, 0);
-}
-
-let _probeRenderScheduled = false;
-function scheduleRenderAfterProbe(){
-  if(_probeRenderScheduled) return;
-  _probeRenderScheduled = true;
-  queueMicrotask(() => { _probeRenderScheduled = false; render(); });
-}
-
-/**
- * Probe Arweave for entries uploaded but not yet confirmed (no UI; updates cache + display).
- * Uses dirty flag from upload proxy when available (PR-034):
- *   - dirty=false → skip all probing (O(1))
- *   - dirty=true  → only probe the listed txids (O(k))
- *   - proxy unavailable → fall back to legacy per-entry probing
- */
-async function probePendingArweaveConfirmations(){
-  const addr = await window.bookishWallet?.getAddress?.();
-  if (addr) {
-    const status = await fetchSyncStatus(addr);
-    if (status) {
-      if (!status.dirty) return; // Nothing pending — skip all probing
-      // Only probe txids the proxy knows about
-      const pendingSet = new Set(status.pendingTxids);
-      const confirmed = [];
-      for (const e of entries) {
-        if (!e.txid || e.onArweave) continue;
-        if (!pendingSet.has(e.txid)) continue;
-        await probeAndUpdateEntry(e);
-        if (e.onArweave) confirmed.push(e.txid);
-      }
-      if (confirmed.length > 0) {
-        ackSyncedTxids(addr, confirmed).catch(() => {});
-      }
-      return;
-    }
-    // Fallback: proxy unavailable — use legacy per-entry probing
-  }
-  for(const e of entries){
-    if(!e.txid || e.onArweave) continue;
-    probeAndUpdateEntry(e);
-  }
-}
-
-/**
- * Probe backoff state — exponential backoff per entry after failures
- * Prevents spamming gateways with HEAD requests for entries not yet on Arweave
- */
-const probeBackoff = new Map(); // txid → { fails: number, lastAttempt: number }
-const PROBE_BASE_MS = 60000;   // 60s base backoff
-const PROBE_MAX_MS  = 900000;  // 15 min max backoff
-
-/**
- * Probe Arweave availability and update entry state
- * Uses exponential backoff per entry to avoid continuous error traffic
- */
-async function probeAndUpdateEntry(entry) {
-  const txid = entry.txid;
-  const state = probeBackoff.get(txid);
-  if (state) {
-    const backoff = Math.min(PROBE_BASE_MS * Math.pow(2, state.fails), PROBE_MAX_MS);
-    if (Date.now() - state.lastAttempt < backoff) {
-      return;
-    }
-  }
-
-  try {
-    const rec = await window.bookishNet?.probeAvailability?.(txid);
-    if(rec?.arweave) {
-      entry.onArweave = true;
-      probeBackoff.delete(txid);
-      if(window.bookishCache) {
-        await window.bookishCache.putEntry(entry);
-      }
-      scheduleRenderAfterProbe();
-    } else {
-      const prev = probeBackoff.get(txid) || { fails: 0, lastAttempt: 0 };
-      probeBackoff.set(txid, { fails: prev.fails + 1, lastAttempt: Date.now() });
-    }
-  } catch(err) {
-    const prev = probeBackoff.get(txid) || { fails: 0, lastAttempt: 0 };
-    probeBackoff.set(txid, { fails: prev.fails + 1, lastAttempt: Date.now() });
-    console.debug('[Bookish] Arweave probe failed for', txid, err);
-  }
 }
 
 // --- WTR drawer logic ---
@@ -1690,21 +1600,16 @@ async function changeReadingStatus(key, newStatus){
   if (result?.toastMessage) showStatusToast(result.toastMessage);
 }
 
-// --- Key handling ---
-async function ensureKeys(){
-  if(keyState.loaded) return true;
-  let symTxt=localStorage.getItem('bookish.sym');
-  // Legacy hex key prompt removed - now using credential-based seed storage
-  if(!symTxt){ return false; }
-  try { const sym=localStorage.getItem('bookish.sym'); if(window.createBrowserClient){ browserClient=await window.createBrowserClient({ symKeyHex:sym, appName:'bookish', schemaVersion:'0.1.0', keyId:'default' }); } else if(window.bookishBrowserClient){ browserClient=await window.bookishBrowserClient.createBrowserClient({ symKeyHex:sym, appName:'bookish', schemaVersion:'0.1.0', keyId:'default' }); } if(!browserClient){ setStatus('Client loading...'); return false; } keyState.loaded=true; const addr=await browserClient.address(); setStatus('EVM '+(addr?addr.slice(0,8)+'...':'ready')); return true; } catch(e){ console.error(e); setStatus('Key load error'); return false; }
+// --- Auth check ---
+function isAuthenticated() {
+  return tarnService.isLoggedIn();
 }
 
 // --- Book data operations (delegated to BookRepository) ---
 
-async function syncBooksFromArweave() {
+async function syncBooksFromTarn() {
   if (!bookRepo) return;
   await bookRepo.sync();
-  setTimeout(probePendingArweaveConfirmations, 50);
 }
 
 async function createServerless(payload) {
@@ -1739,8 +1644,8 @@ form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) re
   const toastMsg = rsValue === READING_STATUS.WANT_TO_READ ? 'Added to Want to Read' : rsValue === READING_STATUS.READING ? 'Added to Currently Reading' : (!priorTxid ? 'Added to Shelf' : null);
   if(priorTxid){
   closeModal();
-  editServerless(priorTxid,payload).catch(()=> { walletError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); });
-} else { closeModal(); createServerless(payload).then(()=>{ if(toastMsg) showStatusToast(toastMsg); }).catch(()=> { walletError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); }); }
+  editServerless(priorTxid,payload).catch(()=> { appError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); });
+} else { closeModal(); createServerless(payload).then(()=>{ if(toastMsg) showStatusToast(toastMsg); }).catch(()=> { appError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); }); }
 });
 
 deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value; if(!txid) return; closeModal(); await deleteServerless(txid); });
@@ -1774,16 +1679,18 @@ async function initCacheLayer(){
   try {
     await window.bookishCache.initCache();
 
+    // Restore Tarn session from localStorage
+    const sessionRestored = await tarnService.init();
+    if (sessionRestored) {
+      console.log('[Bookish] Tarn session restored');
+      setStatus('Signed in');
+    }
+
     // Create the BookRepository — single owner of all book data operations
     bookRepo = new BookRepository({
       cache: window.bookishCache,
-      ensureKeys,
-      getBrowserClient: () => browserClient,
-      getWalletAddress: async () => window.bookishWallet?.getAddress?.(),
-      ensureWallet: async () => { if (window.bookishWallet?.ensure) await window.bookishWallet.ensure(); },
-      deriveBookId: (payload) => window.bookishBrowserClient?.deriveBookId?.(payload),
+      tarnService,
       onDirty: markDirty,
-      dataSource: 'api'
     });
 
     // Wire repository events to UI
@@ -1792,12 +1699,11 @@ async function initCacheLayer(){
       orderEntries();
       render();
       uiStatusManager.refresh();
-      // Show account nudge when 3+ books and logged out (on load or after add)
       showAccountNudge();
     });
-    bookRepo.on('error', ({ code, message, pendingOp }) => {
-      if (code) { walletError = message; if (pendingOp) lastPendingOp = pendingOp; }
-      else { walletError = null; }
+    bookRepo.on('error', ({ code, message }) => {
+      if (code) { appError = message; }
+      else { appError = null; }
       uiStatusManager.refresh();
     });
     bookRepo.on('progress', (items) => {
@@ -1807,46 +1713,16 @@ async function initCacheLayer(){
     // Load cached books immediately for instant display
     await bookRepo.loadFromCache();
     console.log('[Bookish] Loaded', entries.length, 'books from cache');
-    // Show account nudge on load if 3+ books and logged out (per FIRST_RUN_EXPERIENCE.md)
     showAccountNudge();
 
     // Initialize sync manager
     initSyncManager({
       onStatusChange: () => uiStatusManager.refresh(),
-      onBookSync: syncBooksFromArweave,
-      onAccountPersistence: async (isAutoTrigger) => {
-        if (window.accountUI?.handlePersistAccountToArweave) {
-          await window.accountUI.handlePersistAccountToArweave(isAutoTrigger);
-        }
-      },
-      getWalletInfo: async () => {
-        try {
-          const address = await window.bookishWallet?.getAddress();
-          if (!address) return null;
-          return { address };
-        } catch {
-          return null;
-        }
-      },
-      updateBalance: (balanceETH) => {
-        if (window.accountUI?.updateBalanceDisplay) {
-          window.accountUI.updateBalanceDisplay(balanceETH);
-        }
-      }
+      onBookSync: syncBooksFromTarn,
     });
 
-    // Ensure wallet is available before any sync cycle (prevents address:undefined race)
-    try {
-      await import('./wallet.js');
-      await window.bookishWallet?.ensure?.();
-      const addr = await window.bookishWallet?.getAddress?.();
-      if (addr) setStatus((statusEl.textContent ? statusEl.textContent + ' • ' : '') + 'EVM ' + addr.slice(0, 6) + '...');
-    } catch (e) {
-      console.warn('[Bookish] Wallet init failed (non-fatal):', e.message);
-    }
-
     // Only start sync loop if user is logged in
-    if (storageManager.isLoggedIn()) {
+    if (tarnService.isLoggedIn()) {
       console.log('[Bookish] User logged in, starting sync loop');
       startSync();
     } else {
@@ -1855,7 +1731,7 @@ async function initCacheLayer(){
   } catch(err) {
     console.error('[Bookish] IndexedDB failed to initialize:', err);
     // Fail fast with clear error message
-    walletError='Local storage unavailable. Your published books are safe.'; uiStatusManager.refresh();
+    appError='Local storage unavailable. Your published books are safe.'; uiStatusManager.refresh();
     // Show error in UI
     if(emptyEl) {
       emptyEl.style.display='block';
@@ -1893,8 +1769,10 @@ async function initCacheLayer(){
   }
 }
 
-// --- Status & sync bootstrap ---
-async function loadStatus(){ const have=await ensureKeys(); if(!have){ uiStatusManager.refresh(); return; } try { const owner=await browserClient.address(); uiStatusManager.refresh(); } catch{ walletError='Account error. Try signing in again.'; uiStatusManager.refresh(); } }
+// --- Status bootstrap ---
+function loadStatus() {
+  uiStatusManager.refresh();
+}
 
 // --- Init ---
 // Ensure modal is closed on page load
@@ -1910,7 +1788,7 @@ if(window.bookSearch) {
 uiStatusManager.init({
   getAccountStatus,
   getSyncStatus: getSyncStatusForUI,
-  getBalanceStatus
+  getAppErrorStatus
 });
 
 loadStatus(); initCacheLayer(); // wallet init + sync started in initCacheLayer
@@ -1919,9 +1797,9 @@ loadStatus(); initCacheLayer(); // wallet init + sync started in initCacheLayer
 window.addEventListener('online',()=>{ uiStatusManager.refresh(); if(bookRepo) bookRepo.replayPending(); });
 
 // Expose sync manager methods for account UI and release tests (triggerSyncNow)
-window.bookishSyncManager = { getSyncStatus: getSyncStatusForUI, triggerPersistenceCheck, triggerSyncNow };
+window.bookishSyncManager = { getSyncStatus: getSyncStatusForUI, triggerSyncNow };
 
-window.updateBookDots = probePendingArweaveConfirmations;
+window.updateBookDots = () => render();
 
 // --- Notes expand overlay ---
 const notesExpandBtn = document.getElementById('notesExpandBtn');

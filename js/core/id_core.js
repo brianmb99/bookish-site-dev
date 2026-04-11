@@ -1,5 +1,4 @@
-// Core ID & size helpers extracted from browser_client.js (pure logic)
-// No DOM or global side-effects.
+// Core ID & size helpers (pure logic, no DOM or global side-effects)
 
 export async function deriveBookId() {
   return crypto.randomUUID();

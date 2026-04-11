@@ -1,18 +1,15 @@
 // book_repository.js — Single-responsibility module for all book data operations
 //
-// Owns the entries array, ops queue, upload pipeline, bridge registration,
-// and remote sync. Decoupled from DOM, UI, and encryption internals.
+// Owns the entries array, ops queue, and remote sync via TarnClient.
+// Local-first: writes go to IndexedDB immediately, then sync to Tarn.
 //
 // Usage:
-//   const repo = new BookRepository({ cache, ensureKeys, ... });
+//   const repo = new BookRepository({ cache, tarnService, ... });
 //   repo.on('change', (entries) => render());
-//   repo.on('error', ({ code, message, pendingOp }) => showError(message));
-//   repo.on('progress', (items) => updateDiagnostics(items));
+//   repo.on('error', ({ code, message }) => showError(message));
 //   await repo.loadFromCache();
 
 import { pickWinner } from './cache_core.js';
-import { fetchSyncStatus } from '../browser_client.js';
-import { fetchEntriesFromAPI } from './api_data_source.js';
 
 export const READING_STATUS = {
   WANT_TO_READ: 'want_to_read',
@@ -47,34 +44,23 @@ function buildPayloadFromEntry(entry) {
   return payload;
 }
 
-const prevTag = (edge) => edge.node.tags?.find(t => t.name === 'Prev')?.value;
-
 export class BookRepository {
   /**
    * @param {Object} deps
    * @param {Object} deps.cache - IndexedDB cache (window.bookishCache)
-   * @param {Function} deps.ensureKeys - async () => boolean
-   * @param {Function} deps.getBrowserClient - () => browserClient|null
-   * @param {Function} deps.getWalletAddress - async () => string|null
-   * @param {Function} deps.ensureWallet - async () => void
+   * @param {Object} deps.tarnService - tarn_service module
    * @param {Function} [deps.deriveBookId] - async (payload) => string
    * @param {Function} [deps.onDirty] - () => void; signals sync manager
-   * @param {string} [deps.dataSource='arweave'] - 'arweave' for direct Arweave reads, 'api' for bookish-api cache layer
    */
-  constructor({ cache, ensureKeys, getBrowserClient, getWalletAddress, ensureWallet, deriveBookId, onDirty, dataSource }) {
+  constructor({ cache, tarnService, deriveBookId, onDirty }) {
     this._cache = cache;
-    this._ensureKeys = ensureKeys;
-    this._getBrowserClient = getBrowserClient;
-    this._getWalletAddress = getWalletAddress;
-    this._ensureWallet = ensureWallet || (() => {});
+    this._tarnService = tarnService;
     this._deriveBookId = deriveBookId;
     this._onDirty = onDirty || (() => {});
-    this._dataSource = dataSource || 'arweave';
 
     this._entries = [];
     this._editQueue = new Map();
     this._replaying = false;
-    this._lastPendingOp = null;
     this._listeners = { change: [], error: [], progress: [] };
   }
 
@@ -94,10 +80,8 @@ export class BookRepository {
 
   _emitChange() { this._emit('change', this._entries); }
 
-  _emitError(code, message, pendingOp) {
-    if (code) this._lastPendingOp = pendingOp || null;
-    else this._lastPendingOp = null;
-    this._emit('error', { code, message, pendingOp: pendingOp || null });
+  _emitError(code, message) {
+    this._emit('error', { code, message });
   }
 
   _emitProgress(items) { this._emit('progress', items); }
@@ -109,8 +93,6 @@ export class BookRepository {
   getById(key) {
     return this._entries.find(e => (e.txid || e.id) === key);
   }
-
-  getLastPendingOp() { return this._lastPendingOp; }
 
   // --- Lifecycle ---
 
@@ -151,42 +133,25 @@ export class BookRepository {
     this._onDirty();
     this._emitChange();
 
-    try {
-      const haveKeys = await this._ensureKeys();
-      if (!haveKeys) {
+    // Try to upload to Tarn immediately
+    if (this._tarnService.isLoggedIn()) {
+      try {
+        const client = await this._tarnService.getClient();
+        const { txid } = await client.createEntry('entry', buildPayloadFromEntry(rec));
+        const oldId = rec.id;
+        rec.txid = txid; rec.id = txid;
+        rec.pending = false; rec.status = 'confirmed'; rec.seenRemote = true;
+        if (this._cache) await this._cache.replaceProvisional(oldId, rec);
+        this._emitError(null, null);
+        this._emitChange();
+      } catch (e) {
+        console.warn('[BookRepository] createEntry failed, queued for retry:', e.message);
         if (this._cache) await this._cache.queueOp({ type: 'create', localId: rec.id, payload });
-        return { entry: rec, isDuplicate: false };
+        this._emitProgress(['Queued for sync']);
       }
-
-      await this._ensureWallet();
-      this._emitProgress(['Publishing to Arweave...', 'If funding is needed, you\'ll be prompted']);
-
-      const client = this._getBrowserClient();
-      const res = await client.uploadEntry(buildPayloadFromEntry(rec), {});
-      const oldId = rec.id;
-      rec.txid = res.txid; rec.id = res.txid;
-      rec.pending = false; rec.status = 'confirmed'; rec.seenRemote = true; rec.onArweave = false;
-      if (this._cache) await this._cache.replaceProvisional(oldId, rec);
-      this._emitError(null, null);
-      this._emitChange();
-      this._emitProgress(null);
-    } catch (e) {
-      console.warn('[BookRepository] uploadEntry error:', e);
-      const pending = { type: 'create', localId: rec.id, payload };
-      if (this._cache) await this._cache.queueOp(pending);
-
-      if (e?.code === 'upload-required') {
-        this._emitError('upload-required', 'Upload client missing. Refresh page and retry.', pending);
-        this._emitProgress(['Upload client missing', 'Refresh page and retry']);
-      } else if (e?.code === 'post-fund-timeout') {
-        this._emitError('post-fund-timeout', 'Funding sent. Credit pending (can take a few minutes). Try again shortly from Account.', pending);
-        this._emitProgress(['Funding sent – awaiting credit', 'Retry from Account shortly']);
-      } else if (e?.code === 'base-insufficient-funds' || e?.code === 'base-insufficient-funds-recent') {
-        this._emitError('base-insufficient-funds', 'Storage credit used up. Add credit in your account to resume saving.', pending);
-        this._emitProgress(['Storage credit used up', 'Add credit to resume']);
-      } else {
-        this._emitProgress(['Couldn\u2019t reach the server \u2013 queued for retry']);
-      }
+    } else {
+      // Not logged in — queue for later
+      if (this._cache) await this._cache.queueOp({ type: 'create', localId: rec.id, payload });
     }
 
     return { entry: rec, isDuplicate: false };
@@ -212,7 +177,6 @@ export class BookRepository {
     this._emitChange();
 
     if (queueEntry?.uploading) {
-      console.log('[BookRepository] Edit queued - will upload after current edit completes');
       queueEntry.hasPendingEdit = true;
       return;
     }
@@ -229,6 +193,7 @@ export class BookRepository {
     entry._committed = false;
     this._emitChange();
 
+    // Local-only entry — just remove from cache
     if (!entry.txid) {
       if (this._cache) await this._cache.deleteById(entry.id);
       this._entries = this._entries.filter(e => e !== entry);
@@ -236,12 +201,10 @@ export class BookRepository {
       return;
     }
 
+    // Entry on Tarn — send tombstone
     try {
-      const haveKeys = await this._ensureKeys();
-      if (!haveKeys) throw new Error('Cannot delete: encryption keys not available');
-
-      const client = this._getBrowserClient();
-      const tombRes = await client.tombstone(id, { note: 'user delete' });
+      const client = await this._tarnService.getClient();
+      await client.deleteEntry(entry.txid, 'entry');
 
       entry.status = 'tombstoned';
       entry.tombstonedAt = Date.now();
@@ -250,17 +213,14 @@ export class BookRepository {
       this._emitError(null, null);
       this._onDirty();
       this._emitChange();
-    } catch {
+    } catch (e) {
+      console.warn('[BookRepository] deleteEntry failed:', e.message);
       entry._deleting = false;
       this._emitChange();
-      this._emitError('delete-failed', 'Delete failed');
+      this._emitError('delete-failed', 'Delete failed — will retry on next sync');
     }
   }
 
-  /**
-   * Change reading status with optimistic UI update + background upload.
-   * @returns {{ entry, previousStatus, toastMessage } | null}
-   */
   async changeStatus(key, newStatus) {
     const entry = this.getById(key);
     if (!entry) return null;
@@ -301,26 +261,15 @@ export class BookRepository {
     return { entry, previousStatus, toastMessage };
   }
 
-  /**
-   * Restore reading-related fields (e.g. undo after quick "mark as read" on a card).
-   * @param {string} key
-   * @param {{ readingStatus: string, dateRead?: string, readingStartedAt?: number }} snapshot
-   */
   async applyReadingSnapshot(key, snapshot) {
     const entry = this.getById(key);
     if (!entry) return null;
 
     entry.readingStatus = snapshot.readingStatus;
-    if (snapshot.dateRead) {
-      entry.dateRead = snapshot.dateRead;
-    } else {
-      delete entry.dateRead;
-    }
-    if (snapshot.readingStartedAt != null) {
-      entry.readingStartedAt = snapshot.readingStartedAt;
-    } else {
-      delete entry.readingStartedAt;
-    }
+    if (snapshot.dateRead) entry.dateRead = snapshot.dateRead;
+    else delete entry.dateRead;
+    if (snapshot.readingStartedAt != null) entry.readingStartedAt = snapshot.readingStartedAt;
+    else delete entry.readingStartedAt;
 
     if (this._cache) await this._cache.putEntry(entry);
     this._onDirty();
@@ -344,12 +293,6 @@ export class BookRepository {
     return { entry };
   }
 
-  /**
-   * Reorder want-to-read entries. Accepts an array of keys (txid or id) in
-   * the desired display order. Assigns wtrPosition 0, 1, 2, … and queues
-   * Arweave uploads only for entries whose position actually changed.
-   * @param {string[]} orderedKeys - entry keys in desired order
-   */
   async reorderWtr(orderedKeys) {
     const changed = [];
     for (let i = 0; i < orderedKeys.length; i++) {
@@ -383,32 +326,76 @@ export class BookRepository {
   // --- Sync pipeline ---
 
   async sync() {
-    if (!this._cache) {
-      console.warn('[BookRepository] Sync skipped - cache unavailable');
-      return;
-    }
+    if (!this._cache) return;
 
     await this.replayPending();
-    const haveKeys = await this._ensureKeys();
 
-    if (!haveKeys) {
+    if (!this._tarnService.isLoggedIn()) {
       this._entries = await this._cache.getAllActive();
       this._emitChange();
       return;
     }
 
-    console.log('[BookRepository] Starting book sync via', this._dataSource, '...');
-    const fetchFn = this._dataSource === 'api' ? () => this._fetchFromAPI() : () => this._fetchRemoteEntries();
-    const { entries: remoteEntries, tombstones, partial } = await fetchFn();
-    console.log('[BookRepository] Fetched', remoteEntries.length, 'remote entries,', tombstones.length, 'tombstones', partial ? '(partial)' : '');
+    console.log('[BookRepository] Syncing from Tarn...');
+    try {
+      const client = await this._tarnService.getClient();
+      const remoteEntries = await client.getEntries('entry');
+      console.log('[BookRepository] Fetched', remoteEntries.length, 'entries from Tarn');
 
-    const remote = remoteEntries.map(e => ({ ...e, status: 'confirmed', id: e.txid }));
-    this._entries = await this._cache.applyRemote(remote, tombstones);
+      // Build remote entries in cache format
+      const remote = remoteEntries.map(e => ({
+        ...e.data,
+        txid: e.txid,
+        id: e.txid,
+        status: 'confirmed',
+        seenRemote: true,
+        _committed: true,
+      }));
 
-    await this._cache.compactDuplicates();
-    this._entries = await this._cache.getAllActive();
-    this._entries.forEach(e => e._committed = true);
-    this._emitChange();
+      // Merge with local cache (preserving local-only pending entries)
+      const local = await this._cache.getAllActive();
+      const localPending = local.filter(e => !e.txid || e.status === 'pending');
+      const remoteTxids = new Set(remote.map(e => e.txid));
+
+      // Deduplicate by bookId
+      const byBookId = new Map();
+      for (const entry of remote) {
+        if (!entry.bookId) { byBookId.set(entry.txid, entry); continue; }
+        const existing = byBookId.get(entry.bookId);
+        if (!existing || pickWinner(entry, existing) === entry) {
+          byBookId.set(entry.bookId, entry);
+        }
+      }
+
+      const merged = [...byBookId.values()];
+
+      // Add local pending entries that aren't yet on remote
+      for (const pending of localPending) {
+        const alreadyRemote = pending.bookId && merged.some(e => e.bookId === pending.bookId);
+        if (!alreadyRemote) merged.push(pending);
+      }
+
+      // Sort: newest first
+      merged.sort((a, b) => {
+        const da = a.dateRead || '0000-00-00', db = b.dateRead || '0000-00-00';
+        if (da !== db) return db.localeCompare(da);
+        return (b.createdAt || 0) - (a.createdAt || 0);
+      });
+
+      // Update cache
+      for (const entry of merged) {
+        await this._cache.putEntry(entry);
+      }
+
+      this._entries = merged;
+      this._emitChange();
+    } catch (e) {
+      console.error('[BookRepository] Sync failed:', e.message);
+      // Fall back to cached entries
+      this._entries = await this._cache.getAllActive();
+      this._emitChange();
+      throw e;
+    }
   }
 
   async replayPending() {
@@ -416,26 +403,13 @@ export class BookRepository {
     this._replaying = true;
     try {
       if (!this._cache) return;
-      const haveKeys = await this._ensureKeys();
-      if (!haveKeys) return;
+      if (!this._tarnService.isLoggedIn()) return;
+
       const ops = await this._cache.listOps();
       if (!ops.length) return;
 
-      try {
-        const addr = await this._getWalletAddress();
-        const { getWalletBalance } = await import('./wallet_core.js');
-        const { balanceETH, ok } = await getWalletBalance(addr);
-        if (ok && parseFloat(balanceETH) <= 0) {
-          console.log('[BookRepository] Replay deferred - wallet confirmed unfunded');
-          return;
-        }
-        if (!ok) {
-          console.warn('[BookRepository] Balance check failed (RPC), proceeding with replay');
-        }
-      } catch { /* balance check threw, proceed anyway */ }
-
-      this._emitProgress(['Replaying pending changes...']);
-      const client = this._getBrowserClient();
+      console.log('[BookRepository] Replaying', ops.length, 'pending operations...');
+      const client = await this._tarnService.getClient();
 
       for (const op of ops) {
         if (op.type === 'create') {
@@ -444,37 +418,36 @@ export class BookRepository {
           if (local.txid) { await this._cache.removeOp(op.id); continue; }
           try {
             const payload = buildPayloadFromEntry(local);
-            const res = await client.uploadEntry(payload, {});
+            const { txid } = await client.createEntry('entry', payload);
             const oldId = local.id;
-            local.txid = res.txid; local.id = res.txid;
+            local.txid = txid; local.id = txid;
             local.pending = false; local.status = 'confirmed'; local.seenRemote = true;
             await this._cache.replaceProvisional(oldId, local);
             await this._cache.removeOp(op.id);
             this._emitChange();
-          } catch {
-            this._emitProgress(['Awaiting upload credit...', 'Will retry automatically']);
-            break;
+          } catch (e) {
+            console.warn('[BookRepository] Replay create failed:', e.message);
+            break; // Stop replaying on first failure
           }
         } else if (op.type === 'edit') {
           const local = this._entries.find(e => e.txid === op.priorTxid) || this._entries.find(e => e.id === op.priorTxid);
           if (!local) { await this._cache.removeOp(op.id); continue; }
           try {
             const payload = buildPayloadFromEntry(local);
-            const res = await client.uploadEntry(payload, { extraTags: [{ name: 'Prev', value: op.priorTxid }] });
-            local.txid = res.txid; local.id = res.txid;
+            const { txid } = await client.updateEntry(op.priorTxid, 'entry', payload);
+            local.txid = txid; local.id = txid;
             local.pending = false; local.status = 'confirmed'; local.seenRemote = true;
             await this._cache.replaceProvisional(op.priorTxid, local);
             await this._cache.removeOp(op.id);
             this._emitChange();
-          } catch {
-            this._emitProgress(['Awaiting upload credit...', 'Will retry automatically']);
+          } catch (e) {
+            console.warn('[BookRepository] Replay edit failed:', e.message);
             break;
           }
         }
       }
     } finally {
       this._replaying = false;
-      this._emitProgress(null);
     }
   }
 
@@ -487,288 +460,33 @@ export class BookRepository {
     }
 
     try {
-      const haveKeys = await this._ensureKeys();
-      if (!haveKeys) throw new Error('Cannot upload: encryption keys not available');
-
+      const client = await this._tarnService.getClient();
       const payload = buildPayloadFromEntry(entry);
+      const { txid } = await client.updateEntry(prevTxid, 'entry', payload);
 
-      this._emitProgress(['Saving to Arweave\u2026']);
-      const client = this._getBrowserClient();
-      const res = await client.uploadEntry(payload, { extraTags: [{ name: 'Prev', value: prevTxid }] });
-
-      entry.txid = res.txid; entry.id = res.txid;
+      entry.txid = txid; entry.id = txid;
       entry.pending = false; entry.status = 'confirmed'; entry.seenRemote = true;
-
-      const prevStillExists = prevTxid && this._cache
-        ? await this._cache.findByTxid(prevTxid) : true;
-      if (!prevStillExists) {
-        const queueEntry = this._editQueue.get(entryKey);
-        if (queueEntry?.hasPendingEdit) {
-          await this._cache.queueOp({ type: 'edit', priorTxid: res.txid });
-        }
-        this._editQueue.delete(entryKey);
-        this._emitProgress(null);
-        return;
-      }
 
       if (this._cache) await this._cache.replaceProvisional(prevTxid, entry);
       this._emitError(null, null);
       this._emitChange();
-      this._emitProgress(null);
 
       const queueEntry = this._editQueue.get(entryKey);
       if (queueEntry?.hasPendingEdit) {
-        console.log('[BookRepository] Processing queued edit with new Prev:', res.txid.slice(0, 8));
         queueEntry.hasPendingEdit = false;
-        await this._doEditUpload(entryKey, entry, res.txid, snapshot);
+        await this._doEditUpload(entryKey, entry, txid, snapshot);
       } else {
         this._editQueue.delete(entryKey);
       }
     } catch (e) {
+      console.warn('[BookRepository] Edit upload failed:', e.message);
       this._editQueue.delete(entryKey);
-      Object.assign(entry, snapshot);
-      if (this._cache) await this._cache.putEntry(entry);
-      this._emitChange();
 
+      // Queue for retry
       const pending = { type: 'edit', priorTxid: prevTxid };
       if (this._cache) await this._cache.queueOp(pending);
 
-      if (e?.code === 'upload-required') {
-        this._emitError('upload-required', 'Upload client missing. Refresh page and retry.', pending);
-        this._emitProgress(['Upload client missing', 'Refresh page and retry']);
-      } else if (e?.code === 'post-fund-timeout') {
-        this._emitError('post-fund-timeout', 'Funding sent. Credit pending (few minutes). Retry from Account shortly.', pending);
-        this._emitProgress(['Funding sent – awaiting credit', 'Retry from Account shortly']);
-      } else if (e?.code === 'base-insufficient-funds' || e?.code === 'base-insufficient-funds-recent') {
-        this._emitError('base-insufficient-funds', 'Storage credit used up. Add credit in your account to resume saving.', pending);
-        this._emitProgress(['Storage credit used up', 'Add credit to resume']);
-      } else {
-        this._emitError('save-failed', 'Something went wrong saving to the cloud. Your books are safe locally.', pending);
-        this._emitProgress(['Couldn\u2019t save to cloud \u2013 will retry']);
-      }
+      this._emitError('save-failed', 'Could not save to cloud — will retry on next sync');
     }
-  }
-
-  // --- Internal: API-based fetch (bookish-api cache layer) ---
-
-  async _fetchFromAPI() {
-    const client = this._getBrowserClient();
-    if (!client) return { entries: [], tombstones: [], partial: false };
-
-    const addr = await this._getWalletAddress();
-    return fetchEntriesFromAPI(addr, {
-      app: 'bookish',
-      type: 'entry',
-      decryptFn: (txid) => client.decryptTx(txid),
-    });
-  }
-
-  // --- Internal: remote fetch pipeline (Arweave-direct, legacy) ---
-
-  async _fetchRemoteEntries() {
-    const client = this._getBrowserClient();
-    if (!client) return { entries: [], tombstones: [], partial: false };
-
-    // Fetch bridge entries and dirty flag in parallel
-    const addr = await this._getWalletAddress();
-    const [bridgeResult, syncStatus] = await Promise.all([
-      this._fetchBridgeEntries(),
-      addr ? fetchSyncStatus(addr) : Promise.resolve(null),
-    ]);
-    const { entries: bridgeEntries, tombstones: bridgeTombstones } = bridgeResult;
-
-    // PR-034 Workstream D: Skip GraphQL when nothing has changed
-    const cachedEntries = this._cache ? await this._cache.listAllRaw() : [];
-    const isFirstSync = cachedEntries.filter(e => e.seenRemote).length === 0;
-    const canSkipGraphQL = !isFirstSync && syncStatus && !syncStatus.dirty && bridgeEntries.length === 0 && bridgeTombstones.length === 0;
-
-    let allEdges, gqlError;
-    if (canSkipGraphQL) {
-      console.log('[BookRepository] Dirty flag clean + no bridge entries → skipping GraphQL');
-      allEdges = [];
-      gqlError = null;
-    } else {
-      // Build set of known txids for early pagination termination
-      const knownTxids = new Set(cachedEntries.filter(e => e.txid && e.seenRemote).map(e => e.txid));
-      ({ edges: allEdges, error: gqlError } = await this._fetchGraphQLPages(isFirstSync ? null : knownTxids));
-    }
-
-    let liveEdges = [], tombstones = [];
-    if (allEdges.length > 0) {
-      ({ liveEdges, tombstones } = client.computeLiveSets(allEdges));
-    }
-    if (bridgeTombstones.length > 0) {
-      tombstones = [...tombstones, ...bridgeTombstones];
-    }
-
-    const { needsDecrypt, alreadySynced } = this._partitionEdges(liveEdges, cachedEntries);
-
-    console.log('[BookRepository] Cache check:', alreadySynced.length, 'already synced,', needsDecrypt.length, 'need decrypt');
-    window.bookishNet = window.bookishNet || { reads: { arweave: 0, turbo: 0, errors: 0 }, cacheHits: 0 };
-    window.bookishNet.cacheHits = (window.bookishNet.cacheHits || 0) + alreadySynced.length;
-
-    const decrypted = await this._decryptEdges(needsDecrypt);
-    const restored = this._restoreFromCache(alreadySynced, cachedEntries);
-    const hydrated = [...decrypted, ...restored];
-    const entries = this._mergeAndDeduplicate(hydrated, bridgeEntries);
-
-    const partial = !!gqlError;
-    if (partial && bridgeEntries.length > 0) {
-      console.log('[BookRepository] Partial sync: GraphQL unavailable, returning', entries.length, 'bridge entries');
-    }
-
-    return { entries, tombstones, partial };
-  }
-
-  async _fetchBridgeEntries() {
-    try {
-      const addr = await this._getWalletAddress();
-      if (!addr) return { entries: [], tombstones: [] };
-      const { fetchPendingTxIds } = await import('./pending_tx_bridge.js');
-      const pendingIds = await fetchPendingTxIds(addr);
-      if (pendingIds.length === 0) return { entries: [], tombstones: [] };
-
-      const cached = this._cache ? await this._cache.listAllRaw() : [];
-      const knownTxids = new Set(cached.filter(e => e.txid).map(e => e.txid));
-      const newIds = pendingIds.filter(id => !knownTxids.has(id));
-      if (newIds.length === 0) return { entries: [], tombstones: [] };
-
-      console.log('[BookRepository] Bridge: fetching', newIds.length, 'pending tx IDs from Turbo');
-      const client = this._getBrowserClient();
-      const results = [];
-      const bridgeTombstones = [];
-      for (const txid of newIds) {
-        try {
-          const dec = await client.decryptTx(txid);
-          if (dec.op === 'tombstone' && dec.ref) {
-            bridgeTombstones.push({ txid, ref: dec.ref });
-          } else {
-            results.push({ txid, ...dec, block: null });
-          }
-        } catch { /* skip undecryptable */ }
-      }
-      console.log('[BookRepository] Bridge: decrypted', results.length, 'entries,', bridgeTombstones.length, 'tombstones of', newIds.length, 'txids');
-      return { entries: results, tombstones: bridgeTombstones };
-    } catch {
-      return { entries: [], tombstones: [] };
-    }
-  }
-
-  async _fetchGraphQLPages(knownTxids = null) {
-    const client = this._getBrowserClient();
-    const allEdges = [];
-    let cursor, pages = 0, safety = 0;
-    let shortCircuited = false;
-
-    console.log('[BookRepository] Querying Arweave GraphQL for book entries...');
-    const t0 = Date.now();
-
-    for (;;) {
-      const { edges, pageInfo, error } = await client.searchByOwner(null, { limit: 50, cursor });
-      pages++;
-      if (error) {
-        console.warn('[BookRepository] GraphQL unavailable:', error);
-        return { edges: allEdges, error };
-      }
-      allEdges.push(...edges);
-
-      // PR-034: Short-circuit if all edges on this page are already known locally.
-      // GraphQL returns HEIGHT_DESC, so newest first. Once we hit a page where
-      // everything is known, older pages won't have anything new either.
-      if (knownTxids && edges.length > 0) {
-        const allKnown = edges.every(e => knownTxids.has(e.node.id));
-        if (allKnown) {
-          shortCircuited = true;
-          break;
-        }
-      }
-
-      if (!pageInfo.hasNextPage) break;
-      cursor = edges[edges.length - 1]?.cursor;
-      if (++safety > 40) break;
-    }
-
-    const label = shortCircuited ? `(short-circuited after ${pages} page(s))` : '';
-    console.log('[BookRepository] GraphQL completed in', Date.now() - t0, 'ms, found', allEdges.length, 'transactions', label);
-    return { edges: allEdges, error: null };
-  }
-
-  _partitionEdges(liveEdges, cachedEntries) {
-    const confirmedTxids = new Set(
-      cachedEntries
-        .filter(e => e.txid && e.seenRemote && e.status === 'confirmed')
-        .map(e => e.txid)
-    );
-    return {
-      needsDecrypt: liveEdges.filter(e => !confirmedTxids.has(e.node.id)),
-      alreadySynced: liveEdges.filter(e => confirmedTxids.has(e.node.id))
-    };
-  }
-
-  async _decryptEdges(edges) {
-    const BATCH = 10;
-    const t0 = Date.now();
-    const client = this._getBrowserClient();
-    const results = [];
-    for (let i = 0; i < edges.length; i += BATCH) {
-      const batch = edges.slice(i, i + BATCH);
-      const settled = await Promise.allSettled(batch.map(async (e) => {
-        const dec = await client.decryptTx(e.node.id);
-        const prev = prevTag(e);
-        return { txid: e.node.id, ...dec, block: e.node.block, ...(prev && { prevTxid: prev }) };
-      }));
-      for (let j = 0; j < settled.length; j++) {
-        if (settled[j].status === 'fulfilled') {
-          results.push(settled[j].value);
-        } else {
-          console.warn('[BookRepository] Failed to decrypt', batch[j].node.id, settled[j].reason);
-        }
-      }
-    }
-    console.log('[BookRepository] Decrypted', results.length, '/', edges.length, 'entries in', Date.now() - t0, 'ms (batches of', BATCH + ')');
-    return results;
-  }
-
-  _restoreFromCache(edges, cachedEntries) {
-    const results = [];
-    for (const e of edges) {
-      const cached = cachedEntries.find(c => c.txid === e.node.id);
-      if (cached) {
-        results.push({ ...cached, block: e.node.block, ...(prevTag(e) && { prevTxid: prevTag(e) }) });
-      }
-    }
-    return results;
-  }
-
-  _mergeAndDeduplicate(hydrated, bridgeEntries) {
-    if (bridgeEntries.length > 0) {
-      const txids = new Set(hydrated.map(e => e.txid));
-      let added = 0;
-      for (const be of bridgeEntries) {
-        if (!txids.has(be.txid)) { hydrated.push(be); added++; }
-      }
-      if (added > 0) console.log('[BookRepository] Bridge: merged', added, 'new entries into sync results');
-    }
-
-    const byBookId = new Map();
-    for (const entry of hydrated) {
-      if (!entry.bookId) continue;
-      const existing = byBookId.get(entry.bookId);
-      if (!existing || pickWinner(entry, existing) === entry) {
-        byBookId.set(entry.bookId, entry);
-      }
-    }
-
-    const noBookId = hydrated.filter(e => !e.bookId);
-    if (noBookId.length > 0) console.log('[BookRepository] WARNING: entries without bookId:', noBookId.map(e => e.txid?.slice(0,8)));
-    const deduped = [...byBookId.values(), ...noBookId];
-    console.log('[BookRepository] _mergeAndDeduplicate →', deduped.map(e => ({ tx: e.txid?.slice(0,8), bid: e.bookId?.slice(0,8) || 'NONE', mod: e.modifiedAt || 0 })));
-    deduped.sort((a, b) => {
-      const da = a.dateRead || '0000-00-00', db = b.dateRead || '0000-00-00';
-      if (da !== db) return db.localeCompare(da);
-      return (b.createdAt || 0) - (a.createdAt || 0);
-    });
-
-    return deduped;
   }
 }
