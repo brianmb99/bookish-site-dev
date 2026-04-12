@@ -19,7 +19,6 @@ import {
   encrypt,
   decrypt,
   base64ToBytes,
-  bytesToBase64,
 } from './crypto.js';
 
 export class TarnClient {
@@ -127,7 +126,7 @@ export class TarnClient {
    * @param {string} newPassword
    */
   async changeCredentials(newEmail, newPassword) {
-    this.#requireAuth();
+    await this.#requireAuth();
 
     const newKeys = await deriveAllKeys(newEmail, newPassword, this.#appId);
     const newPublicKey = await exportPublicKey(newKeys.signingKeyPair.publicKey);
@@ -158,7 +157,7 @@ export class TarnClient {
    * Delete the account permanently.
    */
   async deleteAccount() {
-    this.#requireAuth();
+    await this.#requireAuth();
 
     const res = await this.#fetch('/api/v1/auth', { method: 'DELETE', auth: true });
 
@@ -184,7 +183,7 @@ export class TarnClient {
    * @returns {Promise<{txid: string}>}
    */
   async createEntry(type, plaintext, extraTags = []) {
-    this.#requireAuth();
+    await this.#requireAuth();
 
     const encrypted = await encrypt(this.#dataEncryptionKey, plaintext);
     const tags = [
@@ -215,18 +214,64 @@ export class TarnClient {
   }
 
   /**
+   * Bulk import multiple entries in one request.
+   * Counts as 1 rate-limit hit regardless of batch size. Max 100 entries per batch.
+   * @param {string} type - Entry type for all entries
+   * @param {Array<Object>} items - Array of JSON-serializable payloads
+   * @returns {Promise<Array<{txid: string}>>}
+   */
+  async batchCreate(type, items) {
+    await this.#requireAuth();
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error('items must be a non-empty array');
+    }
+    if (items.length > 100) {
+      throw new Error('items max 100 per batch');
+    }
+
+    // Encrypt each item and build the batch payload
+    const entries = [];
+    for (const item of items) {
+      const encrypted = await encrypt(this.#dataEncryptionKey, item);
+      const tags = [
+        { name: 'App', value: this.#appId },
+        { name: 'Type', value: type },
+        { name: 'Lk', value: this.#dataLookupKey },
+        { name: 'Enc', value: 'aes-256-gcm' },
+        { name: 'V', value: '0.4.0' },
+      ];
+      // Base64-encode the encrypted bytes for JSON transport
+      const data = btoa(String.fromCharCode(...encrypted));
+      entries.push({ data, tags });
+    }
+
+    const res = await this.#fetch('/api/v1/entries/batch', {
+      method: 'POST',
+      auth: true,
+      body: { entries },
+    });
+
+    if (res.status !== 200) {
+      throw new Error(`Batch create failed: ${res.json?.error || res.status}`);
+    }
+
+    return res.json.entries;
+  }
+
+  /**
    * Retrieve and decrypt entries.
    * @param {string} type - Entry type
    * @returns {Promise<Array<{txid: string, data: Object, tags: Array}>>}
    */
   async getEntries(type) {
-    this.#requireAuth();
+    await this.#requireAuth();
 
-    // Paginate through all entries (API defaults to 100 per page, max 500)
+    // Paginate through all entries (API returns up to 500 per page)
     const allRawEntries = [];
     let cursor = null;
 
-    for (let page = 0; page < 50; page++) { // safety limit
+    for (let page = 0; page < 50; page++) { // safety limit: 50 pages × 500 = 25,000 entries
       let url = `/api/v1/entries?app=${this.#appId}&type=${type}&key=${this.#dataLookupKey}&limit=500`;
       if (cursor) url += `&cursor=${cursor}`;
 
@@ -268,7 +313,7 @@ export class TarnClient {
    * @returns {Promise<{txid: string}>}
    */
   async updateEntry(priorTxid, type, plaintext) {
-    this.#requireAuth();
+    await this.#requireAuth();
 
     const encrypted = await encrypt(this.#dataEncryptionKey, plaintext);
     const tags = [
@@ -305,7 +350,7 @@ export class TarnClient {
    * @returns {Promise<{txid: string}>}
    */
   async deleteEntry(targetTxid, type) {
-    this.#requireAuth();
+    await this.#requireAuth();
 
     const encrypted = await encrypt(this.#dataEncryptionKey, { tombstone: true, ref: targetTxid });
     const tags = [
@@ -340,22 +385,24 @@ export class TarnClient {
 
   get dataLookupKey() { return this.#dataLookupKey; }
   get appId() { return this.#appId; }
-  get isAuthenticated() { return !!this.#jwt; }
+  /** True if the client has a session (JWT may auto-refresh transparently). */
+  get isAuthenticated() { return !!(this.#jwt || this.#signingKeyPair); }
 
-  // ============ SESSION PERSISTENCE ============
-  // Added for Bookish — TarnClient upstream has no session persistence.
-  // These methods allow saving/restoring client state across page refreshes
-  // without requiring the user to re-enter their password.
+  // ============ SESSION PERSISTENCE (Bookish addition) ============
+  // TarnClient upstream has no session persistence. These methods allow
+  // saving/restoring client state across page refreshes without requiring
+  // the user to re-enter their password.
 
   /**
    * Export all session state as a JSON-serializable object.
    * The caller is responsible for encrypting this at rest.
-   * @returns {Promise<Object>} Serialized session state
+   * @returns {Promise<Object|null>} Serialized session state
    */
   async exportSession() {
-    if (!this.#jwt) return null;
+    if (!this.#dataEncryptionKey) return null;
 
-    // Export CryptoKeys to raw/pkcs8/spki bytes → base64
+    const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+
     const [dataKeyRaw, credGcmRaw, credKwRaw, sigPrivPkcs8, sigPubSpki] = await Promise.all([
       crypto.subtle.exportKey('raw', this.#dataEncryptionKey),
       crypto.subtle.exportKey('raw', this.#credentialEncryptionKey.gcmKey),
@@ -365,19 +412,13 @@ export class TarnClient {
     ]);
 
     return {
-      v: 1, // session format version
+      v: 1,
       jwt: this.#jwt,
       dataLookupKey: this.#dataLookupKey,
       credentialLookupKey: this.#credentialLookupKey,
-      dataEncryptionKey: bytesToBase64(new Uint8Array(dataKeyRaw)),
-      credentialEncryptionKey: {
-        gcm: bytesToBase64(new Uint8Array(credGcmRaw)),
-        kw: bytesToBase64(new Uint8Array(credKwRaw)),
-      },
-      signingKeyPair: {
-        priv: bytesToBase64(new Uint8Array(sigPrivPkcs8)),
-        pub: bytesToBase64(new Uint8Array(sigPubSpki)),
-      },
+      dataEncryptionKey: b64(dataKeyRaw),
+      credentialEncryptionKey: { gcm: b64(credGcmRaw), kw: b64(credKwRaw) },
+      signingKeyPair: { priv: b64(sigPrivPkcs8), pub: b64(sigPubSpki) },
     };
   }
 
@@ -391,19 +432,20 @@ export class TarnClient {
   static async fromSession(apiBaseUrl, appId, session) {
     if (!session || session.v !== 1) throw new Error('Invalid session format');
 
+    const b2u = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
     const client = new TarnClient(apiBaseUrl, appId);
 
-    // Import CryptoKeys from base64
     const [dataKey, gcmKey, kwKey, privateKey, publicKey] = await Promise.all([
-      crypto.subtle.importKey('raw', base64ToBytes(session.dataEncryptionKey),
+      crypto.subtle.importKey('raw', b2u(session.dataEncryptionKey),
         { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']),
-      crypto.subtle.importKey('raw', base64ToBytes(session.credentialEncryptionKey.gcm),
+      crypto.subtle.importKey('raw', b2u(session.credentialEncryptionKey.gcm),
         { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']),
-      crypto.subtle.importKey('raw', base64ToBytes(session.credentialEncryptionKey.kw),
+      crypto.subtle.importKey('raw', b2u(session.credentialEncryptionKey.kw),
         'AES-KW', true, ['wrapKey', 'unwrapKey']),
-      crypto.subtle.importKey('pkcs8', base64ToBytes(session.signingKeyPair.priv),
+      crypto.subtle.importKey('pkcs8', b2u(session.signingKeyPair.priv),
         { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign']),
-      crypto.subtle.importKey('spki', base64ToBytes(session.signingKeyPair.pub),
+      crypto.subtle.importKey('spki', b2u(session.signingKeyPair.pub),
         { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']),
     ]);
 
@@ -417,34 +459,39 @@ export class TarnClient {
     return client;
   }
 
-  /**
-   * Re-authenticate using stored signing keys (refreshes JWT).
-   * Use when JWT has expired and you have a restored session.
-   * @returns {Promise<void>}
-   */
-  async refreshAuth() {
-    if (!this.#credentialLookupKey || !this.#signingKeyPair) {
-      throw new Error('No credentials available — call login() first');
-    }
-    await this.#authenticate();
-  }
-
   // ============ PRIVATE ============
 
-  #requireAuth() {
-    if (!this.#jwt) throw new Error('Not authenticated — call register() or login() first');
-    // Check JWT expiry (decode payload without verification — just for timing)
-    try {
-      const parts = this.#jwt.split('.');
-      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-        this.#jwt = null; // Clear expired token
-        throw new Error('JWT expired — call login() to re-authenticate');
-      }
-    } catch (e) {
-      if (e.message.includes('expired')) throw e;
-      // If decoding fails, let the server reject it
+  /**
+   * Ensure we have a valid JWT. If expired but we have signing keys,
+   * silently re-authenticate via challenge-response. If never logged in, throw.
+   */
+  async #requireAuth() {
+    if (!this.#jwt && !this.#signingKeyPair) {
+      throw new Error('Not authenticated — call register() or login() first');
     }
+
+    // Check JWT expiry
+    if (this.#jwt) {
+      try {
+        const parts = this.#jwt.split('.');
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        // Refresh 30 seconds before expiry to avoid edge-case failures
+        if (!payload.exp || payload.exp > Math.floor(Date.now() / 1000) + 30) {
+          return; // JWT is still valid
+        }
+      } catch {
+        // If decoding fails, try to refresh
+      }
+    }
+
+    // JWT is missing or expired — re-authenticate if we have signing keys
+    if (this.#signingKeyPair && this.#credentialLookupKey) {
+      this.#jwt = null;
+      await this.#authenticate();
+      return;
+    }
+
+    throw new Error('JWT expired and no signing keys available — call login() to re-authenticate');
   }
 
   async #authenticate() {
