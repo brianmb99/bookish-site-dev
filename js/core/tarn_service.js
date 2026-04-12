@@ -188,13 +188,33 @@ export function isLoggedIn() {
 export async function getClient() {
   if (!_client) throw new Error('Not logged in');
 
-  // If JWT is expired, try to refresh transparently
-  if (!_client.isAuthenticated) {
+  // Pro-actively refresh if JWT is expired or about to expire.
+  // isAuthenticated only checks !!jwt; we need to check actual expiry
+  // to avoid the race where getClient() returns a client whose next
+  // API call triggers #requireAuth() → "JWT expired".
+  let needsRefresh = !_client.isAuthenticated;
+  if (!needsRefresh) {
+    try {
+      // Peek at JWT expiry (same logic as TarnClient.#requireAuth)
+      const session = await _client.exportSession();
+      if (session?.jwt) {
+        const parts = session.jwt.split('.');
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        // Refresh if expired or within 30s of expiry
+        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000) + 30) {
+          needsRefresh = true;
+        }
+      }
+    } catch {
+      needsRefresh = true;
+    }
+  }
+
+  if (needsRefresh) {
     try {
       await _client.refreshAuth();
       await saveSession(_client, localStorage.getItem(STORAGE_KEYS.EMAIL));
     } catch (err) {
-      // If refresh fails, session is dead — user must re-login
       _client = null;
       clearSession();
       throw new Error('Session expired — please sign in again');
