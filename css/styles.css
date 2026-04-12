@@ -1252,10 +1252,6 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   background:var(--color-success);
   box-shadow:0 0 6px 1px rgba(16,185,129,.3);
 }
-.status-dot.arweave{
-  background:#059669;
-  box-shadow:0 0 8px 2px rgba(5,150,105,.35);
-}
 .card.deleting{opacity:.35;filter:grayscale(.85)}
 /* book search UI */
 #bookSearchUI{display:none;margin:8px 0 12px;background:#101418;border:1px solid #2b333b;border-radius:8px;padding:12px 14px 14px}

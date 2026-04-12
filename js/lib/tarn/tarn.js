@@ -215,7 +215,7 @@ export class TarnClient {
 
   /**
    * Bulk import multiple entries in one request.
-   * Counts as 1 rate-limit hit regardless of batch size. Max 100 entries per batch.
+   * Counts as 1 rate-limit hit regardless of batch size. Max 25 entries per batch.
    * @param {string} type - Entry type for all entries
    * @param {Array<Object>} items - Array of JSON-serializable payloads
    * @returns {Promise<Array<{txid: string}>>}
@@ -226,8 +226,8 @@ export class TarnClient {
     if (!Array.isArray(items) || items.length === 0) {
       throw new Error('items must be a non-empty array');
     }
-    if (items.length > 100) {
-      throw new Error('items max 100 per batch');
+    if (items.length > 25) {
+      throw new Error('items max 25 per batch');
     }
 
     // Encrypt each item and build the batch payload
@@ -289,16 +289,46 @@ export class TarnClient {
       if (!cursor) break;
     }
 
-    // Fetch and decrypt all entries
+    // Decrypt all entries — use inline blob data from API when available,
+    // fall back to gateway fetch only for entries without cached blobs
     const entries = [];
+    const needsFetch = [];
+
     for (const entry of allRawEntries) {
-      try {
-        const blobBytes = await this.#fetchBlob(entry.txid);
-        if (!blobBytes) continue;
-        const data = await decrypt(this.#dataEncryptionKey, blobBytes);
-        entries.push({ txid: entry.txid, data, tags: entry.tags });
-      } catch (err) {
-        console.warn(`Failed to decrypt entry ${entry.txid}:`, err.message);
+      if (entry.data) {
+        // Blob data returned inline from API (base64) — decrypt directly
+        try {
+          const blobBytes = base64ToBytes(entry.data);
+          const data = await decrypt(this.#dataEncryptionKey, blobBytes);
+          entries.push({ txid: entry.txid, data, tags: entry.tags });
+        } catch (err) {
+          console.warn(`Failed to decrypt inline entry ${entry.txid}:`, err.message);
+        }
+      } else {
+        // No inline data — need to fetch from gateway (backfill not yet done)
+        needsFetch.push(entry);
+      }
+    }
+
+    // Fetch remaining entries from gateways in parallel
+    if (needsFetch.length > 0) {
+      const CONCURRENCY = 20;
+      for (let i = 0; i < needsFetch.length; i += CONCURRENCY) {
+        const batch = needsFetch.slice(i, i + CONCURRENCY);
+        const results = await Promise.allSettled(batch.map(async (entry) => {
+          const blobBytes = await this.#fetchBlob(entry.txid);
+          if (!blobBytes) return null;
+          const data = await decrypt(this.#dataEncryptionKey, blobBytes);
+          return { txid: entry.txid, data, tags: entry.tags };
+        }));
+
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value) {
+            entries.push(result.value);
+          } else if (result.status === 'rejected') {
+            console.warn(`Failed to decrypt entry:`, result.reason?.message);
+          }
+        }
       }
     }
 
