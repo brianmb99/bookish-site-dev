@@ -5,6 +5,14 @@ import uiStatusManager from './ui_status_manager.js';
 import { stopSync, startSync, markInitialSyncDone } from './sync_manager.js';
 import * as tarnService from './core/tarn_service.js';
 
+// SVG icons for auth forms
+const SVG_EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const SVG_EYE_OFF = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+const SVG_SHIELD = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`;
+const SVG_USER = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+const SVG_EDIT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+const SVG_DOWNLOAD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+
 /**
  * Full logout: stop sync, clear Tarn session, clear IndexedDB cache,
  * clear in-memory book entries, refresh UI.
@@ -56,13 +64,13 @@ export async function initAccountUI() {
 // MODAL MANAGEMENT
 // ============================================================================
 
-export async function openAccountModal() {
+export async function openAccountModal(mode) {
   const modal = document.getElementById('accountModal');
   const content = document.getElementById('accountModalContent');
   if (!modal || !content) return;
 
   modal.dataset.allowClose = 'false';
-  await renderAccountModalContent(content);
+  await renderAccountModalContent(content, mode);
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
 
@@ -110,9 +118,11 @@ function setupAccountModalListeners() {
 // CONTENT RENDERING
 // ============================================================================
 
-async function renderAccountModalContent(content) {
+async function renderAccountModalContent(content, mode) {
   if (tarnService.isLoggedIn()) {
     renderAccountPanel(content);
+  } else if (mode === 'signin') {
+    renderSignInForm(content);
   } else {
     renderCreateAccountForm(content);
   }
@@ -124,42 +134,56 @@ async function renderAccountModalContent(content) {
 
 function renderCreateAccountForm(content) {
   content.innerHTML = `
-    <div class="account-form">
-      <h2 style="margin:0 0 24px 0;font-size:1.5rem;font-weight:600;">Create Account</h2>
-
-      <label class="form-label" for="acctEmail">Email</label>
-      <input type="email" id="acctEmail" class="form-input" autocomplete="email" required />
-      <div id="emailPreview" class="field-hint" style="min-height:18px;margin-bottom:12px;"></div>
-
-      <label class="form-label" for="acctPassword">Password</label>
-      <input type="password" id="acctPassword" class="form-input" minlength="8" autocomplete="new-password" required />
-      <div id="strengthBar" class="strength-bar" style="margin:6px 0;height:4px;border-radius:2px;background:#333;">
-        <div id="strengthFill" style="height:100%;border-radius:2px;width:0;transition:width .3s,background .3s;"></div>
+    <div class="auth-form">
+      <div class="auth-header">
+        <div class="auth-icon">${SVG_SHIELD}</div>
+        <h2>Create Your Account</h2>
+        <p>Your reading list, encrypted and always yours.</p>
       </div>
-      <div id="strengthLabel" class="field-hint" style="min-height:18px;margin-bottom:12px;"></div>
 
-      <label class="form-label" for="acctConfirmPassword">Confirm Password</label>
-      <input type="password" id="acctConfirmPassword" class="form-input" autocomplete="new-password" required />
-      <div id="confirmHint" class="field-hint" style="min-height:18px;margin-bottom:16px;"></div>
+      <div class="form-group">
+        <label for="acctEmail">Email</label>
+        <input type="email" id="acctEmail" autocomplete="email" placeholder="you@example.com" required />
+        <span class="field-hint" id="emailPreview"></span>
+      </div>
 
-      <label class="consent-label" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:20px;cursor:pointer;">
-        <input type="checkbox" id="recoveryConsent" style="margin-top:3px;" />
-        <span style="font-size:.875rem;line-height:1.4;opacity:.85;">
-          I understand that Bookish cannot recover my password. My data is encrypted with keys derived from my password.
-        </span>
+      <div class="form-group">
+        <label for="acctPassword">Password</label>
+        <div class="password-field">
+          <input type="password" id="acctPassword" minlength="8" autocomplete="new-password" placeholder="At least 8 characters" required />
+          <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
+        </div>
+        <div class="password-strength">
+          <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
+          <span class="strength-label" id="strengthLabel"></span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="acctConfirmPassword">Confirm Password</label>
+        <div class="password-field">
+          <input type="password" id="acctConfirmPassword" autocomplete="new-password" placeholder="Re-enter password" required />
+          <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
+        </div>
+        <span class="field-match" id="confirmHint"></span>
+      </div>
+
+      <label class="auth-consent">
+        <input type="checkbox" id="recoveryConsent" />
+        <span>I understand that Bookish cannot recover my password. My data is encrypted with keys derived from my password.</span>
       </label>
 
-      <button id="createAccountBtn" class="btn btn-primary" disabled style="width:100%;padding:12px;font-size:1rem;">
+      <button id="createAccountBtn" class="btn primary auth-submit" disabled>
         Create Account
       </button>
 
-      <div id="createError" class="error-message" style="margin-top:12px;display:none;"></div>
-      <div id="createProgress" style="margin-top:12px;display:none;text-align:center;opacity:.7;"></div>
+      <div id="createError" class="auth-error" style="display:none;"></div>
+      <div id="createProgress" class="auth-progress" style="display:none;"></div>
 
-      <p style="margin-top:20px;text-align:center;font-size:.875rem;opacity:.7;">
+      <div class="auth-switch">
         Already have an account?
-        <a href="#" id="switchToSignIn" style="color:var(--accent,#3b82f6);text-decoration:none;">Sign in</a>
-      </p>
+        <a href="#" id="switchToSignIn">Sign in</a>
+      </div>
     </div>
   `;
 
@@ -193,6 +217,16 @@ function renderCreateAccountForm(content) {
     }
   });
 
+  // Password toggles
+  content.querySelectorAll('.password-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = btn.previousElementSibling;
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
+    });
+  });
+
   // Password strength
   passwordInput.addEventListener('input', () => {
     const pw = passwordInput.value;
@@ -200,8 +234,9 @@ function renderCreateAccountForm(content) {
     const label = content.querySelector('#strengthLabel');
     const strength = assessPasswordStrength(pw);
     fill.style.width = strength.pct + '%';
-    fill.style.background = strength.color;
+    fill.className = 'strength-fill ' + strength.cls;
     label.textContent = strength.label;
+    label.className = 'strength-label ' + strength.cls;
     validate();
   });
 
@@ -210,12 +245,13 @@ function renderCreateAccountForm(content) {
     const hint = content.querySelector('#confirmHint');
     if (confirmInput.value && confirmInput.value !== passwordInput.value) {
       hint.textContent = 'Passwords do not match';
-      hint.style.color = '#ef4444';
+      hint.className = 'field-match match-error';
     } else if (confirmInput.value) {
       hint.textContent = 'Passwords match';
-      hint.style.color = '#22c55e';
+      hint.className = 'field-match match-success';
     } else {
       hint.textContent = '';
+      hint.className = 'field-match';
     }
     validate();
   });
@@ -313,26 +349,37 @@ function renderCreateAccountForm(content) {
 
 function renderSignInForm(content) {
   content.innerHTML = `
-    <div class="account-form">
-      <h2 style="margin:0 0 24px 0;font-size:1.5rem;font-weight:600;">Sign In</h2>
+    <div class="auth-form">
+      <div class="auth-header">
+        <div class="auth-icon">${SVG_USER}</div>
+        <h2>Welcome Back</h2>
+        <p>Sign in to access your reading list.</p>
+      </div>
 
-      <label class="form-label" for="signInEmail">Email</label>
-      <input type="email" id="signInEmail" class="form-input" autocomplete="email" required />
+      <div class="form-group">
+        <label for="signInEmail">Email</label>
+        <input type="email" id="signInEmail" autocomplete="email" placeholder="you@example.com" required />
+      </div>
 
-      <label class="form-label" for="signInPassword" style="margin-top:12px;">Password</label>
-      <input type="password" id="signInPassword" class="form-input" autocomplete="current-password" required />
+      <div class="form-group">
+        <label for="signInPassword">Password</label>
+        <div class="password-field">
+          <input type="password" id="signInPassword" autocomplete="current-password" placeholder="Your password" required />
+          <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
+        </div>
+      </div>
 
-      <button id="signInBtn" class="btn btn-primary" disabled style="width:100%;padding:12px;font-size:1rem;margin-top:20px;">
+      <button id="signInBtn" class="btn primary auth-submit" disabled>
         Sign In
       </button>
 
-      <div id="signInError" class="error-message" style="margin-top:12px;display:none;"></div>
-      <div id="signInProgress" style="margin-top:12px;display:none;text-align:center;opacity:.7;"></div>
+      <div id="signInError" class="auth-error" style="display:none;"></div>
+      <div id="signInProgress" class="auth-progress" style="display:none;"></div>
 
-      <p style="margin-top:20px;text-align:center;font-size:.875rem;opacity:.7;">
+      <div class="auth-switch">
         Don't have an account?
-        <a href="#" id="switchToCreate" style="color:var(--accent,#3b82f6);text-decoration:none;">Create one</a>
-      </p>
+        <a href="#" id="switchToCreate">Create one</a>
+      </div>
     </div>
   `;
 
@@ -340,6 +387,16 @@ function renderSignInForm(content) {
   const passwordInput = content.querySelector('#signInPassword');
   const signInBtn = content.querySelector('#signInBtn');
   const switchLink = content.querySelector('#switchToCreate');
+
+  // Password toggle
+  content.querySelectorAll('.password-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = btn.previousElementSibling;
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
+    });
+  });
 
   function validate() {
     const email = emailInput.value.trim();
@@ -401,28 +458,26 @@ function renderSignInForm(content) {
 function renderAccountPanel(content) {
   const email = tarnService.getEmail() || '';
   const displayName = tarnService.displayName() || email.split('@')[0] || 'User';
+  const initial = (displayName[0] || 'U').toUpperCase();
 
   content.innerHTML = `
-    <div class="account-panel">
-      <h2 style="margin:0 0 24px 0;font-size:1.5rem;font-weight:600;">Account</h2>
-
-      <div class="account-info" style="margin-bottom:24px;">
-        <div class="info-row" style="margin-bottom:12px;">
-          <span class="info-label" style="opacity:.6;font-size:.875rem;">Email</span>
-          <span class="info-value">${email}</span>
-        </div>
-        <div class="info-row" style="margin-bottom:12px;">
-          <span class="info-label" style="opacity:.6;font-size:.875rem;">Display Name</span>
-          <span id="displayNameValue" class="info-value">${displayName}</span>
-          <button id="editDisplayNameBtn" class="btn-link" style="font-size:.875rem;margin-left:8px;">Edit</button>
+    <div class="auth-form">
+      <div class="account-panel-header">
+        <div class="account-avatar">${initial}</div>
+        <div class="account-panel-info">
+          <div class="account-panel-name">
+            <span id="displayNameValue">${displayName}</span>
+            <button id="editDisplayNameBtn" class="btn-link" title="Edit name">${SVG_EDIT}</button>
+          </div>
+          <div class="account-panel-email">${email}</div>
         </div>
       </div>
 
-      <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:16px;margin-bottom:16px;">
-        <button id="exportCsvBtn" class="btn btn-secondary" style="width:100%;margin-bottom:8px;">
-          Export Books (CSV)
+      <div class="account-actions">
+        <button id="exportCsvBtn" class="btn secondary">
+          ${SVG_DOWNLOAD} Export Books (CSV)
         </button>
-        <button id="logoutBtn" class="btn btn-danger" style="width:100%;">
+        <button id="logoutBtn" class="btn account-signout">
           Sign Out
         </button>
       </div>
@@ -446,8 +501,9 @@ function renderAccountPanel(content) {
     const editBtn = content.querySelector('#editDisplayNameBtn');
     const current = valueEl.textContent;
 
-    valueEl.innerHTML = `<input type="text" id="displayNameInput" class="form-input" value="${current}" style="width:160px;padding:4px 8px;" />`;
-    editBtn.textContent = 'Save';
+    valueEl.innerHTML = `<input type="text" id="displayNameInput" value="${current}" />`;
+    editBtn.innerHTML = 'Save';
+    editBtn.classList.add('save-active');
 
     const input = content.querySelector('#displayNameInput');
     input.focus();
@@ -457,7 +513,11 @@ function renderAccountPanel(content) {
       const newName = input.value.trim() || current;
       tarnService.displayName(newName);
       valueEl.textContent = newName;
-      editBtn.textContent = 'Edit';
+      editBtn.innerHTML = SVG_EDIT;
+      editBtn.classList.remove('save-active');
+      // Update avatar initial
+      const avatar = content.querySelector('.account-avatar');
+      if (avatar) avatar.textContent = (newName[0] || 'U').toUpperCase();
     };
 
     editBtn.onclick = save;
@@ -514,7 +574,7 @@ function csvEscape(str) {
 // ============================================================================
 
 function assessPasswordStrength(password) {
-  if (!password) return { pct: 0, label: '', color: '#333' };
+  if (!password) return { pct: 0, label: '', cls: '' };
   let score = 0;
   if (password.length >= 8) score++;
   if (password.length >= 12) score++;
@@ -522,19 +582,17 @@ function assessPasswordStrength(password) {
   if (/\d/.test(password)) score++;
   if (/[^a-zA-Z0-9]/.test(password)) score++;
 
-  if (score <= 1) return { pct: 20, label: 'Weak', color: '#ef4444' };
-  if (score === 2) return { pct: 40, label: 'Fair', color: '#f59e0b' };
-  if (score === 3) return { pct: 60, label: 'Good', color: '#eab308' };
-  if (score === 4) return { pct: 80, label: 'Strong', color: '#22c55e' };
-  return { pct: 100, label: 'Very Strong', color: '#10b981' };
+  if (score <= 1) return { pct: 20, label: 'Weak', cls: 'strength-weak' };
+  if (score === 2) return { pct: 40, label: 'Fair', cls: 'strength-weak' };
+  if (score === 3) return { pct: 60, label: 'Good', cls: 'strength-medium' };
+  if (score === 4) return { pct: 80, label: 'Strong', cls: 'strength-good' };
+  return { pct: 100, label: 'Very Strong', cls: 'strength-good' };
 }
 
 // Expose for app.js
 window.accountUI = {
   openAccountModal,
   handleSignIn: () => {
-    const content = document.getElementById('accountModalContent');
-    if (content) renderSignInForm(content);
-    openAccountModal();
+    openAccountModal('signin');
   },
 };

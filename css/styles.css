@@ -1822,6 +1822,11 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .auth-form .form-group input:focus {
   outline: none;
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+.auth-form .form-group input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.5;
 }
 .auth-form .form-group input.field-invalid {
   border-color: var(--color-error, #ef4444);
@@ -1899,8 +1904,9 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   top: 50%;
   transform: translateY(-50%);
   z-index: 2;
-  background: transparent;
-  border: none;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
   color: var(--color-text-muted);
   cursor: pointer;
   padding: 8px;
@@ -1916,6 +1922,8 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 }
 .password-toggle:hover {
   color: var(--color-text-secondary);
+  background: transparent !important;
+  transform: translateY(-50%) !important;
 }
 
 /* Password strength indicator */
@@ -1961,6 +1969,204 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 }
 .strength-label.strength-good {
   color: var(--color-success, #10b981);
+}
+
+/* ============================================================================
+   Auth Form Layout (Create Account / Sign In)
+   ============================================================================ */
+
+/* Header with icon + title + subtitle */
+.auth-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.auth-header .auth-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+}
+.auth-header h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.auth-header p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+/* Consent checkbox */
+.auth-consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.auth-consent:hover {
+  border-color: var(--color-border-default);
+}
+.auth-consent input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--color-primary);
+}
+.auth-consent span {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* Submit button */
+.auth-submit {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  margin-top: 4px;
+}
+
+/* Error display */
+.auth-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  color: var(--color-error);
+  font-size: 0.875rem;
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* Progress display */
+.auth-progress {
+  margin-top: 12px;
+  padding: 10px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+/* Switch link (sign in / create account) */
+.auth-switch {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border-subtle);
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+.auth-switch a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+.auth-switch a:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+/* Account panel (logged in) */
+.account-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.account-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-family: var(--font-display);
+}
+.account-panel-info {
+  flex: 1;
+  min-width: 0;
+}
+.account-panel-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 2px;
+}
+.account-panel-name .btn-link {
+  text-decoration: none;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  padding: 4px;
+}
+.account-panel-name .btn-link:hover {
+  color: var(--color-primary);
+}
+.account-panel-name .btn-link.save-active {
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.account-panel-name #displayNameInput {
+  padding: 4px 8px;
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  width: 160px;
+}
+.account-panel-email {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.account-actions .btn {
+  width: 100%;
+  padding: 12px 20px;
+  justify-content: center;
+}
+.account-signout {
+  background: transparent !important;
+  border: 1px solid var(--color-border-default) !important;
+  color: var(--color-text-secondary) !important;
+  box-shadow: none !important;
+}
+.account-signout:hover {
+  border-color: var(--color-error) !important;
+  color: var(--color-error) !important;
+  background: rgba(239, 68, 68, 0.08) !important;
 }
 
 /* ============================================================================
