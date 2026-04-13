@@ -26,9 +26,10 @@ async function performLogout() {
     if (window.bookishCache?.clearAll) await window.bookishCache.clearAll();
   } catch {}
 
+  // Clear in-memory book entries so the UI redraws immediately
+  if (window.bookishApp?.clearBooks) window.bookishApp.clearBooks();
+
   uiStatusManager.refresh();
-  // updateBookDots triggers render() which will show empty state
-  if (typeof window.updateBookDots === 'function') window.updateBookDots();
 }
 
 const BOOKISH_API = window.BOOKISH_API_URL || 'https://bookish-api.bookish.workers.dev';

@@ -61,6 +61,7 @@ export class BookRepository {
     this._entries = [];
     this._editQueue = new Map();
     this._replaying = false;
+    this._purged = false;
     this._listeners = { change: [], error: [], progress: [] };
   }
 
@@ -98,12 +99,14 @@ export class BookRepository {
 
   async loadFromCache() {
     if (!this._cache) return;
+    this._purged = false;
     this._entries = await this._cache.getAllActive();
     this._entries.forEach(e => { e._committed = !!(e.status === 'confirmed' && e.seenRemote); });
     this._emitChange();
   }
 
   clear() {
+    this._purged = true;
     this._entries = [];
     this._emitChange();
   }
@@ -326,7 +329,7 @@ export class BookRepository {
   // --- Sync pipeline ---
 
   async sync() {
-    if (!this._cache) return;
+    if (!this._cache || this._purged) return;
 
     await this.replayPending();
 
@@ -399,7 +402,7 @@ export class BookRepository {
   }
 
   async replayPending() {
-    if (this._replaying) return;
+    if (this._replaying || this._purged) return;
     this._replaying = true;
     try {
       if (!this._cache) return;
