@@ -390,6 +390,15 @@ export class BookRepository {
         await this._cache.putEntry(entry);
       }
 
+      // Remove stale entries from IndexedDB that are no longer in the merged set
+      // (e.g. old txid superseded by an edit on another device)
+      const mergedIds = new Set(merged.map(e => e.id));
+      for (const entry of local) {
+        if (!mergedIds.has(entry.id) && entry.txid && entry.status !== 'pending') {
+          await this._cache.deleteById(entry.id);
+        }
+      }
+
       this._entries = merged;
       this._emitChange();
     } catch (e) {
