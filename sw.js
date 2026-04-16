@@ -1,5 +1,5 @@
 // sw.js - basic PWA service worker
-const VERSION='v210';
+const VERSION='v211';
 const CACHE_NAME='bookish-precache-'+VERSION;
 const PRECACHE=[
   '/',
@@ -19,7 +19,10 @@ const PRECACHE=[
   '/js/core/id_core.js',
   '/js/lib/tarn/tarn.js',
   '/js/lib/tarn/crypto.js',
-  '/manifest.json'
+  '/manifest.json',
+  '/fonts/dm-sans-latin.woff2',
+  '/fonts/fraunces-latin.woff2',
+  '/fonts/jetbrains-mono-latin.woff2'
 ];
 self.addEventListener('install',e=>{
   e.waitUntil((async()=>{ const c=await caches.open(CACHE_NAME); try{ await c.addAll(PRECACHE); }catch(err){ console.warn('[SW] Precache partial failure:',err); } self.skipWaiting(); })());
@@ -47,6 +50,7 @@ self.addEventListener('fetch',e=>{
     return;
   }
   if(url.origin===location.origin){
+    if(url.pathname.startsWith('/fonts/')){ e.respondWith(caches.match(e.request).then(c=>c||fetch(e.request))); return; }
     if(url.pathname.startsWith('/icons/')){ e.respondWith(staleWhileRevalidate(e.request)); return; }
     if(url.pathname.startsWith('/covers/')||/\.(jpg|png|webp)$/i.test(url.pathname)){ e.respondWith(staleWhileRevalidate(e.request)); return; }
     // All same-origin JS/CSS: network-first so SW updates always serve fresh code
