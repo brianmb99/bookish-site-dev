@@ -11,6 +11,7 @@ import { stripNoise } from './core/search_core.js';
 import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
 import { haptic } from './core/haptic.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
+import { initPullToRefresh } from './core/pull_to_refresh.js';
 
 // --- Version logging (always visible in console) ---
 {
@@ -2072,3 +2073,19 @@ notesInput?.addEventListener('input', ()=>{ autoGrowNotes(); if(notesInput.value
   window.addEventListener('wheel',e=>{ if(!e.ctrlKey) return; e.preventDefault(); cols=clamp(cols + (e.deltaY>0?1:-1)); apply(); }, { passive:false });
   apply();
 })();
+
+// --- Pull-to-refresh (standalone PWA only, #90) ---
+if (isStandalone && isTouchDevice) {
+  const appEl = document.getElementById('app');
+  if (appEl) {
+    initPullToRefresh({
+      container: appEl,
+      onRefresh: () => triggerSyncNow(),
+      isOverlayOpen: () =>
+        document.body.classList.contains('modal-open') ||
+        searchTakeoverActive ||
+        (notesOverlay && notesOverlay.style.display === 'flex') ||
+        (wtrOverlay && wtrOverlay.style.display === 'block'),
+    });
+  }
+}

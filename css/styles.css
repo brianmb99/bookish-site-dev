@@ -2605,6 +2605,40 @@ body.modal-open{overscroll-behavior-y:contain}
 }
 
 /* ============================================================================
+   #90: Pull-to-refresh indicator (standalone PWA only)
+   ============================================================================ */
+.ptr-indicator{
+  position:fixed;
+  top:calc(var(--header-height) + env(safe-area-inset-top));
+  left:0;right:0;
+  height:48px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:999;
+  pointer-events:none;
+  opacity:0;
+  transform:translateY(-48px);
+}
+.ptr-spinner{
+  color:var(--color-text-secondary);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.ptr-indicator.ptr-refreshing .ptr-spinner{
+  animation:ptr-spin .8s linear infinite;
+}
+@keyframes ptr-spin{
+  to{transform:rotate(360deg)}
+}
+
+/* Suppress browser pull-to-refresh in standalone mode */
+@media (display-mode:standalone){
+  body{overscroll-behavior-y:contain}
+}
+
+/* ============================================================================
    Reduced Motion
    ============================================================================ */
 @media (prefers-reduced-motion: reduce) {
@@ -2619,5 +2653,9 @@ body.modal-open{overscroll-behavior-y:contain}
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  .ptr-indicator.ptr-refreshing .ptr-spinner{
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
   }
 }
