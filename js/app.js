@@ -515,7 +515,7 @@ function closeModal(fromPopstate = false){
   }
 }
 function clearBooks(){ if(bookRepo) bookRepo.clear(); else { entries=[]; render(); } }
-window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus };
+window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus, showShelfSkeletons, clearShelfSkeletons };
 // Dirty tracking helpers
 function currentFormState(){ return JSON.stringify({
   prior: form.priorTxid.value||'',
@@ -779,6 +779,21 @@ function animateCardExit(el){
   setTimeout(() => { if(el.parentNode) el.remove(); }, 400);
 }
 
+/** Render N skeleton placeholder cards into the cards container */
+function showShelfSkeletons(count = 6){
+  if(!cardsEl) return;
+  const html = Array(count).fill(
+    `<div class="card-skeleton"><div class="skel-cover"></div><div class="skel-meta"><div class="skel-line skel-title"></div><div class="skel-line skel-author"></div><div class="skel-line skel-detail"></div></div></div>`
+  ).join('');
+  cardsEl.innerHTML = html;
+}
+
+function clearShelfSkeletons(){
+  if(!cardsEl) return;
+  const skels = cardsEl.querySelectorAll('.card-skeleton');
+  for(const s of skels) s.remove();
+}
+
 function render(){
   const visible = entries.filter(e => e.status !== 'tombstoned');
 
@@ -829,16 +844,17 @@ function render(){
       if(addBtn) addBtn.style.display = 'none';
       if(signInDiv) signInDiv.style.display = 'none';
       if(illustration) illustration.textContent = '\u23F3';
+      showShelfSkeletons(6);
+      emptyEl.style.display='none';
     } else {
       if(headline) headline.textContent = 'Your reading journey starts here';
       if(subtext) subtext.textContent = 'Track what you read. Keep it forever. Access it anywhere.';
       if(addBtn) addBtn.style.display = '';
       if(signInDiv) signInDiv.style.display = tarnService.isLoggedIn() ? 'none' : '';
       if(illustration) illustration.textContent = '\uD83D\uDCDA';
+      if(cardsEl.children.length > 0) cardsEl.replaceChildren();
+      emptyEl.style.display='block';
     }
-
-    if(cardsEl.children.length > 0) cardsEl.replaceChildren();
-    emptyEl.style.display='block';
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
     setOmniboxVisible(false);
     if(headerSearchBtn) headerSearchBtn.style.display = 'none';
@@ -908,6 +924,8 @@ function render(){
   }
 
   // --- Keyed DOM reconciliation ---
+  // Clear any skeleton placeholders before rendering real cards
+  clearShelfSkeletons();
   // Remove non-card elements (e.g. year-empty message)
   const yearEmptyMsg = cardsEl.querySelector('.year-empty');
   if(yearEmptyMsg) yearEmptyMsg.remove();
@@ -927,12 +945,14 @@ function render(){
     const fp = entryFingerprint(e) + (e._wtrResult ? '\twtr' : '');
     const isReading = normalizeReadingStatus(e) === READING_STATUS.READING;
 
+    const isSyncPending = tarnService.isLoggedIn() && !e.onArweave && !e._deleting;
+
     let card = existingMap.get(key);
     if(card){
       if(card.dataset._fp !== fp){
         const rawFmt=(e.format||'').toLowerCase();
         const fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
-        card.className='card'+(e._deleting?' deleting':'');
+        card.className='card'+(e._deleting?' deleting':'')+(isSyncPending?' sync-pending':'');
         card.dataset.fmt=fmtVariant;
         card.dataset.format=rawFmt;
         if(isReading) card.dataset.reading='true'; else delete card.dataset.reading;
@@ -940,12 +960,14 @@ function render(){
         card.dataset._fp=fp;
         if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
         else { card.style.pointerEvents=''; card.style.opacity=''; }
+      } else {
+        card.classList.toggle('sync-pending', isSyncPending);
       }
     } else {
       card=document.createElement('div');
       const rawFmt=(e.format||'').toLowerCase();
       const fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
-      card.className='card'+(e._deleting?' deleting':'');
+      card.className='card'+(e._deleting?' deleting':'')+(isSyncPending?' sync-pending':'');
       card.dataset.txid=key;
       card.dataset.fmt=fmtVariant;
       card.dataset.format=rawFmt;
@@ -1598,6 +1620,9 @@ function clearHeroCover(){
 }
 
 // --- Year navigation ---
+// Year switching: no skeleton needed — entries are already in memory so render()
+// executes synchronously. Loading is never perceptible. (#94 spec: "if loading is
+// perceptible" qualifier applies; View Transition API handles the visual crossfade.)
 function navigateYear(year){
   selectedYear = year;
   startViewTransition(()=> render());

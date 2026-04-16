@@ -749,17 +749,69 @@ button.secondary:hover, .btn.secondary:hover{
 }
 .omnibox-skeleton-cover{
   width:36px;height:54px;border-radius:4px;
-  background:var(--color-bg-surface);
-  animation:pulse-opacity 1.5s ease-in-out infinite;
+  background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);
+  background-size:200% 100%;
+  animation:shimmer 1.5s ease-in-out infinite;
 }
 .omnibox-skeleton-text{flex:1;display:flex;flex-direction:column;gap:6px}
 .omnibox-skeleton-line{
   height:10px;border-radius:4px;
-  background:var(--color-bg-surface);
-  animation:pulse-opacity 1.5s ease-in-out infinite;
+  background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);
+  background-size:200% 100%;
+  animation:shimmer 1.5s ease-in-out infinite;
 }
 .omnibox-skeleton-line:first-child{width:70%}
 .omnibox-skeleton-line:last-child{width:45%}
+
+/* ── Skeleton card placeholders (initial load / year switch) ── */
+.card-skeleton{
+  position:relative;
+  background:var(--color-bg-surface);
+  border:1px solid var(--color-border-subtle);
+  border-radius:12px;
+  display:flex;
+  gap:12px;
+  padding:12px;
+  pointer-events:none;
+  overflow:hidden;
+}
+.card-skeleton .skel-cover{
+  width:72px;
+  flex:0 0 72px;
+  border-radius:8px;
+  background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);
+  background-size:200% 100%;
+  animation:shimmer 1.5s ease-in-out infinite;
+  min-height:100px;
+}
+.card-skeleton .skel-meta{flex:1;display:flex;flex-direction:column;gap:8px;padding:4px 0}
+.card-skeleton .skel-line{
+  border-radius:4px;
+  background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);
+  background-size:200% 100%;
+  animation:shimmer 1.5s ease-in-out infinite;
+}
+.card-skeleton .skel-title{height:14px;width:75%}
+.card-skeleton .skel-author{height:11px;width:50%;animation-delay:.1s}
+.card-skeleton .skel-detail{height:9px;width:35%;animation-delay:.2s}
+/* Stagger skeletons for organic feel */
+.card-skeleton:nth-child(2) .skel-line{animation-delay:.15s}
+.card-skeleton:nth-child(2) .skel-author{animation-delay:.25s}
+.card-skeleton:nth-child(3) .skel-line{animation-delay:.3s}
+.card-skeleton:nth-child(3) .skel-author{animation-delay:.4s}
+
+/* Sync-pending shimmer overlay on real cards */
+.card.sync-pending::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  border-radius:12px;
+  background:linear-gradient(90deg,transparent 0%,rgba(59,130,246,.06) 50%,transparent 100%);
+  background-size:200% 100%;
+  animation:shimmer 2s ease-in-out infinite;
+  pointer-events:none;
+  z-index:2;
+}
 
 /* ── Year header — plain text, clickable ── */
 .year-header{
@@ -1509,6 +1561,8 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
     padding:14px;
     border-radius:12px;
   }
+  .card-skeleton{flex-direction:column;gap:10px;padding:14px}
+  .card-skeleton .skel-cover{width:100%;flex:0 0 auto;height:0;padding-top:150%;border-radius:12px;min-height:0}
   .cover{width:100%;flex:0 0 auto;height:0;padding-top:150%;position:relative;border-radius:12px}
   /* Blur-fill background for grid covers */
   .cover::before{inset:-15px;filter:blur(15px) brightness(0.65)}
@@ -1556,6 +1610,8 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 @media (min-width:600px){
   .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:22px;margin-top:16px}
   .card{flex-direction:column;gap:10px;padding:14px}
+  .card-skeleton{flex-direction:column;gap:10px;padding:14px}
+  .card-skeleton .skel-cover{width:100%;flex:0 0 auto;height:0;padding-top:150%;border-radius:12px;min-height:0}
   .cover{width:100%;flex:0 0 auto;height:0;padding-top:150%;position:relative;border-radius:12px}
   .cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;z-index:1}
   .cover img[data-fit="cover"]{object-fit:cover}
@@ -1636,7 +1692,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .tile-cover:hover .cover-remove-btn[style*="inline"]{opacity:1}
 .cover-remove-btn:hover{background:rgba(239,68,68,.8)!important}
 .placeholder-loading{font-size:.6rem;opacity:.4;animation:pulse-opacity 1.5s ease-in-out infinite}
-.cover-skeleton-pulse{background:linear-gradient(135deg,#1a1f25 0%,#252d35 50%,#1a1f25 100%);background-size:200% 200%;animation:pulse-opacity 1.5s ease-in-out infinite}
+.cover-skeleton-pulse{background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite}
 @keyframes pulse-opacity{0%,100%{opacity:.3}50%{opacity:.7}}
 .modal-inner .fields-cluster{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
 .modal-inner .field-block{display:flex;flex-direction:column;gap:4px}
