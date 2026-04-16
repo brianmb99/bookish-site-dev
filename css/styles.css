@@ -250,7 +250,7 @@ button.secondary:hover, .btn.secondary:hover{
 .account-link:hover{
   color:var(--color-text-primary)!important;
 }
-.cards{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+.cards{display:flex;flex-direction:column;gap:14px;margin-top:8px;position:relative}
 .card{
   position:relative;
   background:var(--color-bg-surface);
@@ -280,6 +280,17 @@ button.secondary:hover, .btn.secondary:hover{
     opacity:1;
     transform:translateY(0);
   }
+}
+@keyframes card-exit{
+  to{
+    opacity:0;
+    transform:scale(0.95);
+  }
+}
+.card.card-exiting{
+  animation:card-exit .3s ease-in forwards;
+  pointer-events:none;
+  z-index:0;
 }
 .card:hover{
   transform:translateY(-2px);

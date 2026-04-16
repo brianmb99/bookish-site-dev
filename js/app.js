@@ -756,6 +756,24 @@ function entryFingerprint(e){
   return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.notes||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e.onArweave?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'')+'\t'+(e.owned?'1':'0')+'\t'+(e.tags||'')+'\t'+(e._showYearBadge?'1':'0');
 }
 
+function animateCardExit(el){
+  if(el.classList.contains('card-exiting')) return;
+  const parent = el.parentElement;
+  if(!parent){ el.remove(); return; }
+  const rect = el.getBoundingClientRect();
+  const parentRect = parent.getBoundingClientRect();
+  el.style.position = 'absolute';
+  el.style.top = (rect.top - parentRect.top) + 'px';
+  el.style.left = (rect.left - parentRect.left) + 'px';
+  el.style.width = rect.width + 'px';
+  el.style.height = rect.height + 'px';
+  el.style.opacity = '';
+  el.style.margin = '0';
+  el.classList.add('card-exiting');
+  el.addEventListener('animationend', () => el.remove(), { once: true });
+  setTimeout(() => { if(el.parentNode) el.remove(); }, 400);
+}
+
 function render(){
   const visible = entries.filter(e => e.status !== 'tombstoned');
 
@@ -891,7 +909,7 @@ function render(){
 
   const existingMap = new Map();
   for(const el of [...cardsEl.children]){
-    if(el.dataset && el.dataset.txid) existingMap.set(el.dataset.txid, el);
+    if(el.dataset && el.dataset.txid && !el.classList.contains('card-exiting')) existingMap.set(el.dataset.txid, el);
   }
 
   const desiredKeys = new Set();
@@ -944,7 +962,7 @@ function render(){
   }
 
   for(const [key, el] of existingMap){
-    if(!desiredKeys.has(key)) el.remove();
+    if(!desiredKeys.has(key)) animateCardExit(el);
   }
 
   for(let i=0; i<orderedCards.length; i++){
