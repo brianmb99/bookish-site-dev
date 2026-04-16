@@ -10,6 +10,7 @@ import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch 
 import { stripNoise } from './core/search_core.js';
 import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
 import { haptic } from './core/haptic.js';
+import { attachSwipeDismiss } from './core/swipe_dismiss.js';
 
 // --- Version logging (always visible in console) ---
 {
@@ -352,6 +353,10 @@ function openModal(entry, forceIntent){
     const handle = document.createElement('div');
     handle.className = 'sheet-handle';
     inner.insertBefore(handle, inner.firstChild);
+    // Attach swipe-to-dismiss once the handle exists (#87)
+    // Call _finalizeCloseModal directly — the swipe already animated the sheet off-screen,
+    // so we skip closeModal's CSS dismiss animation to avoid a double-slide.
+    resetModalSwipe = attachSwipeDismiss({ sheet: inner, handles: [handle], onDismiss: () => { _finalizeCloseModal(false); clearHeroCover(); } });
   }
   if(inner){ if(!entry) inner.classList.add('add-mode'); else inner.classList.remove('add-mode'); }
   const inputs=[...form.querySelectorAll('input,select,textarea')];
@@ -459,6 +464,7 @@ function applyIntentUI(intent){
 }
 
 function _finalizeCloseModal(fromPopstate){
+  if(resetModalSwipe) resetModalSwipe();
   modal.classList.remove('active');
   document.body.classList.remove('modal-open');
   const inner=modal.querySelector('.modal-inner');
@@ -974,6 +980,7 @@ function openWtrDrawer(){
   pushOverlayState('wtr');
 }
 function closeWtrDrawer(fromPopstate = false){
+  if(resetWtrSwipe) resetWtrSwipe();
   if(wtrOverlay) wtrOverlay.style.display = 'none';
   document.body.classList.remove('modal-open');
   if(!fromPopstate) popOverlayState();
@@ -1177,6 +1184,18 @@ wtrClose?.addEventListener('click', closeWtrDrawer);
 wtrAddBtn?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
 wtrFooterAdd?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
 document.getElementById('shelfEmptyBrowse')?.addEventListener('click', openWtrDrawer);
+
+// --- Swipe-to-dismiss on bottom sheets (#87) ---
+let resetWtrSwipe = null;
+let resetModalSwipe = null;
+if (isTouchDevice && wtrDrawer) {
+  const wtrHandle = wtrDrawer.querySelector('.wtr-drawer-handle');
+  const wtrHeader = wtrDrawer.querySelector('.wtr-header');
+  const swipeHandles = [wtrHandle, wtrHeader].filter(Boolean);
+  if (swipeHandles.length) {
+    resetWtrSwipe = attachSwipeDismiss({ sheet: wtrDrawer, handles: swipeHandles, onDismiss: () => closeWtrDrawer() });
+  }
+}
 
 // --- Omnibox visibility helper (#80) ---
 // On desktop: show/hide the inline omnibox input normally.
