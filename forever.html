@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="view-transition" content="same-origin"/>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>Bookish — Export Your Books</title>
   <style>
@@ -51,6 +52,13 @@
     .nav-links a{color:#94a3b8;text-decoration:none;font-weight:500;transition:color .2s}
     .nav-links a:hover{color:#1e293b}
     .nav-links a.active{color:#1e293b}
+    /* Cross-document view transitions */
+    @view-transition{navigation:auto}
+    ::view-transition-old(root){animation:vt-fade-out .2s ease-out}
+    ::view-transition-new(root){animation:vt-fade-in .25s ease-in}
+    @keyframes vt-fade-out{from{opacity:1}to{opacity:0}}
+    @keyframes vt-fade-in{from{opacity:0}to{opacity:1}}
+    @media(prefers-reduced-motion:reduce){::view-transition-old(root),::view-transition-new(root){animation:none!important}}
   </style>
 </head>
 <body>

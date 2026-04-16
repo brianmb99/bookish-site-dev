@@ -979,6 +979,9 @@ button.secondary:hover, .btn.secondary:hover{
   .cards.year-fade-out,.cards.year-fade-in{transition:none}
 }
 
+/* Cross-document view transitions (static page navigation) */
+@view-transition{navigation:auto}
+
 /* View Transition API — year switching crossfade */
 ::view-transition-old(root){
   animation:vt-fade-out .2s ease-out;
