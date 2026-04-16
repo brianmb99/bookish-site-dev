@@ -961,11 +961,42 @@ button.secondary:hover, .btn.secondary:hover{
   .spine-btn{height:56px}
 }
 
-/* Year transition */
+/* Year transition (legacy fallback — kept for browsers without View Transition API) */
 .cards.year-fade-out{opacity:0;transition:opacity 150ms ease-out}
 .cards.year-fade-in{opacity:1;transition:opacity 150ms ease-in}
 @media(prefers-reduced-motion:reduce){
   .cards.year-fade-out,.cards.year-fade-in{transition:none}
+}
+
+/* View Transition API — year switching crossfade */
+::view-transition-old(root){
+  animation:vt-fade-out .2s ease-out;
+}
+::view-transition-new(root){
+  animation:vt-fade-in .25s ease-in;
+}
+@keyframes vt-fade-out{from{opacity:1}to{opacity:0}}
+@keyframes vt-fade-in{from{opacity:0}to{opacity:1}}
+
+/* View Transition API — hero cover image transition */
+::view-transition-old(book-cover),
+::view-transition-new(book-cover){
+  animation-duration:.3s;
+  animation-timing-function:cubic-bezier(.4,0,.2,1);
+}
+
+/* Suppress default crossfade on the hero element — let geometry animate */
+::view-transition-image-pair(book-cover){
+  isolation:auto;
+}
+
+/* Reduced motion: disable view transitions */
+@media(prefers-reduced-motion:reduce){
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*){
+    animation:none!important;
+  }
 }
 
 /* Year badge on search result cards */

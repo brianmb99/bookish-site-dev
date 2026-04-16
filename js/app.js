@@ -325,6 +325,22 @@ function formatDisplayDate(iso){ if(!iso) return ''; const d=new Date(iso+'T00:0
 function mapFormat(f){ const v=(f||'').toLowerCase(); if(v==='ebook') return 'ebook'; if(v==='audiobook'||v==='audio') return 'audio'; return 'print'; }
 
 // --- Modal helpers ---
+function openModalWithHero(entry, cardEl){
+  if(!document.startViewTransition || prefersReducedMotion()){
+    openModal(entry);
+    return;
+  }
+  // Old state: card cover has the transition name
+  setHeroCover(cardEl);
+  document.startViewTransition(()=>{
+    // New state: move transition name to modal cover
+    const cardCover = cardEl.querySelector('.cover');
+    if(cardCover) cardCover.style.viewTransitionName = '';
+    if(tileCoverClick) tileCoverClick.style.viewTransitionName = 'book-cover';
+    openModal(entry);
+  });
+}
+
 function openModal(entry, forceIntent){
   _formSubmitting = false;
   modal.classList.add('active');
@@ -461,14 +477,30 @@ function _finalizeCloseModal(fromPopstate){
 function closeModal(fromPopstate = false){
   if(!modal.classList.contains('active')) return;
   const inner = modal.querySelector('.modal-inner');
-  if(inner && window.matchMedia('(pointer: coarse)').matches && !inner.classList.contains('sheet-dismissing')){
+  const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+  if(inner && isCoarse && !inner.classList.contains('sheet-dismissing')){
     inner.classList.add('sheet-dismissing');
     inner.addEventListener('animationend', function handler(){
       inner.removeEventListener('animationend', handler);
       _finalizeCloseModal(fromPopstate);
+      clearHeroCover();
     });
   } else if(!inner || !inner.classList.contains('sheet-dismissing')){
-    _finalizeCloseModal(fromPopstate);
+    if(_heroSourceCard && document.startViewTransition && !prefersReducedMotion()){
+      // Old state: modal cover has the transition name
+      if(tileCoverClick) tileCoverClick.style.viewTransitionName = 'book-cover';
+      const cardEl = _heroSourceCard;
+      document.startViewTransition(()=>{
+        // New state: move transition name to card cover
+        if(tileCoverClick) tileCoverClick.style.viewTransitionName = '';
+        const cardCover = cardEl.querySelector('.cover');
+        if(cardCover) cardCover.style.viewTransitionName = 'book-cover';
+        _finalizeCloseModal(fromPopstate);
+      }).finished.then(()=> clearHeroCover()).catch(()=> clearHeroCover());
+    } else {
+      _finalizeCloseModal(fromPopstate);
+      clearHeroCover();
+    }
   }
 }
 function clearBooks(){ if(bookRepo) bookRepo.clear(); else { entries=[]; render(); } }
@@ -899,7 +931,7 @@ function render(){
       for(const n of path){
         if(n instanceof Element && n.classList?.contains('card-done-check')) return;
       }
-      openModal(e);
+      openModalWithHero(e, card);
     };
     orderedCards.push(card);
     }catch(err){ console.warn('[Bookish] Skipping corrupt entry', e.txid||e.id, err.message); }
@@ -1489,21 +1521,43 @@ headerSearchCancel?.addEventListener('click', ()=>{
   closeSearchTakeover();
 });
 
+// --- View Transition helpers ---
+function prefersReducedMotion(){
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function startViewTransition(callback){
+  if(!document.startViewTransition || prefersReducedMotion()){
+    callback();
+    return;
+  }
+  document.startViewTransition(callback);
+}
+
+// Track the card element whose cover is animating (hero transition)
+let _heroSourceCard = null;
+
+function setHeroCover(cardEl){
+  clearHeroCover();
+  if(!cardEl) return;
+  const coverEl = cardEl.querySelector('.cover');
+  if(coverEl) coverEl.style.viewTransitionName = 'book-cover';
+  _heroSourceCard = cardEl;
+}
+
+function clearHeroCover(){
+  if(_heroSourceCard){
+    const coverEl = _heroSourceCard.querySelector('.cover');
+    if(coverEl) coverEl.style.viewTransitionName = '';
+  }
+  _heroSourceCard = null;
+  if(tileCoverClick) tileCoverClick.style.viewTransitionName = '';
+}
+
 // --- Year navigation ---
 function navigateYear(year){
   selectedYear = year;
-  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(prefersReducedMotion){
-    render();
-    return;
-  }
-  cardsEl.classList.add('year-fade-out');
-  setTimeout(()=>{
-    render();
-    cardsEl.classList.remove('year-fade-out');
-    cardsEl.classList.add('year-fade-in');
-    setTimeout(()=> cardsEl.classList.remove('year-fade-in'), 150);
-  }, 150);
+  startViewTransition(()=> render());
 }
 
 // --- Spine panel toggle ---
