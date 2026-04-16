@@ -1584,7 +1584,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
     padding:16px 14px;
     max-width:100%;
     border-radius:16px 16px 0 0;
-    max-height:calc(100dvh - env(safe-area-inset-top, 0px) - 20px);
+    max-height:calc(100dvh - env(safe-area-inset-top, 0px));
     overflow-y:auto;
     animation:slideUpSheet .3s ease-out;
     padding-bottom:max(16px,env(safe-area-inset-bottom));
