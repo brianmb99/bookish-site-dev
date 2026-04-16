@@ -281,7 +281,7 @@ optFieldsZone?.addEventListener('click',e=>{
   updateDirty();
 });
 
-if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn,.upload-cover-btn,.find-covers-btn,.cover-nav-arrow')) return; coverFileInput.click(); }); }
+if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn,.cover-nav-arrow')) return; coverFileInput.click(); }); }
 if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); updateDirty(); }); }
 
 // --- Helpers ---
@@ -329,7 +329,8 @@ function mapFormat(f){ const v=(f||'').toLowerCase(); if(v==='ebook') return 'eb
 
 // --- Modal helpers ---
 function openModalWithHero(entry, cardEl){
-  if(!document.startViewTransition || prefersReducedMotion()){
+  const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+  if(!document.startViewTransition || prefersReducedMotion() || isCoarse){
     openModal(entry);
     return;
   }

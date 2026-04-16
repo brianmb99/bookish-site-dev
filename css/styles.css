@@ -34,6 +34,7 @@
   --color-spine-read:#3d3630;
   --color-spine-read-mid:#322c27;
 }
+html{background:var(--color-bg-deep)}
 body{
   font-family:var(--font-body);
   margin:0;
@@ -1497,20 +1498,6 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   font-size:.55rem;padding:2px 8px;border-radius:10px;z-index:4;
   pointer-events:none;white-space:nowrap;letter-spacing:.02em;
 }
-/* "Browse other covers" pill overlaid at top center of tile */
-.find-covers-btn{
-  position:absolute;top:8px;left:50%;transform:translateX(-50%);
-  background:rgba(0,0,0,.55)!important;border:none!important;
-  color:rgba(255,255,255,.85)!important;
-  font-size:.55rem!important;padding:3px 10px!important;
-  border-radius:10px;cursor:pointer;z-index:4;
-  min-height:auto!important;white-space:nowrap;
-  letter-spacing:.02em;
-  transition:background .15s,opacity .15s;opacity:.7;
-}
-.find-covers-btn:hover{background:rgba(0,0,0,.75)!important;opacity:1}
-.find-covers-btn:active{transform:translateX(-50%)!important}
-.find-covers-btn.loading{opacity:.5;cursor:default;animation:pulse-opacity 1.5s ease-in-out infinite}
 .cards .title{transition:font-size .2s}
 .cards .author{transition:font-size .2s}
 .cards .details{transition:font-size .2s}
@@ -1534,8 +1521,8 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   .wtr-header-btn{padding:6px!important}
   .cover-remove-btn{min-height:auto!important;padding:0!important}
   .cover-nav-arrow{min-height:auto!important;padding:0!important;width:28px!important;height:44px!important}
-  .upload-cover-btn{min-height:auto!important;padding:3px 10px!important}
-  .find-covers-btn{min-height:auto!important;padding:3px 10px!important}
+  .change-cover-link{min-height:auto!important;padding:2px 0!important}
+  .cover-action-btn{min-height:auto!important;padding:2px 0!important}
   .notes-expand-btn{min-height:auto;padding:0;width:32px;height:32px}
   .modal-close-btn{width:36px;height:36px;font-size:16px;min-height:auto;padding:0}
   .modal-inner .btn{
@@ -1543,7 +1530,8 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   }
   /* Compact modal form on mobile */
   .modal-inner .form-as-tile{gap:10px}
-  .modal-inner .tile-cover{width:35%;max-width:140px;min-height:120px}
+  .modal-inner .tile-cover-wrap{max-width:120px}
+  .modal-inner .tile-cover{min-height:100px}
   .modal-inner .fields-cluster{gap:10px}
   /* 16px minimum prevents iOS Safari auto-zoom on focus */
   input,select,textarea{font-size:16px!important}
@@ -1633,8 +1621,9 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .modal-inner.add-mode{border:2px solid #2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15);border-radius:16px}
 @media (pointer: coarse){.modal-inner.add-mode{border-radius:16px 16px 0 0}}
 .modal-inner form.inline{margin-top:0}
-.modal-inner .form-as-tile{display:flex;flex-direction:column;align-items:center;gap:16px}
-.modal-inner .tile-cover{width:45%;max-width:220px;aspect-ratio:2/3;min-height:180px;background:#101418;border:1px solid #2b333b;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
+.modal-inner .form-as-tile{display:flex;flex-direction:row;align-items:flex-start;gap:16px}
+.tile-cover-wrap{width:30%;min-width:120px;max-width:140px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.modal-inner .tile-cover{width:100%;aspect-ratio:2/3;min-height:140px;background:#101418;border:1px solid #2b333b;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
 /* Blur-fill background for modal tile cover */
 .modal-inner .tile-cover::before{
   content:'';
@@ -1655,19 +1644,28 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 /* Cover placeholder icon (SVG book + label) */
 .placeholder-icon{display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.7;color:var(--color-text-secondary)}
 .placeholder-icon span{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;font-weight:500}
-/* "Upload my own" pill — upper third band (same vertical line as nav arrows) */
-.upload-cover-btn{
-  position:absolute;top:33%;left:50%;transform:translate(-50%,-50%);
-  background:rgba(0,0,0,.55)!important;border:none!important;
-  color:rgba(255,255,255,.85)!important;
-  font-size:.55rem!important;padding:3px 10px!important;
-  border-radius:10px;cursor:pointer;z-index:4;
-  min-height:auto!important;white-space:nowrap;
+/* "Change cover" link below cover image */
+.change-cover-link{
+  background:none!important;border:none!important;
+  color:var(--color-primary)!important;
+  font-size:.65rem!important;padding:2px 0!important;
+  cursor:pointer;min-height:auto!important;
   letter-spacing:.02em;font-weight:500;
-  transition:background .15s,opacity .15s;opacity:.7;
+  transition:opacity .15s;opacity:.8;
 }
-.upload-cover-btn:hover{background:rgba(0,0,0,.75)!important;opacity:1}
-.upload-cover-btn:active{transform:translate(-50%,-50%)!important}
+.change-cover-link:hover{opacity:1}
+/* Cover action buttons (below cover, shown via toggle) */
+.cover-actions{flex-direction:column;align-items:center;gap:4px;width:100%}
+.cover-action-btn{
+  background:none!important;border:none!important;
+  color:var(--color-text-secondary)!important;
+  font-size:.6rem!important;padding:2px 0!important;
+  cursor:pointer;min-height:auto!important;
+  letter-spacing:.02em;
+  transition:color .15s;
+}
+.cover-action-btn:hover{color:var(--color-primary)!important}
+.cover-action-btn.loading{opacity:.5;cursor:default;animation:pulse-opacity 1.5s ease-in-out infinite}
 /* Cover remove button */
 .cover-remove-btn{
   position:absolute;
@@ -1694,7 +1692,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .placeholder-loading{font-size:.6rem;opacity:.4;animation:pulse-opacity 1.5s ease-in-out infinite}
 .cover-skeleton-pulse{background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite}
 @keyframes pulse-opacity{0%,100%{opacity:.3}50%{opacity:.7}}
-.modal-inner .fields-cluster{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
+.modal-inner .fields-cluster{flex:1;min-width:0;display:grid;grid-template-columns:1fr;gap:16px}
 .modal-inner .field-block{display:flex;flex-direction:column;gap:4px}
 .modal-inner .field-block label{font-size:.65rem;letter-spacing:.08em;opacity:.85;margin:0;text-transform:uppercase;font-weight:600}
 .modal-inner .field-block input,.modal-inner .field-block select{background:transparent;border:1px solid var(--color-border-subtle);padding:6px 8px;font-size:.75rem;border-radius:8px;transition:border-color .2s,background .2s}

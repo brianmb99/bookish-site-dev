@@ -10,6 +10,8 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
   const findCoversBtn=document.getElementById('findCoversBtn');
   const uploadCoverBtn=document.getElementById('uploadCoverBtn');
   const coverFileInput=document.getElementById('hiddenCoverInput');
+  const changeCoverLink=document.getElementById('changeCoverLink');
+  const coverActionsEl=document.getElementById('coverActions');
   // SVG book icon for cover placeholders (matches library card placeholder)
   const BOOK_SVG='<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
   function setCoverPlaceholder(ph,state){
@@ -27,9 +29,9 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
   let abortController=null;
   function markDirty(){ try{ form.dispatchEvent(new Event('input',{bubbles:true})); }catch{} }
   function showUI(isEdit){ ui.style.display=isEdit?'none':'block'; if(isEdit) clearSearchState(); }
-  function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; }
+  function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; if(changeCoverLink) changeCoverLink.style.display='none'; if(coverActionsEl) coverActionsEl.style.display='none'; }
   function hideCoverNav(){ prevBtn.style.display='none'; nextBtn.style.display='none'; editionInfo.style.display='none'; }
-  function clearSearchState(){ if(abortController){ abortController.abort(); abortController=null; } if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; } currentWork=null; currentAudio=null; editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null; olDocs=[]; itunesItems=[]; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; hideCoverNav(); if(uploadCoverBtn) uploadCoverBtn.style.display='none'; lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all'; }
+  function clearSearchState(){ if(abortController){ abortController.abort(); abortController=null; } if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; } currentWork=null; currentAudio=null; editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null; olDocs=[]; itunesItems=[]; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; hideCoverNav(); if(uploadCoverBtn) uploadCoverBtn.style.display='none'; if(changeCoverLink) changeCoverLink.style.display='none'; if(coverActionsEl) coverActionsEl.style.display='none'; lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all'; }
   function prepareQuery(q){ lastQuery=q.trim(); queryTokens=coreTokenize(lastQuery); }
   function showSkeletonCards(){
     resultsEl.innerHTML='<div class="search-status">Searching\u2026</div>'+
@@ -521,6 +523,12 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
   if(uploadCoverBtn && coverFileInput){
     uploadCoverBtn.addEventListener('click',(e)=>{ e.stopPropagation(); coverFileInput.click(); });
   }
+  if(changeCoverLink){
+    changeCoverLink.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      if(coverActionsEl) coverActionsEl.style.display=coverActionsEl.style.display==='flex'?'none':'flex';
+    });
+  }
 
   // Re-display cached results on focus (Fix 3: focus event re-displays search results)
   input.addEventListener('focus',()=>{
@@ -530,7 +538,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
   });
 
   window.bookSearch={
-    handleModalOpen(isEdit){ showUI(isEdit); hideCoverNav(); if(findCoversBtn) findCoversBtn.style.display='none'; if(uploadCoverBtn) uploadCoverBtn.style.display='block'; },
+    handleModalOpen(isEdit){ showUI(isEdit); hideCoverNav(); if(findCoversBtn) findCoversBtn.style.display='none'; if(uploadCoverBtn) uploadCoverBtn.style.display='block'; if(changeCoverLink) changeCoverLink.style.display='block'; if(coverActionsEl) coverActionsEl.style.display='none'; },
     showFindCoversBtn(hasCover){
       if(findCoversBtn){
         findCoversBtn.textContent=hasCover?'Browse other covers':'Browse covers';
