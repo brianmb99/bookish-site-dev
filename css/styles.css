@@ -1443,6 +1443,11 @@ form.inline label{
 }
 .row-actions{display:flex;gap:8px;margin-top:16px}
 .danger{background:var(--color-error)}
+/* Delete text-link style (de-emphasized destructive action) */
+.btn-delete-link{background:none!important;border:none!important;box-shadow:none!important;color:var(--color-error);font-size:.75rem;font-weight:500;padding:0;cursor:pointer;opacity:.7;transition:opacity .2s}
+.btn-delete-link:hover{opacity:1;background:none!important;box-shadow:none!important;transform:none}
+.btn-delete-link:active{transform:none}
+.delete-action{margin-top:16px;padding-top:12px;border-top:1px solid var(--color-border-subtle);text-align:center}
 .secondary{background:var(--color-bg-elevated);color:var(--color-text-secondary);border:1px solid var(--color-border-default)}
 #entryForm input[type=file]{padding:4px;font-size:.65rem}
 img.preview{max-width:100%;border-radius:8px;margin-top:8px}
@@ -1698,9 +1703,8 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .modal-inner .field-block input,.modal-inner .field-block select{background:transparent;border:1px solid var(--color-border-subtle);padding:6px 8px;font-size:.75rem;border-radius:8px;transition:border-color .2s,background .2s}
 .modal-inner .field-block input:focus,.modal-inner .field-block select:focus{outline:none;border-color:#2563eb;background:#192028}
 .modal-inner .field-block.readonly input:not(:focus){border-color:transparent;background:transparent;cursor:text}
-.modal-inner .primary-actions{margin-top:12px;display:flex;gap:10px}
+.modal-inner .primary-actions{margin-top:12px;display:flex;gap:10px;justify-content:flex-end}
 .modal-inner.add-mode .primary-actions{justify-content:center}
-.modal-inner .primary-actions #cancelBtn{margin-left:auto}
 .modal-inner .primary-actions .btn{padding:10px 18px;font-size:.8rem}
 /* Distinguish edit (existing entry) vs add */
 .modal-inner:not(.add-mode) .add-only{display:none}
@@ -1921,15 +1925,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 }
 
 /* Date picker enhancements */
-.date-input-wrap{display:flex;align-items:center;gap:6px;position:relative}
-.date-input-wrap input[type=date]{flex:1;min-width:0}
 .date-readonly input[type=date]{color:var(--color-text-muted);background:transparent;border-color:transparent;pointer-events:none}
-.date-readonly .cal-btn{display:none}
-/* Hide native date picker icon - we use custom .cal-btn */
-.date-input-wrap input[type=date]::-webkit-calendar-picker-indicator{display:none}
-.date-input-wrap input[type=date]::-webkit-inner-spin-button{display:none}
-.cal-btn{background:#2b333b;border:1px solid #374151;color:#cbd5e1;font-size:.7rem;padding:6px 8px;border-radius:6px;cursor:pointer;line-height:1}
-.cal-btn:hover{background:#343e48;border-color:#46525e}
 .date-picker{position:absolute;z-index:1000;background:#1e242b;border:1px solid #2b333b;border-radius:10px;padding:10px;width:220px;max-width:calc(100vw - 20px);box-shadow:0 6px 18px -4px rgba(0,0,0,.55);font-size:.65rem;display:none}
 .date-picker header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .date-picker header button{background:#2b333b;border:1px solid #374151;color:#cbd5e1;padding:2px 6px;font-size:.6rem;border-radius:4px;cursor:pointer}

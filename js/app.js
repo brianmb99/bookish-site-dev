@@ -423,7 +423,6 @@ function openModal(entry, forceIntent){
     tileCoverClick.style.setProperty('--cover-url',`url('${coverDataUrl}')`);
     showCoverLoaded();
   } else { clearCoverPreview(); }
-  if(deleteBtn) deleteBtn.style.display=entry?'inline-flex':'none';
   if(cancelBtn) cancelBtn.style.display='inline-flex';
 
   // Reading status: unified selector for both add and edit mode

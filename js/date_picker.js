@@ -1,13 +1,12 @@
-// Date picker polyfill & helper extracted
+// Date picker polyfill for browsers without native date input support
 (function(){
   const input = document.querySelector('input[name=dateRead]');
-  const btn = document.getElementById('openCalendarBtn');
-  if(!input || !btn) return;
+  if(!input) return;
   const test = document.createElement('input'); test.type='date'; const native = (test.type === 'date');
-  function focusNative(){ input.showPicker ? input.showPicker() : input.focus(); }
-  btn.addEventListener('click', e => { if(native){ focusNative(); } else { togglePicker(); } });
   if(native){ return; }
+  // Non-native: open custom picker on input click
   let picker; let visible=false; let current=new Date();
+  input.addEventListener('click', e => { togglePicker(); });
   function build(){
     if(!picker){ picker = document.createElement('div'); picker.id='datePicker'; picker.className='date-picker'; document.body.appendChild(picker); }
     const year=current.getFullYear(); const month=current.getMonth();
@@ -38,5 +37,5 @@
   function show(){ build(); picker.style.display='block'; visible=true; document.addEventListener('mousedown', outside); }
   function hide(){ if(picker){ picker.style.display='none'; } visible=false; document.removeEventListener('mousedown', outside); }
   function togglePicker(){ visible?hide():show(); }
-  function outside(ev){ if(!picker.contains(ev.target) && ev.target!==input && ev.target!==btn) hide(); }
+  function outside(ev){ if(!picker.contains(ev.target) && ev.target!==input) hide(); }
 })();

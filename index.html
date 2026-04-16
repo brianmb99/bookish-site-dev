@@ -147,7 +147,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.125</div>
+  <div class="footer-meta">Alpha &bull; v0.2.126</div>
 </footer>
 </div>
 
@@ -200,7 +200,7 @@
           <div class="field-block"><label>Title</label><input name="title" required placeholder="Title"></div>
           <div class="field-block"><label>Author</label><input name="author" required placeholder="Author"></div>
           <div class="field-block"><label>Format</label><select name="format"><option value="print">Print</option><option value="ebook">Ebook</option><option value="audio">Audio</option></select></div>
-          <div class="field-block"><label>Date Read</label><div class="date-input-wrap"><input name="dateRead" type="date"><button type="button" class="cal-btn" id="openCalendarBtn" title="Pick date">📅</button></div></div>
+          <div class="field-block"><label>Date Read</label><input name="dateRead" type="date"></div>
         </div>
       </div>
       <div class="optional-fields-zone" id="optionalFieldsZone">
@@ -239,9 +239,11 @@
       </div>
       <input type="hidden" name="priorTxid"/>
       <div class="row-actions primary-actions">
-        <button type="button" class="btn danger edit-only" id="deleteBtn" title="Delete book">Delete</button>
         <button type="button" class="btn secondary" id="cancelBtn">Cancel</button>
         <button type="submit" class="btn" id="saveBtn" disabled>Save</button>
+      </div>
+      <div class="delete-action edit-only">
+        <button type="button" class="btn-delete-link" id="deleteBtn">Delete this book</button>
       </div>
     </form>
   </div>
