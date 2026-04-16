@@ -324,6 +324,13 @@ function openModal(entry, forceIntent){
   modal.classList.add('active');
   document.body.classList.add('modal-open');
   const inner = modal.querySelector('.modal-inner');
+  if(inner){ inner.classList.remove('sheet-dismissing'); }
+  // Add sheet handle bar on touch devices (for bottom sheet UX)
+  if(inner && window.matchMedia('(pointer: coarse)').matches && !inner.querySelector('.sheet-handle')){
+    const handle = document.createElement('div');
+    handle.className = 'sheet-handle';
+    inner.insertBefore(handle, inner.firstChild);
+  }
   if(inner){ if(!entry) inner.classList.add('add-mode'); else inner.classList.remove('add-mode'); }
   const inputs=[...form.querySelectorAll('input,select,textarea')];
   inputs.forEach(i=>{ if(i.name==='priorTxid') return; i.disabled=false; });
@@ -429,17 +436,34 @@ function applyIntentUI(intent){
   }
 }
 
-function closeModal(fromPopstate = false){ modal.classList.remove('active'); document.body.classList.remove('modal-open'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(statusSelector) statusSelector.style.display='none';
+function _finalizeCloseModal(fromPopstate){
+  modal.classList.remove('active');
+  document.body.classList.remove('modal-open');
+  const inner=modal.querySelector('.modal-inner');
+  if(inner){ inner.classList.remove('add-mode'); inner.classList.remove('sheet-dismissing'); }
+  form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(statusSelector) statusSelector.style.display='none';
   const dateBlock = form.dateRead?.closest('.field-block');
   if(dateBlock){ dateBlock.style.display=''; dateBlock.classList.remove('date-readonly'); }
   if(form.dateRead) form.dateRead.readOnly=false;
   const dateLabel = dateBlock?.querySelector('label');
   if(dateLabel) dateLabel.textContent='Completed';
   if(window.bookSearch) window.bookSearch.handleModalOpen(true);
-  // Ensure omnibox is clean after modal dismiss (Fix 4)
   if(omniboxInput && omniboxInput.value){ clearOmnibox(); }
   closeOmniboxDropdown();
   if(!fromPopstate) popOverlayState();
+}
+function closeModal(fromPopstate = false){
+  if(!modal.classList.contains('active')) return;
+  const inner = modal.querySelector('.modal-inner');
+  if(inner && window.matchMedia('(pointer: coarse)').matches && !inner.classList.contains('sheet-dismissing')){
+    inner.classList.add('sheet-dismissing');
+    inner.addEventListener('animationend', function handler(){
+      inner.removeEventListener('animationend', handler);
+      _finalizeCloseModal(fromPopstate);
+    });
+  } else if(!inner || !inner.classList.contains('sheet-dismissing')){
+    _finalizeCloseModal(fromPopstate);
+  }
 }
 function clearBooks(){ if(bookRepo) bookRepo.clear(); else { entries=[]; render(); } }
 window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus };

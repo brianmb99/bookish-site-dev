@@ -1198,6 +1198,8 @@ form.inline label{
     transform:scale(1) translateY(0);
   }
 }
+@keyframes slideUpSheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes slideDownSheet{from{transform:translateY(0)}to{transform:translateY(100%)}}
 .modal-close-btn{
   position:absolute;
   top:12px;
@@ -1325,15 +1327,6 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   .find-covers-btn{min-height:auto!important;padding:3px 10px!important}
   .notes-expand-btn{min-height:auto;padding:0;width:32px;height:32px}
   .modal-close-btn{width:36px;height:36px;font-size:16px;min-height:auto;padding:0}
-  /* Mobile modal: anchor to top so tall content scrolls naturally */
-  .modal{align-items:flex-start;padding:max(12px,env(safe-area-inset-top)) 8px max(24px,env(safe-area-inset-bottom))}
-  .modal-inner{
-    padding:16px 14px;
-    border-radius:16px;
-    max-height:calc(100vh - 36px);
-    max-height:calc(100dvh - 36px);
-    overflow-y:auto;
-  }
   .modal-inner .btn{
     width:100%;
   }
@@ -1371,6 +1364,31 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   .title{font-size:1rem}
   .author{font-size:.85rem}
 }
+/* Mobile modal: bottom sheet anchored to bottom (touch devices) */
+@media (pointer: coarse){
+  .modal{align-items:flex-end;padding:0}
+  .modal-inner{
+    padding:16px 14px;
+    max-width:100%;
+    border-radius:16px 16px 0 0;
+    max-height:calc(100dvh - env(safe-area-inset-top, 0px) - 20px);
+    overflow-y:auto;
+    animation:slideUpSheet .3s ease-out;
+    padding-bottom:max(16px,env(safe-area-inset-bottom));
+  }
+  .modal-inner.sheet-dismissing{
+    animation:slideDownSheet .25s ease-in forwards;
+  }
+  .sheet-handle{
+    display:block;
+    width:32px;
+    height:4px;
+    border-radius:2px;
+    background:var(--color-border-strong);
+    margin:0 auto 12px;
+    flex-shrink:0;
+  }
+}
 @media (min-width:600px){
   .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:22px;margin-top:16px}
   .card{flex-direction:column;gap:10px;padding:14px}
@@ -1393,7 +1411,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 }
 /* Tile layout for book modal (shared by add & edit) */
 .modal-inner.add-mode{border:2px solid #2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15);border-radius:16px}
-@media (max-width:599px){.modal-inner.add-mode{border-radius:16px}}
+@media (pointer: coarse){.modal-inner.add-mode{border-radius:16px 16px 0 0}}
 .modal-inner form.inline{margin-top:0}
 .modal-inner .form-as-tile{display:flex;flex-direction:column;align-items:center;gap:16px}
 .modal-inner .tile-cover{width:45%;max-width:220px;aspect-ratio:2/3;min-height:180px;background:#101418;border:1px solid #2b333b;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
