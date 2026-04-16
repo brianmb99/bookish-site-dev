@@ -1547,6 +1547,11 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
     margin:0 auto 12px;
     flex-shrink:0;
   }
+  /* Keyboard-open state: smooth max-height transition (#93) */
+  .modal-inner.keyboard-open{
+    transition:max-height .2s ease-out;
+    padding-bottom:8px;
+  }
 }
 @media (min-width:600px){
   .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:22px;margin-top:16px}
