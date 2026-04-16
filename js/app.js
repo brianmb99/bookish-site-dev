@@ -112,7 +112,7 @@ function showStatusToast(msg) {
   toast.id = 'bookishStatusToast';
   toast.className = 'toast status-toast';
   toast.innerHTML = `<span class="toast-message">${escapeHtml(msg)}</span>`;
-  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9001;';
+  toast.style.cssText = 'position:fixed;top:calc(var(--header-height) + env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:9001;';
   document.body.appendChild(toast);
   setTimeout(() => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 300); }, 2000);
 }
@@ -128,7 +128,7 @@ function showMarkAsReadToastWithUndo(key, snapshot) {
   toast.className = 'toast status-toast status-toast-with-action';
   toast.setAttribute('role', 'status');
   toast.innerHTML = `<span class="toast-message">Marked as read</span><button type="button" class="toast-undo-btn">Undo</button>`;
-  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9001;';
+  toast.style.cssText = 'position:fixed;top:calc(var(--header-height) + env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:9001;';
   document.body.appendChild(toast);
 
   let cleared = false;
