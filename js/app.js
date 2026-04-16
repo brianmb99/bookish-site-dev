@@ -8,6 +8,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
 import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
 import { stripNoise } from './core/search_core.js';
+import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
 
 // --- Version logging (always visible in console) ---
 {
@@ -368,6 +369,7 @@ function openModal(entry, forceIntent){
     const hasCover=!!(entry.coverImage);
     window.bookSearch.showFindCoversBtn(hasCover);
   }
+  pushOverlayState('modal');
   setTimeout(()=>{ if(notesInput){ notesInput.style.height='auto'; notesInput.style.height=Math.max(60,notesInput.scrollHeight)+'px'; }}, 0);
 }
 
@@ -425,7 +427,7 @@ function applyIntentUI(intent){
   }
 }
 
-function closeModal(){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(statusSelector) statusSelector.style.display='none';
+function closeModal(fromPopstate = false){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(statusSelector) statusSelector.style.display='none';
   const dateBlock = form.dateRead?.closest('.field-block');
   if(dateBlock){ dateBlock.style.display=''; dateBlock.classList.remove('date-readonly'); }
   if(form.dateRead) form.dateRead.readOnly=false;
@@ -435,6 +437,7 @@ function closeModal(){ modal.classList.remove('active'); const inner=modal.query
   // Ensure omnibox is clean after modal dismiss (Fix 4)
   if(omniboxInput && omniboxInput.value){ clearOmnibox(); }
   closeOmniboxDropdown();
+  if(!fromPopstate) popOverlayState();
 }
 function clearBooks(){ if(bookRepo) bookRepo.clear(); else { entries=[]; render(); } }
 window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus };
@@ -495,6 +498,7 @@ document.addEventListener('keydown', (ev)=>{
 // Account UI handles all updates via account_ui.js
 // Import modal functions from account_ui.js
 let openAccountModal;
+let closeAccountModalFn;
 (async function setupAccountButton() {
   try {
     // Wait for DOM to be ready if needed
@@ -508,6 +512,7 @@ let openAccountModal;
       return;
     }
     openAccountModal = accountUI.openAccountModal;
+    closeAccountModalFn = accountUI.closeAccountModal;
 
     // Get button reference (may not exist at module load time)
     const btn = document.getElementById('accountBtn');
@@ -545,6 +550,25 @@ let openAccountModal;
 })();
 
 // No settings UI anymore; defaults used
+
+// --- Popstate handler for standalone PWA back-button overlay dismissal (#81) ---
+window.addEventListener('popstate', () => {
+  if (!isStandalone) return;
+  if (consumeSuppressFlag()) return;
+  // Close topmost visible overlay (notes > modal > account > wtr)
+  if (notesOverlay && notesOverlay.style.display === 'flex') {
+    closeNotesOverlay(true);
+  } else if (modal && modal.classList.contains('active')) {
+    closeModal(true);
+  } else {
+    const accountModal = document.getElementById('accountModal');
+    if (accountModal && accountModal.style.display === 'flex') {
+      if (closeAccountModalFn) closeAccountModalFn(true);
+    } else if (wtrOverlay && wtrOverlay.style.display === 'block') {
+      closeWtrDrawer(true);
+    }
+  }
+});
 
 // --- Phase 2: First-run experience functions ---
 export function showCelebrationToast(){
@@ -879,9 +903,11 @@ function openWtrDrawer(){
   sortWtrList(wantList);
   renderWtrDrawer(wantList);
   if(wtrOverlay) wtrOverlay.style.display = 'block';
+  pushOverlayState('wtr');
 }
-function closeWtrDrawer(){
+function closeWtrDrawer(fromPopstate = false){
   if(wtrOverlay) wtrOverlay.style.display = 'none';
+  if(!fromPopstate) popOverlayState();
 }
 function renderWtrDrawer(wantList){
   if(!wtrListEl) return;
@@ -1814,14 +1840,16 @@ function openNotesOverlay(){
   notesOverlayInput.value = notesInput?.value || '';
   notesOverlay.style.display = 'flex';
   if(notesOverlayCount) notesOverlayCount.textContent = notesOverlayInput.value.length;
+  pushOverlayState('notes');
   setTimeout(()=> notesOverlayInput.focus(), 50);
 }
-function closeNotesOverlay(){
+function closeNotesOverlay(fromPopstate = false){
   if(!notesOverlay) return;
   if(notesInput) notesInput.value = notesOverlayInput.value;
   notesOverlay.style.display = 'none';
   autoGrowNotes();
   updateDirty();
+  if(!fromPopstate) popOverlayState();
 }
 notesExpandBtn?.addEventListener('click', openNotesOverlay);
 notesOverlayClose?.addEventListener('click', closeNotesOverlay);
