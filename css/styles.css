@@ -2363,6 +2363,32 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 }
 
 /* ============================================================================
+   7a: Overscroll containment — keep scroll inside modals/overlays
+   ============================================================================ */
+.modal-inner,.wtr-drawer,.notes-overlay{overscroll-behavior:contain}
+body.modal-open{overscroll-behavior-y:contain}
+
+/* ============================================================================
+   7c: Touch press feedback — coarse pointer only
+   ============================================================================ */
+@media (pointer:coarse){
+  button:active,.btn:active{transform:scale(0.95);filter:brightness(0.9);transition:transform 50ms,filter 50ms}
+  .card:active{transform:scale(0.98);transition:transform 80ms}
+  button,.btn,.card,a{-webkit-tap-highlight-color:transparent}
+}
+
+/* ============================================================================
+   7d: Text selection control
+   ============================================================================ */
+@media (pointer:coarse){
+  header,.spine-panel,button,.btn,.status-selector,.card .meta,.card .title,.card .author{user-select:none;-webkit-user-select:none}
+  .notes-content,.modal-inner input,.modal-inner textarea{user-select:auto;-webkit-user-select:auto}
+}
+@media (pointer:fine){
+  button,.btn,.status-selector{user-select:none}
+}
+
+/* ============================================================================
    Mobile Bottom Sheet
    ============================================================================ */
 @media (max-width: 480px) {

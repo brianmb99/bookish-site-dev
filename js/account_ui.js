@@ -75,6 +75,7 @@ export async function openAccountModal(mode) {
   await renderAccountModalContent(content, mode);
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  document.body.classList.add('modal-open');
 
   const modalContent = modal.querySelector('.account-modal');
   if (modalContent) {
@@ -96,6 +97,7 @@ export function closeAccountModal(fromPopstate = false) {
   if (!modal) return;
   modal.style.display = 'none';
   document.body.style.overflow = '';
+  document.body.classList.remove('modal-open');
   if (!fromPopstate) popOverlayState();
 }
 

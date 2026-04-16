@@ -9,6 +9,7 @@ import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/b
 import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
 import { stripNoise } from './core/search_core.js';
 import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
+import { haptic } from './core/haptic.js';
 
 // --- Version logging (always visible in console) ---
 {
@@ -321,6 +322,7 @@ function mapFormat(f){ const v=(f||'').toLowerCase(); if(v==='ebook') return 'eb
 function openModal(entry, forceIntent){
   _formSubmitting = false;
   modal.classList.add('active');
+  document.body.classList.add('modal-open');
   const inner = modal.querySelector('.modal-inner');
   if(inner){ if(!entry) inner.classList.add('add-mode'); else inner.classList.remove('add-mode'); }
   const inputs=[...form.querySelectorAll('input,select,textarea')];
@@ -427,7 +429,7 @@ function applyIntentUI(intent){
   }
 }
 
-function closeModal(fromPopstate = false){ modal.classList.remove('active'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(statusSelector) statusSelector.style.display='none';
+function closeModal(fromPopstate = false){ modal.classList.remove('active'); document.body.classList.remove('modal-open'); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('add-mode'); form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(statusSelector) statusSelector.style.display='none';
   const dateBlock = form.dateRead?.closest('.field-block');
   if(dateBlock){ dateBlock.style.display=''; dateBlock.classList.remove('date-readonly'); }
   if(form.dateRead) form.dateRead.readOnly=false;
@@ -903,10 +905,12 @@ function openWtrDrawer(){
   sortWtrList(wantList);
   renderWtrDrawer(wantList);
   if(wtrOverlay) wtrOverlay.style.display = 'block';
+  document.body.classList.add('modal-open');
   pushOverlayState('wtr');
 }
 function closeWtrDrawer(fromPopstate = false){
   if(wtrOverlay) wtrOverlay.style.display = 'none';
+  document.body.classList.remove('modal-open');
   if(!fromPopstate) popOverlayState();
 }
 function renderWtrDrawer(wantList){
@@ -1098,7 +1102,7 @@ function renderWtrDrawer(wantList){
     items.forEach(item => {
       if (item.dataset.key) keys.push(item.dataset.key);
     });
-    if (keys.length > 1) bookRepo.reorderWtr(keys);
+    if (keys.length > 1) { haptic(); bookRepo.reorderWtr(keys); }
   }
 })();
 
@@ -1615,6 +1619,7 @@ document.addEventListener('keydown', (e)=>{
 statusSelector?.addEventListener('click', (ev)=>{
   const btn = ev.target.closest('.status-option');
   if(!btn) return;
+  haptic();
   setReadingStatus(btn.dataset.status);
   updateDirty();
 });
@@ -1668,13 +1673,14 @@ async function deleteServerless(priorTxid) {
 let _formSubmitting = false;
 form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) return; _formSubmitting=true; const priorTxid=form.priorTxid.value||undefined; const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ; const dateVal = form.dateRead.value; const payload={ title:form.title.value.trim(), author:form.author.value.trim(), format:form.format.value, dateRead:'', readingStatus:rsValue }; if(rsValue === READING_STATUS.READ){ payload.dateRead = dateVal; } else if(rsValue === READING_STATUS.READING){ payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now(); } if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; if(coverPreview.dataset.fit) payload.coverFit=coverPreview.dataset.fit; } else if(priorTxid){ payload.coverImage=''; payload.mimeType=''; } const notesVal=(notesInput?.value||'').trim(); if(notesVal) payload.notes=notesVal; const optVals=getOptionalFieldValues(); if(priorTxid){ payload.rating=optVals.rating||0; payload.owned=!!optVals.owned; payload.tags=optVals.tags||''; if(!notesVal) payload.notes=''; } else { if(optVals.rating) payload.rating=optVals.rating; if(optVals.owned) payload.owned=optVals.owned; if(optVals.tags) payload.tags=optVals.tags; } uiStatusManager.refresh();
   const toastMsg = rsValue === READING_STATUS.WANT_TO_READ ? 'Added to Want to Read' : rsValue === READING_STATUS.READING ? 'Added to Currently Reading' : (!priorTxid ? 'Added to Shelf' : null);
+  haptic();
   if(priorTxid){
   closeModal();
   editServerless(priorTxid,payload).catch(()=> { appError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); });
 } else { closeModal(); createServerless(payload).then(()=>{ if(toastMsg) showStatusToast(toastMsg); }).catch(()=> { appError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); }); }
 });
 
-deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value; if(!txid) return; closeModal(); await deleteServerless(txid); });
+deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value; if(!txid) return; haptic(); closeModal(); await deleteServerless(txid); });
 
 // header refresh removed; app auto-syncs
 
@@ -1839,6 +1845,7 @@ function openNotesOverlay(){
   if(!notesOverlay) return;
   notesOverlayInput.value = notesInput?.value || '';
   notesOverlay.style.display = 'flex';
+  document.body.classList.add('modal-open');
   if(notesOverlayCount) notesOverlayCount.textContent = notesOverlayInput.value.length;
   pushOverlayState('notes');
   setTimeout(()=> notesOverlayInput.focus(), 50);
@@ -1847,6 +1854,7 @@ function closeNotesOverlay(fromPopstate = false){
   if(!notesOverlay) return;
   if(notesInput) notesInput.value = notesOverlayInput.value;
   notesOverlay.style.display = 'none';
+  document.body.classList.remove('modal-open');
   autoGrowNotes();
   updateDirty();
   if(!fromPopstate) popOverlayState();
