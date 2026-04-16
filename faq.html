@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <title>FAQ — Bookish</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="description" content="Frequently asked questions about Bookish — pricing, privacy, permanent storage, and more."/>
   <meta name="theme-color" content="#2563eb"/>
   <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-192.png"/>
@@ -56,7 +56,7 @@
     .page {
       max-width: 720px;
       margin: 0 auto;
-      padding: 48px 24px 64px;
+      padding: max(48px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(64px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
     }
 
     /* === Shared nav === */
@@ -189,7 +189,7 @@
     /* Responsive */
     @media (min-width: 600px) {
       .page {
-        padding: 64px 32px 80px;
+        padding: max(64px, env(safe-area-inset-top)) max(32px, env(safe-area-inset-right)) max(80px, env(safe-area-inset-bottom)) max(32px, env(safe-area-inset-left));
       }
 
       .page-header h1 {
