@@ -147,7 +147,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.124</div>
+  <div class="footer-meta">Alpha &bull; v0.2.125</div>
 </footer>
 </div>
 
@@ -204,11 +204,14 @@
         </div>
       </div>
       <div class="optional-fields-zone" id="optionalFieldsZone">
-        <div class="field-chips" id="fieldChips">
-          <button type="button" class="field-chip" data-field="notes">+ Notes</button>
-          <button type="button" class="field-chip" data-field="rating">+ Rating</button>
-          <button type="button" class="field-chip" data-field="owned">+ Owned</button>
-          <button type="button" class="field-chip" data-field="tags">+ Tags</button>
+        <div class="add-detail-wrap" id="addDetailWrap">
+          <button type="button" class="add-detail-btn" id="addDetailBtn">+ Add detail</button>
+          <div class="add-detail-menu" id="addDetailMenu" style="display:none">
+            <button type="button" class="add-detail-option" data-field="notes">Notes</button>
+            <button type="button" class="add-detail-option" data-field="rating">Rating</button>
+            <button type="button" class="add-detail-option" data-field="owned">Owned</button>
+            <button type="button" class="add-detail-option" data-field="tags">Tags</button>
+          </div>
         </div>
         <div class="optional-field" data-field="rating" style="display:none">
           <div class="optional-field-header"><label>Rating</label><button type="button" class="field-deactivate" data-field="rating" title="Remove rating field" aria-label="Remove rating field">&times;</button></div>

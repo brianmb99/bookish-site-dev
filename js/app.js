@@ -56,14 +56,15 @@ const nudgeDismissBtn = document.getElementById('nudgeDismissBtn');
 const nudgeCreateAccountBtn = document.getElementById('nudgeCreateAccountBtn');
 // --- Optional fields (Tap to Track) ---
 const optFieldsZone = document.getElementById('optionalFieldsZone');
-const fieldChipsEl = document.getElementById('fieldChips');
+const addDetailWrap = document.getElementById('addDetailWrap');
+const addDetailBtn = document.getElementById('addDetailBtn');
+const addDetailMenu = document.getElementById('addDetailMenu');
 const starRatingEl = document.getElementById('starRating');
 const ratingInput = document.getElementById('ratingInput');
 const ownedToggle = document.getElementById('ownedToggle');
 const ownedLabel = document.getElementById('ownedLabel');
 const tagsInputEl = document.getElementById('tagsInput');
 const tagsPillsEl = document.getElementById('tagsPills');
-const OPT_FIELDS_KEY = 'bookish_active_fields';
 const OPTIONAL_FIELDS = ['notes','rating','owned','tags'];
 
 // --- Reading status (constants imported from book_repository.js) ---
@@ -153,28 +154,43 @@ function showMarkAsReadToastWithUndo(key, snapshot) {
   });
 }
 
-function getActiveFields(){ try{ return JSON.parse(localStorage.getItem(OPT_FIELDS_KEY))||[]; }catch{ return []; } }
-function setActiveFields(list){ localStorage.setItem(OPT_FIELDS_KEY, JSON.stringify(list)); }
+function showOptionalField(name, show, animate){
+  const option=addDetailMenu?.querySelector(`.add-detail-option[data-field="${name}"]`);
+  const field=optFieldsZone?.querySelector(`.optional-field[data-field="${name}"]`);
+  if(option) option.style.display=show?'none':'block';
+  if(field){
+    field.style.display=show?'block':'none';
+    if(show && animate){
+      field.classList.add('field-reveal');
+      field.addEventListener('animationend',()=>{ field.classList.remove('field-reveal'); },{once:true});
+      const focusTarget=field.querySelector('input:not([type=hidden]):not([type=checkbox]),textarea');
+      if(focusTarget) setTimeout(()=>focusTarget.focus(),200);
+    }
+  }
+  updateAddDetailButton();
+}
 function activateField(name){
-  const list=getActiveFields(); if(!list.includes(name)) list.push(name); setActiveFields(list);
-  showOptionalField(name, true);
+  const field=optFieldsZone?.querySelector(`.optional-field[data-field="${name}"]`);
+  if(field && field.style.display!=='none') return;
+  showOptionalField(name, true, true);
 }
 function deactivateField(name){
-  const list=getActiveFields().filter(f=>f!==name); setActiveFields(list);
   showOptionalField(name, false);
 }
-function showOptionalField(name, show){
-  const chip=fieldChipsEl?.querySelector(`.field-chip[data-field="${name}"]`);
-  const field=optFieldsZone?.querySelector(`.optional-field[data-field="${name}"]`);
-  if(chip) chip.style.display=show?'none':'inline-flex';
-  if(field) field.style.display=show?'block':'none';
-}
 function initOptionalFields(entry){
-  const active=getActiveFields();
   OPTIONAL_FIELDS.forEach(name=>{
     const hasData = entry && ((name==='notes' && entry.notes) || (name==='rating' && entry.rating) || (name==='owned' && entry.owned) || (name==='tags' && entry.tags));
-    showOptionalField(name, active.includes(name)||!!hasData);
+    showOptionalField(name, !!hasData);
   });
+  closeAddDetailMenu();
+}
+function updateAddDetailButton(){
+  if(!addDetailMenu||!addDetailWrap) return;
+  const remaining=addDetailMenu.querySelectorAll('.add-detail-option:not([style*="display: none"])');
+  addDetailWrap.style.display=remaining.length?'':'none';
+}
+function closeAddDetailMenu(){
+  if(addDetailMenu) addDetailMenu.style.display='none';
 }
 function resetOptionalFields(){
   if(ratingInput){ ratingInput.value=''; updateStarDisplay(0); }
@@ -266,12 +282,24 @@ tagsInputEl?.addEventListener('blur',()=>{
   if(parts.length){ parts.forEach(t=>addTagPill(t)); tagsInputEl.value=''; activateField('tags'); updateDirty(); }
 });
 
-// Chip click → activate field
-fieldChipsEl?.addEventListener('click',e=>{
-  const chip=e.target.closest('.field-chip');
-  if(!chip) return;
-  activateField(chip.dataset.field);
+// Add detail popover toggle
+addDetailBtn?.addEventListener('click',()=>{
+  if(!addDetailMenu) return;
+  addDetailMenu.style.display=addDetailMenu.style.display==='none'?'block':'none';
+});
+// Add detail menu option click → activate field
+addDetailMenu?.addEventListener('click',e=>{
+  const opt=e.target.closest('.add-detail-option');
+  if(!opt) return;
+  activateField(opt.dataset.field);
+  closeAddDetailMenu();
   updateDirty();
+});
+// Close popover on outside click
+document.addEventListener('click',e=>{
+  if(addDetailMenu?.style.display!=='none' && !addDetailWrap?.contains(e.target)){
+    closeAddDetailMenu();
+  }
 });
 // Deactivate field
 optFieldsZone?.addEventListener('click',e=>{
