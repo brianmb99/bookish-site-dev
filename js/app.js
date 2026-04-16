@@ -88,6 +88,12 @@ const omniboxAddSection = document.getElementById('omniboxAddSection');
 const omniboxAddResults = document.getElementById('omniboxAddResults');
 const omniboxManualAdd = document.getElementById('omniboxManualAdd');
 let omniboxBackdrop = null; // created dynamically
+// Fixed header & mobile search takeover (#80)
+const mainHeader = document.getElementById('mainHeader');
+const headerSearchBtn = document.getElementById('headerSearchBtn');
+const headerSearchCancel = document.getElementById('headerSearchCancel');
+const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+let searchTakeoverActive = false;
 const yearHeader = document.getElementById('yearHeader');
 const yearLabelEl = document.getElementById('yearLabel');
 const spinePanel = document.getElementById('spinePanel');
@@ -581,8 +587,10 @@ let closeAccountModalFn;
 window.addEventListener('popstate', () => {
   if (!isStandalone) return;
   if (consumeSuppressFlag()) return;
-  // Close topmost visible overlay (notes > modal > account > wtr)
-  if (notesOverlay && notesOverlay.style.display === 'flex') {
+  // Close topmost visible overlay (search takeover > notes > modal > account > wtr)
+  if (searchTakeoverActive) {
+    closeSearchTakeover(true);
+  } else if (notesOverlay && notesOverlay.style.display === 'flex') {
     closeNotesOverlay(true);
   } else if (modal && modal.classList.contains('active')) {
     closeModal(true);
@@ -771,7 +779,8 @@ function render(){
     if(cardsEl.children.length > 0) cardsEl.replaceChildren();
     emptyEl.style.display='block';
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
-    if(omniboxWrap) omniboxWrap.style.display = 'none';
+    setOmniboxVisible(false);
+    if(headerSearchBtn) headerSearchBtn.style.display = 'none';
     if(yearHeader) yearHeader.style.display = 'none';
     closeSpinePanel();
     hideAccountNudge();
@@ -782,7 +791,7 @@ function render(){
     if(cardsEl.children.length > 0) cardsEl.replaceChildren();
     emptyEl.style.display='none';
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'block';
-    if(omniboxWrap) omniboxWrap.style.display = '';
+    setOmniboxVisible(true);
     if(yearHeader) yearHeader.style.display = 'none';
     closeSpinePanel();
     hideAccountNudge();
@@ -791,7 +800,7 @@ function render(){
 
   emptyEl.style.display='none';
   if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
-  if(omniboxWrap) omniboxWrap.style.display = '';
+  setOmniboxVisible(true);
   if(tarnService.isLoggedIn()) hideAccountNudge();
 
   // --- Search filtering + year grouping via shelf_filter ---
@@ -1137,6 +1146,20 @@ wtrAddBtn?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, REA
 wtrFooterAdd?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
 document.getElementById('shelfEmptyBrowse')?.addEventListener('click', openWtrDrawer);
 
+// --- Omnibox visibility helper (#80) ---
+// On desktop: show/hide the inline omnibox input normally.
+// On mobile: show/hide the search icon button; omnibox itself is controlled by search takeover.
+function setOmniboxVisible(visible){
+  if(isTouchDevice){
+    // Mobile: toggle search icon button visibility
+    if(headerSearchBtn) headerSearchBtn.style.display = visible ? '' : 'none';
+    // Don't touch omniboxWrap on mobile — CSS handles it via .search-takeover class
+  } else {
+    // Desktop: toggle omnibox input directly
+    if(omniboxWrap) omniboxWrap.style.display = visible ? '' : 'none';
+  }
+}
+
 // --- Omnibox event handlers ---
 let _omniboxApiDebounce = null;
 let _omniboxApiAbort = null;
@@ -1168,6 +1191,7 @@ function completeOmniboxSelection(){
   if(omniboxClear) omniboxClear.style.display = 'none';
   closeOmniboxDropdown();
   if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
+  if(searchTakeoverActive) closeSearchTakeover();
 }
 
 function clearOmnibox(){
@@ -1360,6 +1384,8 @@ omniboxInput?.addEventListener('keydown', (ev)=>{
     ev.preventDefault();
     if(omniboxDropdown && omniboxDropdown.style.display !== 'none'){
       closeOmniboxDropdown();
+    } else if(searchTakeoverActive){
+      closeSearchTakeover();
     } else {
       clearOmnibox();
     }
@@ -1429,6 +1455,38 @@ omniboxManualAdd?.addEventListener('click', ()=>{
     if(form.title && q) form.title.value = q;
     form.dispatchEvent(new Event('input', {bubbles:true}));
   }, 50);
+});
+
+// --- Mobile search takeover (#80) ---
+function openSearchTakeover(){
+  if(!mainHeader || !isTouchDevice || searchTakeoverActive) return;
+  searchTakeoverActive = true;
+  mainHeader.classList.add('search-takeover');
+  if(omniboxWrap) omniboxWrap.style.display = '';
+  pushOverlayState('search');
+  // Focus input after transition
+  setTimeout(()=>{
+    omniboxInput?.focus();
+  }, 50);
+}
+
+function closeSearchTakeover(fromPopstate){
+  if(!mainHeader || !searchTakeoverActive) return;
+  searchTakeoverActive = false;
+  // Blur input first to close keyboard
+  omniboxInput?.blur();
+  mainHeader.classList.remove('search-takeover');
+  // Clear and close dropdown
+  clearOmnibox();
+  if(!fromPopstate) popOverlayState();
+}
+
+headerSearchBtn?.addEventListener('click', ()=>{
+  openSearchTakeover();
+});
+
+headerSearchCancel?.addEventListener('click', ()=>{
+  closeSearchTakeover();
 });
 
 // --- Year navigation ---

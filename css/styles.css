@@ -1,4 +1,5 @@
 :root{
+  --header-height:48px;
   --mobile-columns:2;
   --mobile-scale:1;
   /* Phase 4: Typography */
@@ -68,9 +69,23 @@ h1,h2,h3,.headline{
     transition-duration:.01ms!important;
   }
 }
-#app{width:100%;max-width:1200px;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 16px max(16px,env(safe-area-inset-left));box-sizing:border-box} /* widened for desktop grid */
-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-header h1{
+#app{width:100%;max-width:1200px;padding:calc(var(--header-height) + env(safe-area-inset-top) + 16px) max(16px,env(safe-area-inset-right)) 16px max(16px,env(safe-area-inset-left));box-sizing:border-box}
+header{
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  z-index:1000;
+  height:var(--header-height);
+  padding:0 max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left));
+  padding-top:env(safe-area-inset-top);
+  background:var(--color-bg-deep);
+  border-bottom:1px solid var(--color-border-subtle);
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+header .header-title{
   font-family:var(--font-display);
   font-size:1.35rem;
   font-weight:600;
@@ -80,7 +95,74 @@ header h1{
   -webkit-background-clip:text;
   -webkit-text-fill-color:transparent;
   background-clip:text;
+  flex-shrink:0;
+  transition:opacity 150ms ease-out;
 }
+.header-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:.65rem;
+  flex-shrink:0;
+  margin-left:auto;
+  transition:opacity 150ms ease-out;
+}
+
+/* Search icon button — mobile only */
+.header-search-btn{
+  background:transparent!important;
+  border:none!important;
+  color:var(--color-text-secondary)!important;
+  padding:6px!important;
+  border-radius:8px!important;
+  cursor:pointer;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  min-height:auto!important;
+  flex-shrink:0;
+  transition:color .2s,opacity 150ms ease-out;
+  box-shadow:none!important;
+}
+.header-search-btn:hover{color:var(--color-text-primary)!important;background:var(--color-bg-surface)!important}
+
+/* Cancel button — mobile search takeover only */
+.header-search-cancel{
+  display:none;
+  background:transparent!important;
+  border:none!important;
+  color:var(--color-primary)!important;
+  font-size:.85rem!important;
+  font-weight:600!important;
+  padding:6px 8px!important;
+  border-radius:6px!important;
+  cursor:pointer;
+  white-space:nowrap;
+  flex-shrink:0;
+  min-height:auto!important;
+  box-shadow:none!important;
+  opacity:0;
+  transition:opacity 150ms ease-in;
+}
+
+/* Omnibox inside header */
+header .omnibox-wrap{
+  flex:1;
+  min-width:0;
+  margin:0;
+  position:relative;
+}
+
+/* ---- Desktop (pointer: fine) — inline search always visible ---- */
+@media (pointer:fine){
+  .header-search-btn{display:none!important}
+  .header-search-cancel{display:none!important}
+  header .omnibox-wrap{
+    max-width:400px;
+  }
+}
+
+/* Mobile header search takeover rules are in section 7e at the bottom of this file */
 #status{
   font-size:.65rem;
   opacity:.7;
@@ -479,26 +561,26 @@ button.secondary:hover, .btn.secondary:hover{
 }
 
 /* Omnibox (unified search + add) */
-.omnibox-wrap{margin:0 0 12px;position:relative}
+.omnibox-wrap{margin:0;position:relative}
 .omnibox-inner{position:relative;display:flex;align-items:center}
-.omnibox-icon{position:absolute;left:12px;color:var(--color-text-muted);display:flex;align-items:center;pointer-events:none}
+.omnibox-icon{position:absolute;left:10px;color:var(--color-text-muted);display:flex;align-items:center;pointer-events:none}
 #omniboxInput{
-  width:100%;height:44px;
-  background:var(--color-bg-deep);
+  width:100%;height:36px;
+  background:var(--color-bg-base);
   color:var(--color-text-primary);
-  border:1px solid transparent;
-  border-radius:10px;
-  padding:0 36px 0 40px;
+  border:1px solid var(--color-border-subtle);
+  border-radius:8px;
+  padding:0 32px 0 36px;
   font-family:var(--font-body);
-  font-size:.9rem;
+  font-size:.85rem;
   box-sizing:border-box;
   transition:border-color .2s,box-shadow .2s,background .2s;
 }
-#omniboxInput:focus{outline:none;border-color:var(--color-primary);box-shadow:0 0 0 3px var(--color-primary-muted);background:var(--color-bg-base)}
+#omniboxInput:focus{outline:none;border-color:var(--color-primary);box-shadow:0 0 0 2px var(--color-primary-muted);background:var(--color-bg-base)}
 #omniboxInput::placeholder{color:var(--color-text-muted)}
 .omnibox-clear{
-  position:absolute;right:8px;
-  width:24px;height:24px;
+  position:absolute;right:6px;
+  width:22px;height:22px;
   border:none;background:transparent;
   color:var(--color-text-secondary);
   cursor:pointer;padding:0;
@@ -511,9 +593,10 @@ button.secondary:hover, .btn.secondary:hover{
 
 /* Omnibox dropdown */
 .omnibox-dropdown{
-  position:absolute;
-  top:calc(100% + 4px);
-  left:0;right:0;
+  position:fixed;
+  top:calc(var(--header-height) + env(safe-area-inset-top) + 4px);
+  left:max(16px,env(safe-area-inset-left));
+  right:max(16px,env(safe-area-inset-right));
   max-width:640px;
   background:var(--color-bg-elevated);
   border:1px solid var(--color-border-default);
@@ -521,8 +604,20 @@ button.secondary:hover, .btn.secondary:hover{
   box-shadow:0 8px 32px -4px rgba(0,0,0,.5);
   max-height:60vh;
   overflow-y:auto;
-  z-index:100;
+  z-index:1001;
   padding:6px 0;
+}
+/* Mobile: full-screen results below header */
+@media (pointer:coarse){
+  .omnibox-dropdown{
+    border-radius:0;
+    border-left:none;
+    border-right:none;
+    left:0;right:0;
+    max-width:none;
+    max-height:calc(100vh - var(--header-height) - env(safe-area-inset-top) - 4px);
+    box-shadow:0 8px 32px rgba(0,0,0,.5);
+  }
 }
 .omnibox-section{padding:0 6px}
 .omnibox-section + .omnibox-section{border-top:1px solid var(--color-border-subtle);margin-top:4px;padding-top:4px}
@@ -625,9 +720,12 @@ button.secondary:hover, .btn.secondary:hover{
   border-color:var(--color-primary);
 }
 .omnibox-backdrop{
-  position:fixed;inset:0;
+  position:fixed;
+  top:calc(var(--header-height) + env(safe-area-inset-top));
+  left:0;right:0;bottom:0;
   background:rgba(0,0,0,.3);
-  z-index:99;
+  z-index:999;
+  transition:opacity 200ms ease-out;
 }
 /* Skeleton loader for API results */
 .omnibox-skeleton{
@@ -650,7 +748,10 @@ button.secondary:hover, .btn.secondary:hover{
 /* ── Year header — plain text, clickable ── */
 .year-header{
   padding:4px 0 6px 2px;
-  position:relative;
+  position:sticky;
+  top:calc(var(--header-height) + env(safe-area-inset-top));
+  z-index:998;
+  background:var(--color-bg-deep);
   cursor:pointer;
   -webkit-tap-highlight-color:transparent;
 }
@@ -680,7 +781,10 @@ button.secondary:hover, .btn.secondary:hover{
   overflow:hidden;
   transition:max-height 250ms ease-out,opacity 250ms ease-out;
   opacity:0;
-  position:relative;
+  position:sticky;
+  top:calc(var(--header-height) + env(safe-area-inset-top) + 28px);
+  z-index:997;
+  background:var(--color-bg-deep);
 }
 .spine-panel.open{
   max-height:120px;
@@ -841,10 +945,15 @@ button.secondary:hover, .btn.secondary:hover{
 .spine-panel-inner.fade-left .spine-fade-left{opacity:1}
 .spine-panel-inner.fade-right .spine-fade-right{opacity:1}
 
-/* Reduced motion: instant panel show/hide */
+/* Reduced motion: instant panel show/hide, instant search takeover */
 @media(prefers-reduced-motion:reduce){
   .spine-panel,.spine-panel.closing{transition:none}
   .year-chevron{transition:none}
+  header .header-title,
+  .header-actions,
+  .header-search-btn,
+  .header-search-cancel,
+  header .omnibox-wrap{transition:none!important}
 }
 
 /* Mobile: smaller spines */
@@ -2427,6 +2536,27 @@ body.modal-open{overscroll-behavior-y:contain}
   .strength-label{min-width:0;white-space:normal}
   .empty-state{min-height:200px;padding:40px 16px}
   .modal-inner .fields-cluster{grid-template-columns:1fr}
+}
+
+/* ============================================================================
+   7e: Mobile header search takeover (#80)
+   ============================================================================ */
+@media (pointer:coarse){
+  .header-search-btn{display:flex}
+  /* Hide omnibox by default on mobile (shown via search takeover) */
+  header .omnibox-wrap{
+    display:none!important;
+    flex:1;
+    min-width:0;
+    opacity:0;
+    transition:opacity 200ms ease-out;
+  }
+  /* Search takeover active state */
+  header.search-takeover .header-title{opacity:0;width:0;overflow:hidden;padding:0;margin:0;pointer-events:none}
+  header.search-takeover .header-search-btn{opacity:0;width:0;overflow:hidden;padding:0!important;pointer-events:none}
+  header.search-takeover .header-actions{opacity:0;width:0;overflow:hidden;padding:0;pointer-events:none}
+  header.search-takeover .omnibox-wrap{display:flex!important;opacity:1}
+  header.search-takeover .header-search-cancel{display:flex;opacity:1}
 }
 
 /* ============================================================================
