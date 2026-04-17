@@ -932,9 +932,25 @@ button.secondary:hover, .btn.secondary:hover{
   background:var(--color-bg-deep);
   cursor:pointer;
   -webkit-tap-highlight-color:transparent;
+  display:flex;
+  align-items:center;
+  gap:6px;
 }
 .year-header:hover .year-header-label{color:var(--color-text-primary)}
+.year-header:hover .year-header-chevron{color:var(--color-text-secondary)}
 .year-header:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px;border-radius:2px}
+/* Chevron indicator — affordance that the year header is a toggle.
+   Points down when panel closed, rotates up when open. */
+.year-header-chevron{
+  color:var(--color-text-muted);
+  transition:transform .2s ease, color .15s;
+  flex-shrink:0;
+  opacity:.7;
+}
+.year-header[aria-expanded="true"] .year-header-chevron{
+  transform:rotate(180deg);
+  opacity:.9;
+}
 /* Shelf-edge shadow hint when panel is closed */
 .year-header::after{
   content:'';
@@ -1054,6 +1070,30 @@ button.secondary:hover, .btn.secondary:hover{
     rgba(0,0,0,.05) 3px
   );
   pointer-events:none;
+}
+/* Book-grain dividers — paint thin vertical lines on top of the cloth
+   when the --book-grain custom property is set. JS provides 1-4 line
+   layers based on book count and year hash. Very subtle — you notice
+   "this year looks like more than one book" without seeing individual
+   book boundaries. */
+.spine-btn[style*="--book-grain"]::before{
+  background:
+    var(--book-grain),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,.05) 2px,
+      rgba(0,0,0,.05) 3px
+    );
+}
+
+/* Per-sub-book height variation — each "book within a year" gets 0..3px
+   of shortness via a clip-path. Creates a gently uneven topline within
+   each year-block while the block itself stays at the base height.
+   Bottom edge stays flat (books resting on the shelf). */
+.spine-btn[style*="--spine-clip"]{
+  clip-path:var(--spine-clip);
 }
 
 /* Gold foil edge — thin line along the top */

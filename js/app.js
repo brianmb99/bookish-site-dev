@@ -1871,6 +1871,84 @@ function spineWidth(count){
   return Math.max(36, Math.min(count * 3, 96));
 }
 
+/** Deterministic hash of a year string — stable variation across renders. */
+function spineHash(s){
+  let h = 0;
+  for(let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+/** For a year with N books in the spine, return:
+ *  - `positions`: array of divider positions (0-100%) between sub-books
+ *  - `heights`: array of top offsets (0-4px) per sub-book — varies so
+ *    each "book within the year" has a slightly different height
+ *
+ *  All values deterministic via the year hash so renders are stable.
+ *  Line count scales with book count: 1 divider ≤3 books, 2 ≤8, 3 ≤15, 4 else. */
+function spineBookLayout(year, count){
+  if(count <= 1) return { positions: [], heights: [0] };
+  const h = spineHash(String(year));
+  const dividers = count <= 3 ? 1 : count <= 8 ? 2 : count <= 15 ? 3 : 4;
+  const positions = [];
+  for(let i = 0; i < dividers; i++){
+    const base = (100 / (dividers + 1)) * (i + 1);
+    const jitter = ((h >> (i * 3)) % 11) - 5;
+    positions.push(Math.max(10, Math.min(90, base + jitter)));
+  }
+  // One height per sub-book section (dividers + 1 sections).
+  const heights = [];
+  for(let i = 0; i < dividers + 1; i++){
+    // Each sub-book gets 0..4px of "shortness" relative to the tallest.
+    // Distribution biased toward small variation — most sub-books same.
+    const v = (h >> (i * 2 + 4)) & 7; // 0-7
+    heights.push(v < 3 ? 0 : v < 5 ? 1 : v < 7 ? 2 : 3);
+  }
+  return { positions, heights };
+}
+
+/** Paint 1-4 thin vertical divider lines inside the spine (on top of cloth
+ *  texture). Returns the CSS background layers. */
+function spineBookGrain(positions){
+  if(positions.length === 0) return '';
+  return positions.map(pos =>
+    `linear-gradient(90deg, transparent ${pos}%, ` +
+    `rgba(0,0,0,.45) ${pos}%, rgba(0,0,0,.45) calc(${pos}% + 1px), ` +
+    `rgba(255,255,255,.06) calc(${pos}% + 1px), rgba(255,255,255,.06) calc(${pos}% + 2px), ` +
+    `transparent calc(${pos}% + 2px))`
+  ).join(',');
+}
+
+/** Build a clip-path polygon that carves an irregular top edge — each
+ *  sub-book gets its own slight height offset, so the top of the spine
+ *  reads as "books of slightly different heights butted up against each
+ *  other." Bottom remains flat (books resting on the shelf). */
+function spineClipPath(positions, heights){
+  if(positions.length === 0 || heights.length === 0) return '';
+  // Walk left-to-right across the top edge. Each sub-book section has a
+  // Y offset (in px) from 0 (tallest possible) down to 3 (shortest).
+  const pts = [];
+  // Top-left
+  pts.push(`0 ${heights[0]}px`);
+  for(let i = 0; i < positions.length; i++){
+    const x = positions[i];
+    const curH = heights[i];
+    const nextH = heights[i + 1];
+    // Right edge of current sub-book at its height
+    pts.push(`${x}% ${curH}px`);
+    // Transition to next sub-book's height (a tiny vertical step at the divider)
+    if(nextH !== curH){
+      pts.push(`${x}% ${nextH}px`);
+    }
+  }
+  // Top-right corner at last sub-book's height
+  const lastH = heights[heights.length - 1];
+  pts.push(`100% ${lastH}px`);
+  // Bottom-right → bottom-left
+  pts.push(`100% 100%`);
+  pts.push(`0 100%`);
+  return `polygon(${pts.join(', ')})`;
+}
+
 function renderSpineNav(yearList, activeYear){
   if(!spineStrip) return;
   spineStrip.innerHTML = '';
@@ -1902,6 +1980,21 @@ function renderSpineNav(yearList, activeYear){
     const colorKey = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
     btn.dataset.spineColor = colorKey;
     btn.style.width = `${spineWidth(count)}px`;
+    // Every year is the same height; variation happens inside via sub-book
+    // heights (see spineClipPath). Keeps the shelf topline roughly consistent
+    // while the individual books within each year differ slightly.
+    btn.style.height = `68px`;
+    // Compute sub-book layout: divider positions + per-sub-book heights.
+    const layout = spineBookLayout(year, count);
+    const grain = spineBookGrain(layout.positions);
+    if(grain) btn.style.setProperty('--book-grain', grain);
+    // Irregular top edge — each sub-book gets 0..3px of "shortness" so the
+    // tops of the books within a year vary subtly. Skipped on the selected
+    // spine so the ribbon stays anchored and the block reads as focal.
+    if(year !== activeYear){
+      const clip = spineClipPath(layout.positions, layout.heights);
+      if(clip) btn.style.setProperty('--spine-clip', clip);
+    }
 
     // Bookmark ribbon on selected year
     if(year === activeYear){
@@ -1926,7 +2019,8 @@ function renderSpineNav(yearList, activeYear){
     btn.tabIndex = year === activeYear ? 0 : -1;
     btn.addEventListener('click', ()=>{
       navigateYear(year);
-      closeSpinePanel(); // tapping a spine navigates and closes panel
+      // Panel stays open so users can browse multiple years. Click the
+      // year header (or press Escape) to close.
     });
     spineStrip.appendChild(btn);
   }
