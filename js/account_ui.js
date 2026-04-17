@@ -5,6 +5,10 @@ import uiStatusManager from './ui_status_manager.js';
 import { stopSync, startSync, markInitialSyncDone } from './sync_manager.js';
 import * as tarnService from './core/tarn_service.js';
 import { pushOverlayState, popOverlayState } from './core/overlay_history.js';
+import { attachSwipeDismiss } from './core/swipe_dismiss.js';
+
+// Track the swipe-dismiss cleanup so we can detach on close.
+let _accountResetSwipe = null;
 
 // SVG icons for auth forms
 const SVG_EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
@@ -81,6 +85,24 @@ export async function openAccountModal(mode) {
   if (modalContent) {
     modalContent.style.visibility = 'visible';
     modalContent.style.opacity = '1';
+    modalContent.classList.remove('sheet-dismissing');
+    // On touch devices: add a drag handle and wire swipe-to-dismiss (#104 followup).
+    // Matches the book edit modal pattern for visual consistency.
+    if (window.matchMedia('(pointer: coarse)').matches) {
+      if (!modalContent.querySelector('.sheet-handle')) {
+        const handle = document.createElement('div');
+        handle.className = 'sheet-handle';
+        modalContent.insertBefore(handle, modalContent.firstChild);
+      }
+      const handle = modalContent.querySelector('.sheet-handle');
+      if (handle && !_accountResetSwipe) {
+        _accountResetSwipe = attachSwipeDismiss({
+          sheet: modalContent,
+          handles: [handle],
+          onDismiss: () => closeAccountModal(),
+        });
+      }
+    }
   }
 
   pushOverlayState('account');
@@ -95,7 +117,11 @@ export async function openAccountModal(mode) {
 export function closeAccountModal(fromPopstate = false) {
   const modal = document.getElementById('accountModal');
   if (!modal) return;
+  // Clean up swipe-dismiss listeners and inline transform from the gesture.
+  if (_accountResetSwipe) { _accountResetSwipe(); _accountResetSwipe = null; }
   modal.style.display = 'none';
+  const modalContent = modal.querySelector('.account-modal');
+  if (modalContent) modalContent.classList.remove('sheet-dismissing');
   document.body.style.overflow = '';
   document.body.classList.remove('modal-open');
   if (!fromPopstate) popOverlayState();

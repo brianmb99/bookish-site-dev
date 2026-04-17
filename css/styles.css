@@ -1120,13 +1120,14 @@ html.modal-transitioning::view-transition-new(root){
 
 /* WTR drawer overlay */
 .wtr-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:5000;animation:fadeIn .2s ease-out}
-.wtr-drawer{position:fixed;background:var(--color-bg-elevated);z-index:5001;overflow-y:auto;display:flex;flex-direction:column}
+.wtr-drawer{position:fixed;background:var(--color-bg-elevated);z-index:5001;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column}
 .wtr-drawer-handle{display:none}
-@media(max-width:599px){
-  .wtr-drawer{bottom:0;left:0;right:0;max-height:75vh;border-radius:16px 16px 0 0;padding:20px 16px max(20px,env(safe-area-inset-bottom));animation:slideUpDrawer .3s ease-out;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
+/* Peek-drawer pattern — uses pointer:coarse for touch, not max-width (design guideline) */
+@media (pointer: coarse){
+  .wtr-drawer{bottom:0;left:0;right:0;max-height:85vh;border-radius:16px 16px 0 0;padding:20px 16px max(20px,env(safe-area-inset-bottom));animation:slideUpDrawer .3s ease-out;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
   .wtr-drawer-handle{display:block;width:32px;height:4px;border-radius:2px;background:var(--color-border-strong);margin:0 auto 12px;flex-shrink:0}
 }
-@media(min-width:600px){
+@media (pointer: fine){
   .wtr-drawer{top:0;right:0;bottom:0;width:380px;max-width:90vw;border-left:1px solid var(--color-border-default);padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) 24px;animation:slideInRight .25s ease-out;box-shadow:-4px 0 24px rgba(0,0,0,.2)}
 }
 @keyframes slideUpDrawer{from{transform:translateY(100%)}to{transform:translateY(0)}}
@@ -1229,6 +1230,11 @@ html.modal-transitioning::view-transition-new(root){
   justify-content:center;
   padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
 }
+/* Mobile: overlay anchors its child to the bottom edge for bottom-sheet
+   treatment on account and other modal-overlay-based dialogs (#104-followup). */
+@media (pointer: coarse){
+  .modal-overlay{align-items:flex-end;padding:0}
+}
 .modal-backdrop{
   position:absolute;
   inset:0;
@@ -1237,30 +1243,51 @@ html.modal-transitioning::view-transition-new(root){
   z-index:1000;
   pointer-events:auto;
 }
+/* Account modal — focused-sheet pattern, matching book edit modal.
+   Mobile: full-height bottom sheet. Desktop: centered 640px modal. */
 .account-modal{
   /* Override .modal class positioning - this is a flex child, not fixed positioned */
   position:relative !important;
   inset:auto !important;
-  /* Override .modal display:none */
   display:block !important;
-  /* Reset other .modal properties that interfere */
-  background:#0f172a;
-  border:1px solid #334155;
-  border-radius:12px;
+  background:var(--color-bg-elevated);
+  border:1px solid var(--color-border-default);
+  border-radius:16px;
   padding:32px;
   padding-top:40px;
-  width:min(440px,calc(100vw - 32px));
+  width:100%;
+  max-width:640px;
   max-height:calc(100vh - 64px);
   overflow-y:auto;
-  box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);
+  box-shadow:0 24px 48px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,.05) inset;
   z-index:1001;
   opacity:1;
   transform:scale(1);
   transition:opacity 0.2s ease, transform 0.2s ease;
   pointer-events:auto;
   visibility:visible;
-  /* Ensure it's centered by flex parent */
   margin:auto;
+  animation:modal-enter .3s ease-out;
+}
+/* Mobile: full-height bottom sheet matching book edit (#100 + #104 followup) */
+@media (pointer: coarse){
+  .account-modal{
+    max-width:100% !important;
+    border-radius:16px 16px 0 0;
+    border-left:none;
+    border-right:none;
+    border-bottom:none;
+    height:100dvh;
+    max-height:none;
+    padding:16px 14px;
+    padding-top:max(16px,env(safe-area-inset-top));
+    padding-bottom:max(16px,env(safe-area-inset-bottom));
+    animation:slideUpSheet .3s ease-out;
+    margin:0;
+  }
+  .account-modal.sheet-dismissing{
+    animation:slideDownSheet .25s ease-in forwards;
+  }
 }
 .account-modal .modal-close-btn{
   top:12px;
