@@ -1859,7 +1859,10 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 }
 /* Mobile modal: bottom sheet anchored to bottom (touch devices) */
 @media (pointer: coarse){
-  .modal{align-items:flex-end;padding:0}
+  /* overflow:hidden so the parent doesn't allow scrolling past the visible
+     viewport — only modal-inner handles its own content overflow via its
+     own overflow-y:auto. */
+  .modal{align-items:flex-end;padding:0;overflow:hidden}
   .modal-inner{
     padding:16px 14px;
     max-width:100%;
