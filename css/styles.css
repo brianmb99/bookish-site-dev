@@ -1587,9 +1587,14 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
     padding:16px 14px;
     max-width:100%;
     border-radius:16px 16px 0 0;
-    height:calc(100dvh - env(safe-area-inset-top, 0px));
+    /* Full viewport height; safe area handled via padding-top below. */
+    height:100dvh;
     overflow-y:auto;
     animation:slideUpSheet .3s ease-out;
+    /* Safe-area insets for top (status bar) and bottom (home indicator /
+       gesture nav). Ensures content doesn't sit under the status bar on
+       Android PWA mode where env(safe-area-inset-top) is > 0. */
+    padding-top:max(16px,env(safe-area-inset-top));
     padding-bottom:max(16px,env(safe-area-inset-bottom));
   }
   .modal-inner.sheet-dismissing{
