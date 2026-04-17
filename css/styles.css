@@ -840,6 +840,29 @@ button.secondary:hover, .btn.secondary:hover{
   font-weight:500;
   line-height:1.35;
 }
+/* Value-prop line in the free-plan block — connects price to what's bought
+   (unlimited books) without mentioning privacy/permanence (those are the
+   platform tagline above, tier-independent). */
+.account-panel-sub-pitch{
+  font-size:.78rem;
+  color:var(--color-text-muted);
+  line-height:1.35;
+}
+.account-panel-sub-pitch strong{
+  color:var(--color-text-secondary);
+  font-weight:600;
+}
+/* Platform-promise tagline — always visible regardless of subscription tier.
+   Signals that privacy and permanence are a platform guarantee, not a paid
+   feature. Keep restrained — it's a quiet reminder, not a marketing banner. */
+.account-panel-tagline{
+  font-size:.72rem;
+  color:var(--color-text-muted);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  padding:6px 0 0;
+  opacity:.75;
+}
 /* Full-width to match Export Books + Sign Out below; consistent CTA
    weight across the whole account panel. */
 .account-panel-sub-btn{
@@ -2505,6 +2528,35 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   font-size: 0.875rem;
   color: var(--color-text-muted);
   line-height: 1.4;
+}
+
+/* Informational note above the consent — explains the trust model and
+   the recovery-code-by-email flow without requiring a checkbox (the
+   checkbox is just the acknowledgment of the personal responsibility). */
+.auth-note {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  padding: 10px 14px;
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  margin: 0 0 10px;
+}
+
+/* Success message after account creation — larger than regular progress
+   so the "check your email" sub-message is readable. */
+.auth-progress.auth-success {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--color-success);
+}
+.auth-success-sub {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-top: 6px;
+  font-weight: 400;
 }
 
 /* Consent checkbox */

@@ -173,7 +173,7 @@ function renderCreateAccountForm(content) {
       <div class="auth-header">
         <div class="auth-icon">${SVG_SHIELD}</div>
         <h2>Create Your Account</h2>
-        <p>Your reading list, encrypted and always yours.</p>
+        <p>Private. Permanent. Yours.</p>
       </div>
 
       <div class="form-group">
@@ -203,9 +203,13 @@ function renderCreateAccountForm(content) {
         <span class="field-match" id="confirmHint"></span>
       </div>
 
+      <div class="auth-note">
+        Your reading list is private — even Bookish can't read it or reset your password. A recovery code will be emailed at signup; save it somewhere safe (spam folder, too).
+      </div>
+
       <label class="auth-consent">
         <input type="checkbox" id="recoveryConsent" />
-        <span>I understand that Bookish cannot recover my password. My data is encrypted with keys derived from my password.</span>
+        <span>I'll save the recovery code I'll be emailed. Without it and my password, my data can't be recovered.</span>
       </label>
 
       <button id="createAccountBtn" class="btn primary auth-submit" disabled>
@@ -354,15 +358,26 @@ function renderCreateAccountForm(content) {
       subscription.resetStatus();
       subscription.fetchStatus().catch(() => {});
 
-      progress.textContent = provisioned
-        ? 'Account created!'
-        : 'Account created! Cloud sync setup will retry shortly.';
+      // Show a recovery-code-first success message instead of a quick "Account
+      // created!" — Tarn emails a recovery code at signup, and users need to
+      // know to look for it (could land in spam).
+      progress.innerHTML = provisioned
+        ? '✓ Account created<br><span class="auth-success-sub">Check your email for a recovery code and save it somewhere safe.</span>'
+        : '✓ Account created<br><span class="auth-success-sub">Check your email for a recovery code. Cloud sync setup will retry shortly.</span>';
+      progress.classList.add('auth-success');
       setTimeout(() => {
         closeAccountModal();
         startSync();
         uiStatusManager.refresh();
         if (typeof window.updateBookDots === 'function') window.updateBookDots();
-      }, provisioned ? 800 : 2000);
+        // Post-close toast reinforces the "check your email" message in case
+        // the modal message was skimmed during the ~3s it was visible.
+        setTimeout(() => {
+          if (typeof window.bookishApp?.showStatusToast === 'function') {
+            window.bookishApp.showStatusToast('Check email for your recovery code — save it somewhere safe.');
+          }
+        }, 400);
+      }, provisioned ? 3000 : 3500);
 
     } catch (e) {
       console.error('[AccountUI] Registration failed:', e);
@@ -513,16 +528,17 @@ function renderAccountPanel(content) {
   if (subStatus === 'free') {
     subSectionHtml = `
       <div class="account-panel-subscription">
-        <div class="account-panel-sub-label">Free tier</div>
+        <div class="account-panel-sub-label">Free plan</div>
         <div class="account-panel-sub-value">${count} of ${subscription.FREE_LIMIT} books used</div>
-        <button type="button" id="accountSubscribeBtn" class="account-panel-sub-btn" data-subscribe-action="subscribe">Subscribe \u2014 $10/year</button>
+        <div class="account-panel-sub-pitch">Unlimited books: <strong>$10/year</strong> \u00B7 cancel anytime</div>
+        <button type="button" id="accountSubscribeBtn" class="account-panel-sub-btn" data-subscribe-action="subscribe">Go unlimited \u2014 $10/year</button>
       </div>
     `;
   } else if (subStatus === 'lapsed') {
     subSectionHtml = `
       <div class="account-panel-subscription">
         <div class="account-panel-sub-label">Subscription</div>
-        <div class="account-panel-sub-value">Expired</div>
+        <div class="account-panel-sub-value">Expired \u2014 renew to keep adding books</div>
         <button type="button" id="accountSubscribeBtn" class="account-panel-sub-btn" data-subscribe-action="renew">Renew \u2014 $10/year</button>
       </div>
     `;
@@ -556,6 +572,8 @@ function renderAccountPanel(content) {
           <div class="account-panel-email">${email}</div>
         </div>
       </div>
+
+      <div class="account-panel-tagline">Private. Permanent. Yours.</div>
 
       ${subSectionHtml}
 
