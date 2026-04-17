@@ -10,4 +10,4 @@ Source code, tests, tools, and private utilities live in a separate private repo
 
 Do not edit files here directly; changes will be overwritten on next publish.
 
-Last publish: 2026-04-16 22:59:45 -0400
+Last publish: 2026-04-17 09:00:27 -0400

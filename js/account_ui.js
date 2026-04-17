@@ -503,9 +503,10 @@ function renderAccountPanel(content) {
   const displayName = tarnService.displayName() || email.split('@')[0] || 'User';
   const initial = (displayName[0] || 'U').toUpperCase();
 
-  // Subscription section (#74). Free users see their book count (subtle,
-  // permanent version of the same info the omnibox surfaces at the limit).
-  // Subscribed/lapsed full management UI is issue #107; omit here for now.
+  // Subscription section (#74). Free users see their book count + a
+  // proactive Subscribe CTA so they can upgrade before hitting the limit.
+  // Lapsed users see "Subscription expired" + Renew. Subscribed users:
+  // nothing here yet — full management UI is #107.
   const subStatus = subscription.getStatus();
   const count = window.bookishApp?.getActiveEntryCount?.() || 0;
   let subSectionHtml = '';
@@ -514,6 +515,15 @@ function renderAccountPanel(content) {
       <div class="account-panel-subscription">
         <div class="account-panel-sub-label">Free tier</div>
         <div class="account-panel-sub-value">${count} of ${subscription.FREE_LIMIT} books used</div>
+        <button type="button" id="accountSubscribeBtn" class="account-panel-sub-btn" data-subscribe-action="subscribe">Subscribe \u2014 $10/year</button>
+      </div>
+    `;
+  } else if (subStatus === 'lapsed') {
+    subSectionHtml = `
+      <div class="account-panel-subscription">
+        <div class="account-panel-sub-label">Subscription</div>
+        <div class="account-panel-sub-value">Expired</div>
+        <button type="button" id="accountSubscribeBtn" class="account-panel-sub-btn" data-subscribe-action="renew">Renew \u2014 $10/year</button>
       </div>
     `;
   }
@@ -543,6 +553,22 @@ function renderAccountPanel(content) {
       </div>
     </div>
   `;
+
+  // Subscribe / Renew (#74)
+  const subscribeBtn = content.querySelector('#accountSubscribeBtn');
+  if (subscribeBtn) {
+    subscribeBtn.addEventListener('click', async () => {
+      subscribeBtn.disabled = true;
+      try {
+        await subscription.startCheckout();
+        // Success redirects via window.location.assign; below only runs on failure.
+      } catch (err) {
+        console.error('[AccountUI] Checkout failed:', err?.message || err);
+        subscribeBtn.disabled = false;
+        subscribeBtn.textContent = "Couldn't start checkout \u2014 try again";
+      }
+    });
+  }
 
   // Logout
   content.querySelector('#logoutBtn').addEventListener('click', async () => {

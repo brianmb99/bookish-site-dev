@@ -838,6 +838,40 @@ button.secondary:hover, .btn.secondary:hover{
   color:var(--color-text-primary);
   font-weight:500;
 }
+.account-panel-sub-btn{
+  align-self:flex-start;
+  margin-top:8px;
+  padding:8px 14px;
+  font-size:.8rem;
+  font-weight:600;
+  color:#fff;
+  background:var(--color-primary);
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  transition:background .15s;
+  min-height:auto!important;
+}
+.account-panel-sub-btn:hover{background:var(--color-primary-hover)}
+.account-panel-sub-btn:disabled{opacity:.5;cursor:wait}
+
+/* Subscription success toast (#74) — slightly larger, softer corners so a
+   two-line message reads cleanly on narrow mobile screens. */
+.status-toast.celebration-toast{
+  background:linear-gradient(135deg,#1e3a5f 0%,#1e293b 100%)!important;
+  border-color:var(--color-primary)!important;
+  border-radius:14px!important;
+  padding:14px 18px;
+  font-size:.9rem;
+  max-width:min(420px, calc(100vw - 32px));
+  line-height:1.35;
+}
+.status-toast.celebration-toast .toast-icon{
+  color:var(--color-success);
+  display:inline-flex;
+  align-items:center;
+  flex-shrink:0;
+}
 
 /* ── Skeleton card placeholders (initial load / year switch) ── */
 .card-skeleton{

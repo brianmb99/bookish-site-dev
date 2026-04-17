@@ -123,6 +123,29 @@ function showStatusToast(msg) {
   setTimeout(() => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 300); }, 2000);
 }
 
+/**
+ * Dedicated subscription-success toast (#74). Longer dwell than showStatusToast
+ * because a purchase completion deserves a proper acknowledgement, and a checkmark
+ * icon so it reads as a confirmation rather than a status update.
+ */
+function showSubscriptionSuccessToast(msg) {
+  const existing = document.getElementById('bookishStatusToast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = 'bookishStatusToast';
+  toast.className = 'toast status-toast celebration-toast';
+  toast.setAttribute('role', 'status');
+  toast.innerHTML = `
+    <span class="toast-icon" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </span>
+    <span class="toast-message">${escapeHtml(msg)}</span>
+  `;
+  toast.style.cssText = 'position:fixed;top:calc(var(--header-height) + env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:9001;';
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 300); }, 4500);
+}
+
 const MARK_READ_UNDO_MS = 5500;
 
 /** Toast after marking a currently-reading book as read; Undo restores prior fields via BookRepository. */
@@ -1396,7 +1419,11 @@ async function handleStripeReturn(){
     const msg = prev === 'lapsed'
       ? 'Subscription renewed. You can add books again.'
       : "You're subscribed. Add as many books as you like.";
-    showStatusToast(msg);
+    // Let the shelf finish its initial render before the toast animates in,
+    // so it doesn't compete with skeleton -> content layout shifts on mobile.
+    requestAnimationFrame(() => {
+      setTimeout(() => showSubscriptionSuccessToast(msg), 400);
+    });
   }
   // If we timed out waiting for webhook, stay quiet — a subsequent render
   // will pick up the new status from the next fetch cycle.
