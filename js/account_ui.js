@@ -578,7 +578,7 @@ function renderAccountPanel(content) {
       ${subSectionHtml}
 
       <div class="account-panel-archive">
-        <div class="account-panel-sub-label">Your Archive</div>
+        <div class="account-panel-sub-label">Your Permanent Archive</div>
         <a class="account-panel-archive-url" href="#" target="_blank" rel="noopener noreferrer" data-archive-link>arweave.net/U6dP2xK9mN3qRvT8aBc4FdEgH1jKlM2oPqRsTuVwXyZ</a>
         <div class="account-panel-archive-note">Works without Bookish. Private, permanent, and yours regardless of subscription.</div>
         <button type="button" id="accountArchiveBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Open archive <span aria-hidden="true" class="external-link-icon">\u2197</span></button>
