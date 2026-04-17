@@ -863,6 +863,52 @@ button.secondary:hover, .btn.secondary:hover{
   padding:6px 0 0;
   opacity:.75;
 }
+
+/* "Your Archive" block — the demonstration of "Private. Permanent. Yours."
+   Shows the actual Arweave permalink to the decryption/export page so
+   users can SEE that their data is independent of Bookish. Positioned
+   below Subscription to reinforce that it's yours regardless of tier.
+
+   Same top border + spacing as .account-panel-subscription for visual
+   rhythm: identity → tagline → subscription → archive → actions. */
+.account-panel-archive{
+  margin:4px 0;
+  padding:14px 0 6px;
+  border-top:1px solid var(--color-border-default);
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.account-panel-archive-url{
+  font-family:var(--font-mono, ui-monospace, 'SF Mono', Menlo, monospace);
+  font-size:.72rem;
+  color:var(--color-text-secondary);
+  word-break:break-all;
+  text-decoration:none;
+  padding:6px 8px;
+  background:var(--color-bg-base);
+  border:1px solid var(--color-border-subtle);
+  border-radius:6px;
+  transition:border-color .15s, color .15s;
+  line-height:1.35;
+}
+.account-panel-archive-url:hover{
+  border-color:var(--color-primary);
+  color:var(--color-primary);
+}
+.account-panel-archive-note{
+  font-size:.78rem;
+  color:var(--color-text-muted);
+  line-height:1.4;
+}
+/* Demote the CSV export button — smaller and lower visual weight than the
+   archive link, which is now the primary "here's your data" affordance. */
+.account-csv-btn{
+  font-size:.78rem !important;
+  padding:8px 14px !important;
+  min-height:auto !important;
+  opacity:.85;
+}
 /* Full-width to match Export Books + Sign Out below; consistent CTA
    weight across the whole account panel. */
 .account-panel-sub-btn{

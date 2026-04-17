@@ -577,9 +577,16 @@ function renderAccountPanel(content) {
 
       ${subSectionHtml}
 
+      <div class="account-panel-archive">
+        <div class="account-panel-sub-label">Your Archive</div>
+        <a class="account-panel-archive-url" href="#" target="_blank" rel="noopener noreferrer" data-archive-link>arweave.net/U6dP2xK9mN3qRvT8aBc4FdEgH1jKlM2oPqRsTuVwXyZ</a>
+        <div class="account-panel-archive-note">Works without Bookish. Private, permanent, and yours regardless of subscription.</div>
+        <button type="button" id="accountArchiveBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Open archive <span aria-hidden="true" class="external-link-icon">\u2197</span></button>
+      </div>
+
       <div class="account-actions">
-        <button id="exportCsvBtn" class="btn secondary">
-          ${SVG_DOWNLOAD} Export Books (CSV)
+        <button id="exportCsvBtn" class="btn secondary account-csv-btn">
+          ${SVG_DOWNLOAD} Export CSV
         </button>
         <button id="logoutBtn" class="btn account-signout">
           Sign Out
@@ -618,6 +625,19 @@ function renderAccountPanel(content) {
         // Re-enable after a beat so a slow new-tab open doesn't lock the button.
         setTimeout(() => { manageBtn.disabled = false; }, 1500);
       }
+    });
+  }
+
+  // Open Archive (perma-export page on Arweave — #12). Dummy URL for now,
+  // swap to the real TX URL once the page is uploaded. Both the text link
+  // and the button navigate to the same place.
+  const ARCHIVE_URL = 'https://arweave.net/U6dP2xK9mN3qRvT8aBc4FdEgH1jKlM2oPqRsTuVwXyZ';
+  const archiveLink = content.querySelector('[data-archive-link]');
+  if (archiveLink) archiveLink.href = ARCHIVE_URL;
+  const archiveBtn = content.querySelector('#accountArchiveBtn');
+  if (archiveBtn) {
+    archiveBtn.addEventListener('click', () => {
+      window.open(ARCHIVE_URL, '_blank', 'noopener,noreferrer');
     });
   }
 
