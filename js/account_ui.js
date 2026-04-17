@@ -111,8 +111,13 @@ export async function openAccountModal(mode) {
 
   requestAnimationFrame(() => {
     modal.dataset.allowClose = 'true';
-    const firstInput = content.querySelector('input:not([type=hidden])');
-    if (firstInput) firstInput.focus();
+    // Auto-focus the first input on desktop only. On mobile, popping the
+    // keyboard immediately covers the form before the user has seen it
+    // and creates layout churn with the keyboard-aware sheet handler.
+    if (!window.matchMedia('(pointer: coarse)').matches) {
+      const firstInput = content.querySelector('input:not([type=hidden])');
+      if (firstInput) firstInput.focus({ preventScroll: true });
+    }
   });
 }
 
