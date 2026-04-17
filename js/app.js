@@ -14,6 +14,7 @@ import { attachSwipeDismiss } from './core/swipe_dismiss.js';
 import { attachKeyboardHandler } from './core/keyboard_viewport.js';
 import { initPullToRefresh } from './core/pull_to_refresh.js';
 import { getFieldPref, setFieldPref } from './core/field_prefs.js';
+import * as subscription from './core/subscription.js';
 
 // --- Version logging (always visible in console) ---
 {
@@ -568,7 +569,7 @@ function closeModal(fromPopstate = false){
   }
 }
 function clearBooks(){ if(bookRepo) bookRepo.clear(); else { entries=[]; render(); } }
-window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus, showShelfSkeletons, clearShelfSkeletons };
+window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus, showShelfSkeletons, clearShelfSkeletons, getActiveEntryCount: ()=>activeEntryCount() };
 // Dirty tracking helpers
 function currentFormState(){ return JSON.stringify({
   prior: form.priorTxid.value||'',
@@ -1310,6 +1311,97 @@ function setOmniboxVisible(visible){
   }
 }
 
+// --- Subscription helpers (#74) ---
+
+/** Non-tombstoned entry count — what counts against the free tier. */
+function activeEntryCount(){
+  return entries.filter(e => e.status !== 'tombstoned').length;
+}
+
+/**
+ * Render the subscribe/lapsed prompt in place of add-book search results.
+ * Free-at-limit → subscribe copy; lapsed → renew copy.
+ */
+function renderOmniboxSubscribePrompt(){
+  if(!omniboxAddResults) return;
+  const lapsed = subscription.isLapsed();
+  const title = lapsed
+    ? "Your subscription lapsed"
+    : "You've saved 5 books for free";
+  const body = lapsed
+    ? "Renew to keep adding books \u2014 $10/year, cancel anytime."
+    : "Keep going for $10/year \u2014 cancel anytime. That's less than a single paperback.";
+  const btnLabel = lapsed ? "Renew \u2014 $10/year" : "Subscribe \u2014 $10/year";
+  omniboxAddResults.innerHTML = `
+    <div class="omnibox-subscribe-prompt${lapsed ? ' omnibox-lapsed-prompt' : ''}" role="status">
+      <div class="omnibox-subscribe-title">${escapeHtml(title)}</div>
+      <div class="omnibox-subscribe-body">${escapeHtml(body)}</div>
+      <button type="button" class="omnibox-subscribe-btn" data-subscribe-action="${lapsed ? 'renew' : 'subscribe'}">${escapeHtml(btnLabel)}</button>
+      <div class="omnibox-subscribe-dismiss">Or keep browsing your library</div>
+    </div>
+  `;
+}
+
+/** Show/hide the small "N of 5 free books" line at the top of the add section. */
+function renderOmniboxCount(){
+  if(!omniboxAddSection) return;
+  const count = activeEntryCount();
+  let el = omniboxAddSection.querySelector('.omnibox-count');
+  if(!subscription.shouldShowCount(count)){
+    if(el) el.remove();
+    return;
+  }
+  if(!el){
+    el = document.createElement('div');
+    el.className = 'omnibox-count';
+    omniboxAddSection.insertBefore(el, omniboxAddSection.firstChild);
+  }
+  el.textContent = `${count} of ${subscription.FREE_LIMIT} free books`;
+}
+
+/** Kick off Stripe Checkout via bookish-api. */
+async function startSubscribeCheckout(){
+  try {
+    await subscription.startCheckout();
+    // startCheckout does window.location.assign — code below unreachable on success
+  } catch(err) {
+    console.error('[Bookish] Checkout failed:', err?.message || err);
+    showStatusToast("Couldn't start checkout. Please try again.");
+  }
+}
+
+/**
+ * Handle return from Stripe Checkout. Reads ?sub=success or ?sub=cancel,
+ * strips the param, and on success polls status until the webhook has
+ * processed, then shows a confirmation toast.
+ */
+async function handleStripeReturn(){
+  const params = new URLSearchParams(window.location.search);
+  const subParam = params.get('sub');
+  if(!subParam) return;
+
+  // Strip the query param immediately so a refresh doesn't re-trigger.
+  params.delete('sub');
+  const newSearch = params.toString();
+  const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '') + window.location.hash;
+  window.history.replaceState({}, '', newUrl);
+
+  if(subParam !== 'success') return; // 'cancel' is silent per spec
+
+  const prev = subscription.getStatus();
+  // Small initial delay to let the webhook land before the first poll.
+  await new Promise(r => setTimeout(r, 500));
+  const next = await subscription.waitForStatus(['subscribed']);
+  if(next === 'subscribed'){
+    const msg = prev === 'lapsed'
+      ? 'Subscription renewed. You can add books again.'
+      : "You're subscribed. Add as many books as you like.";
+    showStatusToast(msg);
+  }
+  // If we timed out waiting for webhook, stay quiet — a subsequent render
+  // will pick up the new status from the next fetch cycle.
+}
+
 // --- Omnibox event handlers ---
 let _omniboxApiDebounce = null;
 let _omniboxApiAbort = null;
@@ -1421,6 +1513,11 @@ function renderOmniboxApiResults(results){
 }
 
 function searchOmniboxApis(query){
+  // #74: never fire external add-book searches while blocked.
+  if(subscription.isAddBlocked(activeEntryCount())){
+    renderOmniboxSubscribePrompt();
+    return;
+  }
   if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
   const controller = new AbortController();
   _omniboxApiAbort = controller;
@@ -1513,10 +1610,21 @@ omniboxInput?.addEventListener('input', ()=>{
     showOmniboxDropdown();
     renderOmniboxShelfResults(q);
     if(omniboxAddSection) omniboxAddSection.style.display = '';
-    if(omniboxManualAdd) omniboxManualAdd.style.display = '';
 
-    clearTimeout(_omniboxApiDebounce);
-    _omniboxApiDebounce = setTimeout(()=> searchOmniboxApis(q), 350);
+    // Subscription gate (#74): when at free limit or lapsed, replace API
+    // results with a subscribe/renew prompt and hide the manual-add path.
+    if(subscription.isAddBlocked(activeEntryCount())){
+      if(omniboxManualAdd) omniboxManualAdd.style.display = 'none';
+      if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
+      clearTimeout(_omniboxApiDebounce);
+      renderOmniboxCount(); // clears count when blocked state doesn't need it
+      renderOmniboxSubscribePrompt();
+    } else {
+      if(omniboxManualAdd) omniboxManualAdd.style.display = '';
+      renderOmniboxCount();
+      clearTimeout(_omniboxApiDebounce);
+      _omniboxApiDebounce = setTimeout(()=> searchOmniboxApis(q), 350);
+    }
   } else {
     closeOmniboxDropdown();
     if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
@@ -1544,6 +1652,14 @@ omniboxInput?.addEventListener('keydown', (ev)=>{
 
 // Omnibox dropdown click delegation
 omniboxDropdown?.addEventListener('click', (ev)=>{
+  // Subscribe/Renew button inside the subscribe prompt (#74)
+  const subscribeBtn = ev.target.closest('[data-subscribe-action]');
+  if(subscribeBtn){
+    ev.preventDefault();
+    ev.stopPropagation();
+    startSubscribeCheckout();
+    return;
+  }
   // Shelf result clicked — open edit modal
   const shelfRow = ev.target.closest('[data-shelf-key]');
   if(shelfRow){
@@ -2014,6 +2130,13 @@ async function initCacheLayer(){
     if (tarnService.isLoggedIn()) {
       console.log('[Bookish] User logged in, starting sync loop');
       startSync();
+      // Fetch subscription status for free/subscribed/lapsed gating (#74).
+      // Fire-and-forget; omnibox UI reads whatever's cached at interaction time.
+      subscription.fetchStatus().catch(err =>
+        console.warn('[Bookish] Subscription status fetch failed:', err?.message || err)
+      );
+      // Handle return from Stripe Checkout (?sub=success / ?sub=cancel).
+      handleStripeReturn();
     } else {
       console.log('[Bookish] User not logged in, sync loop will not start');
     }

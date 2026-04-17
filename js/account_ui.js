@@ -4,6 +4,7 @@
 import uiStatusManager from './ui_status_manager.js';
 import { stopSync, startSync, markInitialSyncDone } from './sync_manager.js';
 import * as tarnService from './core/tarn_service.js';
+import * as subscription from './core/subscription.js';
 import { pushOverlayState, popOverlayState } from './core/overlay_history.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
 
@@ -25,6 +26,7 @@ const SVG_DOWNLOAD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none
 async function performLogout() {
   stopSync();
   tarnService.logout();
+  subscription.resetStatus();
 
   // Clear IndexedDB cache so next user doesn't see stale books
   try {
@@ -348,6 +350,10 @@ function renderCreateAccountForm(content) {
       transientState.createdTime = Date.now();
       markInitialSyncDone(); // New account — no books to sync
 
+      // New account starts on the free tier; prime the cache (#74).
+      subscription.resetStatus();
+      subscription.fetchStatus().catch(() => {});
+
       progress.textContent = provisioned
         ? 'Account created!'
         : 'Account created! Cloud sync setup will retry shortly.';
@@ -459,6 +465,10 @@ function renderSignInForm(content) {
       transientState.justSignedIn = true;
       transientState.signInTime = Date.now();
 
+      // Fresh subscription state for the signed-in user (#74).
+      subscription.resetStatus();
+      subscription.fetchStatus().catch(() => {});
+
       progress.textContent = 'Signed in!';
       setTimeout(() => {
         closeAccountModal();
@@ -493,6 +503,21 @@ function renderAccountPanel(content) {
   const displayName = tarnService.displayName() || email.split('@')[0] || 'User';
   const initial = (displayName[0] || 'U').toUpperCase();
 
+  // Subscription section (#74). Free users see their book count (subtle,
+  // permanent version of the same info the omnibox surfaces at the limit).
+  // Subscribed/lapsed full management UI is issue #107; omit here for now.
+  const subStatus = subscription.getStatus();
+  const count = window.bookishApp?.getActiveEntryCount?.() || 0;
+  let subSectionHtml = '';
+  if (subStatus === 'free') {
+    subSectionHtml = `
+      <div class="account-panel-subscription">
+        <div class="account-panel-sub-label">Free tier</div>
+        <div class="account-panel-sub-value">${count} of ${subscription.FREE_LIMIT} books used</div>
+      </div>
+    `;
+  }
+
   content.innerHTML = `
     <div class="auth-form">
       <div class="account-panel-header">
@@ -505,6 +530,8 @@ function renderAccountPanel(content) {
           <div class="account-panel-email">${email}</div>
         </div>
       </div>
+
+      ${subSectionHtml}
 
       <div class="account-actions">
         <button id="exportCsvBtn" class="btn secondary">
