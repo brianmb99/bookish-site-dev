@@ -1527,7 +1527,7 @@ html.modal-transitioning::view-transition-new(root){
     max-height:none;
     padding:16px 14px;
     /* 48px min top padding — see same rationale on .modal-inner */
-    padding-top:max(48px,env(safe-area-inset-top));
+    padding-top:max(56px,env(safe-area-inset-top));
     padding-bottom:max(16px,env(safe-area-inset-bottom));
     animation:slideUpSheet .3s ease-out;
     margin:0;
@@ -1866,11 +1866,10 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
     overflow-y:auto;
     animation:slideUpSheet .3s ease-out;
     /* Safe-area insets for top (status bar) and bottom (home indicator /
-       gesture nav). 48px minimum because Chrome on Android in installed
+       gesture nav). 56px minimum because Chrome on Android in installed
        PWA mode often returns 0 for env(safe-area-inset-top) even when the
-       status bar IS overlaying content. 48px clears typical Android
-       status bars (including Samsung S25 Ultra class devices). */
-    padding-top:max(48px,env(safe-area-inset-top));
+       status bar IS overlaying content. */
+    padding-top:max(56px,env(safe-area-inset-top));
     padding-bottom:max(16px,env(safe-area-inset-bottom));
   }
   .modal-inner.sheet-dismissing{
@@ -3068,6 +3067,20 @@ body.modal-open{overscroll-behavior-y:contain}
 /* Suppress browser pull-to-refresh in standalone mode */
 @media (display-mode:standalone){
   body{overscroll-behavior-y:contain}
+}
+
+/* Installed PWA: belt-and-suspenders status-bar clearance.
+   Chrome on Android in standalone mode can return 0 for
+   env(safe-area-inset-top) while still overlaying the status bar.
+   Applied to ANY installed PWA regardless of pointer type — some
+   Android devices (e.g. Samsung with S-Pen primary input) may report
+   pointer:fine even on a mobile viewport, so the pointer:coarse
+   bottom-sheet rule may not match there. This rule provides a floor
+   for the installed-PWA case specifically. */
+@media (display-mode:standalone){
+  .modal-inner, .account-modal{
+    padding-top:max(72px,env(safe-area-inset-top)) !important;
+  }
 }
 
 /* ============================================================================
