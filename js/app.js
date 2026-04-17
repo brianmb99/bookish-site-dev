@@ -1382,10 +1382,10 @@ function renderOmniboxSubscribePrompt(){
   const lapsed = subscription.isLapsed();
   const title = lapsed
     ? "Your subscription lapsed"
-    : "You've saved 5 books for free";
+    : "Ready to add more?";
   const body = lapsed
     ? "Renew to keep adding books \u2014 $10/year, cancel anytime."
-    : "Keep going for $10/year \u2014 cancel anytime. That's less than a single paperback.";
+    : "Add unlimited books for $10/year \u2014 less than a paperback. Cancel anytime.";
   const btnLabel = lapsed ? "Renew \u2014 $10/year" : "Subscribe \u2014 $10/year";
   omniboxAddResults.innerHTML = `
     <div class="omnibox-subscribe-prompt${lapsed ? ' omnibox-lapsed-prompt' : ''}" role="status">
