@@ -1457,8 +1457,8 @@ html.modal-transitioning::view-transition-new(root){
     height:100dvh;
     max-height:none;
     padding:16px 14px;
-    /* 32px min top padding — see same rationale on .modal-inner */
-    padding-top:max(32px,env(safe-area-inset-top));
+    /* 48px min top padding — see same rationale on .modal-inner */
+    padding-top:max(48px,env(safe-area-inset-top));
     padding-bottom:max(16px,env(safe-area-inset-bottom));
     animation:slideUpSheet .3s ease-out;
     margin:0;
@@ -1797,10 +1797,11 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
     overflow-y:auto;
     animation:slideUpSheet .3s ease-out;
     /* Safe-area insets for top (status bar) and bottom (home indicator /
-       gesture nav). 32px minimum because Chrome on Android often returns 0
-       for env(safe-area-inset-top) even in PWA mode with an active status
-       bar — 16px isn't enough to clear typical Android status bar heights. */
-    padding-top:max(32px,env(safe-area-inset-top));
+       gesture nav). 48px minimum because Chrome on Android in installed
+       PWA mode often returns 0 for env(safe-area-inset-top) even when the
+       status bar IS overlaying content. 48px clears typical Android
+       status bars (including Samsung S25 Ultra class devices). */
+    padding-top:max(48px,env(safe-area-inset-top));
     padding-bottom:max(16px,env(safe-area-inset-bottom));
   }
   .modal-inner.sheet-dismissing{
