@@ -118,6 +118,29 @@ export async function startCheckout() {
 }
 
 /**
+ * Open the Stripe Billing Portal for the current user in a new tab.
+ * Users manage card, cancel subscription, view invoices from there.
+ * @returns {Promise<void>}
+ */
+export async function openPortal() {
+  const dlk = getDataLookupKey();
+  if (!dlk) throw new Error('Not logged in');
+
+  const res = await fetch(`${BOOKISH_API}/api/portal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataLookupKey: dlk }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Portal failed (${res.status}): ${body}`);
+  }
+  const { url } = await res.json();
+  if (!url) throw new Error('No portal URL returned');
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/**
  * Poll status until it matches one of the target values or a timeout elapses.
  * Used on return from Stripe (?sub=success) because the webhook may take a
  * few seconds to process.

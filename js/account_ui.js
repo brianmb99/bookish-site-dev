@@ -503,10 +503,10 @@ function renderAccountPanel(content) {
   const displayName = tarnService.displayName() || email.split('@')[0] || 'User';
   const initial = (displayName[0] || 'U').toUpperCase();
 
-  // Subscription section (#74). Free users see their book count + a
-  // proactive Subscribe CTA so they can upgrade before hitting the limit.
-  // Lapsed users see "Subscription expired" + Renew. Subscribed users:
-  // nothing here yet — full management UI is #107.
+  // Subscription section (#74). All three states get a block: free users
+  // see their count + proactive Subscribe CTA; lapsed users see an
+  // expired status + Renew; subscribed users see their renewal date + a
+  // Manage subscription link that opens the Stripe Billing Portal.
   const subStatus = subscription.getStatus();
   const count = window.bookishApp?.getActiveEntryCount?.() || 0;
   let subSectionHtml = '';
@@ -524,6 +524,22 @@ function renderAccountPanel(content) {
         <div class="account-panel-sub-label">Subscription</div>
         <div class="account-panel-sub-value">Expired</div>
         <button type="button" id="accountSubscribeBtn" class="account-panel-sub-btn" data-subscribe-action="renew">Renew \u2014 $10/year</button>
+      </div>
+    `;
+  } else if (subStatus === 'subscribed') {
+    const periodEndIso = subscription.getCurrentPeriodEnd();
+    let renewLine = 'Subscribed';
+    if (periodEndIso) {
+      try {
+        const d = new Date(periodEndIso);
+        renewLine = `Subscribed \u2014 renews ${d.toLocaleDateString('en-US', { dateStyle: 'long' })}`;
+      } catch { /* fall back to plain label */ }
+    }
+    subSectionHtml = `
+      <div class="account-panel-subscription">
+        <div class="account-panel-sub-label">Subscription</div>
+        <div class="account-panel-sub-value">${renewLine}</div>
+        <button type="button" id="accountManageBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Manage subscription <span aria-hidden="true" class="external-link-icon">\u2197</span></button>
       </div>
     `;
   }
@@ -566,6 +582,23 @@ function renderAccountPanel(content) {
         console.error('[AccountUI] Checkout failed:', err?.message || err);
         subscribeBtn.disabled = false;
         subscribeBtn.textContent = "Couldn't start checkout \u2014 try again";
+      }
+    });
+  }
+
+  // Manage subscription (#74 — opens Stripe Billing Portal in new tab)
+  const manageBtn = content.querySelector('#accountManageBtn');
+  if (manageBtn) {
+    manageBtn.addEventListener('click', async () => {
+      manageBtn.disabled = true;
+      try {
+        await subscription.openPortal();
+      } catch (err) {
+        console.error('[AccountUI] Portal open failed:', err?.message || err);
+        manageBtn.textContent = "Couldn't open portal \u2014 try again";
+      } finally {
+        // Re-enable after a beat so a slow new-tab open doesn't lock the button.
+        setTimeout(() => { manageBtn.disabled = false; }, 1500);
       }
     });
   }

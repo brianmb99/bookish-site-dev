@@ -817,15 +817,16 @@ button.secondary:hover, .btn.secondary:hover{
 }
 
 /* Account panel subscription section (#74) */
+/* Flat section matching the identity header pattern: no card chrome,
+   just a subtle top divider for rhythm. Three horizontal bands:
+   identity \u2192 subscription \u2192 actions. */
 .account-panel-subscription{
-  margin:4px 0 4px;
-  padding:10px 12px;
-  background:var(--color-bg-surface);
-  border:1px solid var(--color-border-default);
-  border-radius:8px;
+  margin:4px 0;
+  padding:14px 0 6px;
+  border-top:1px solid var(--color-border-default);
   display:flex;
   flex-direction:column;
-  gap:2px;
+  gap:6px;
 }
 .account-panel-sub-label{
   font-size:.7rem;
@@ -834,26 +835,46 @@ button.secondary:hover, .btn.secondary:hover{
   letter-spacing:.04em;
 }
 .account-panel-sub-value{
-  font-size:.9rem;
+  font-size:1rem;
   color:var(--color-text-primary);
   font-weight:500;
+  line-height:1.35;
 }
+/* Full-width to match Export Books + Sign Out below; consistent CTA
+   weight across the whole account panel. */
 .account-panel-sub-btn{
-  align-self:flex-start;
+  width:100%;
   margin-top:8px;
-  padding:8px 14px;
-  font-size:.8rem;
+  padding:12px 20px;
+  font-size:.9rem;
   font-weight:600;
   color:#fff;
   background:var(--color-primary);
   border:none;
-  border-radius:6px;
+  border-radius:8px;
   cursor:pointer;
   transition:background .15s;
-  min-height:auto!important;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
 }
 .account-panel-sub-btn:hover{background:var(--color-primary-hover)}
 .account-panel-sub-btn:disabled{opacity:.5;cursor:wait}
+.account-panel-sub-btn-secondary{
+  background:transparent;
+  color:var(--color-primary);
+  border:1px solid var(--color-primary-muted);
+}
+.account-panel-sub-btn-secondary:hover{
+  background:var(--color-primary-muted);
+  color:var(--color-primary-hover);
+}
+.external-link-icon{
+  display:inline-block;
+  font-size:.9em;
+  opacity:.8;
+}
 
 /* Subscription success toast (#74) — slightly larger, softer corners so a
    two-line message reads cleanly on narrow mobile screens. */
