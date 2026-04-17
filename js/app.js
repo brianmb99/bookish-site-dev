@@ -1821,7 +1821,19 @@ function clearHeroCover(){
 // perceptible" qualifier applies; View Transition API handles the visual crossfade.)
 function navigateYear(year){
   selectedYear = year;
-  startViewTransition(()=> render());
+  // Suppress the root crossfade during year switches — the old and new
+  // year's book covers would blend translucently for ~200ms, looking
+  // like "multiple covers flipping." Cards still animate (card-exit
+  // fades old out, new cards instantly appear) — but without the root
+  // blend there's no ghostly layering artifact.
+  if(document.startViewTransition && !prefersReducedMotion()){
+    document.documentElement.classList.add('year-switching');
+    const transition = document.startViewTransition(()=> render());
+    const clearFlag = () => document.documentElement.classList.remove('year-switching');
+    transition.finished.then(clearFlag).catch(clearFlag);
+  } else {
+    render();
+  }
 }
 
 // --- Spine panel toggle ---
