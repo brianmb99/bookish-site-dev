@@ -838,17 +838,32 @@ function entryFingerprint(e){
   return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.notes||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e.onArweave?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'')+'\t'+(e.owned?'1':'0')+'\t'+(e.tags||'')+'\t'+(e._showYearBadge?'1':'0');
 }
 
-function animateCardExit(el){
+/**
+ * Animate a card out of the shelf. If `preMeasured` is supplied (with
+ * top/left/width/height from a batch measurement), use those values —
+ * caller has already recorded the rect before mutating the DOM.
+ * Otherwise, measure here (legacy single-exit path — e.g. swipe-delete).
+ */
+function animateCardExit(el, preMeasured){
   if(el.classList.contains('card-exiting')) return;
   const parent = el.parentElement;
   if(!parent){ el.remove(); return; }
-  const rect = el.getBoundingClientRect();
-  const parentRect = parent.getBoundingClientRect();
+  let top, left, width, height;
+  if(preMeasured){
+    ({ top, left, width, height } = preMeasured);
+  } else {
+    const rect = el.getBoundingClientRect();
+    const parentRect = parent.getBoundingClientRect();
+    top = rect.top - parentRect.top;
+    left = rect.left - parentRect.left;
+    width = rect.width;
+    height = rect.height;
+  }
   el.style.position = 'absolute';
-  el.style.top = (rect.top - parentRect.top) + 'px';
-  el.style.left = (rect.left - parentRect.left) + 'px';
-  el.style.width = rect.width + 'px';
-  el.style.height = rect.height + 'px';
+  el.style.top = top + 'px';
+  el.style.left = left + 'px';
+  el.style.width = width + 'px';
+  el.style.height = height + 'px';
   el.style.opacity = '';
   el.style.margin = '0';
   el.classList.add('card-exiting');
@@ -1065,8 +1080,25 @@ function render(){
     }catch(err){ console.warn('[Bookish] Skipping corrupt entry', e.txid||e.id, err.message); }
   }
 
+  // Measure rects for ALL exiting cards BEFORE any are mutated.
+  // If we measure-then-mutate one card at a time, each absolute positioning
+  // reflows the grid, so the next getBoundingClientRect reads a shifted
+  // position — and all exiting cards end up stacked at the first few slots.
+  const exiting = [];
   for(const [key, el] of existingMap){
-    if(!desiredKeys.has(key)) animateCardExit(el);
+    if(!desiredKeys.has(key)){
+      const parent = el.parentElement;
+      if(parent){
+        const rect = el.getBoundingClientRect();
+        const parentRect = parent.getBoundingClientRect();
+        exiting.push({ el, top: rect.top - parentRect.top, left: rect.left - parentRect.left, width: rect.width, height: rect.height });
+      } else {
+        el.remove();
+      }
+    }
+  }
+  for(const entry of exiting){
+    animateCardExit(entry.el, entry);
   }
 
   for(let i=0; i<orderedCards.length; i++){
