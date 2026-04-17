@@ -56,6 +56,7 @@ export class TarnClient {
 
     const res = await this.#fetch('/api/v1/auth/register', {
       method: 'POST',
+      retry: true, // idempotent since tarn #6
       body: {
         credential_lookup_key: keys.credentialLookupKey,
         public_key: publicKeyBase64,
@@ -95,6 +96,7 @@ export class TarnClient {
     // Challenge
     const challengeRes = await this.#fetch('/api/v1/auth/challenge', {
       method: 'POST',
+      retry: true, // generates a fresh nonce per call — safe to retry
       body: { credential_lookup_key: keys.credentialLookupKey },
     });
 
@@ -200,10 +202,11 @@ export class TarnClient {
       headers: {
         'Authorization': `Bearer ${this.#jwt}`,
         'X-Arweave-Tags': JSON.stringify(tags),
+        'X-Idempotency-Key': generateIdempotencyKey(), // retry-safe (#8)
         'Content-Type': 'application/octet-stream',
       },
       body: encrypted,
-    });
+    }, { retry: true });
 
     const json = await res.json().catch(() => null);
     if (res.status !== 200) {
@@ -215,7 +218,7 @@ export class TarnClient {
 
   /**
    * Bulk import multiple entries in one request.
-   * Counts as 1 rate-limit hit regardless of batch size. Max 25 entries per batch.
+   * Counts as 1 rate-limit hit regardless of batch size. Max 100 entries per batch.
    * @param {string} type - Entry type for all entries
    * @param {Array<Object>} items - Array of JSON-serializable payloads
    * @returns {Promise<Array<{txid: string}>>}
@@ -246,17 +249,34 @@ export class TarnClient {
       entries.push({ data, tags });
     }
 
-    const res = await this.#fetch('/api/v1/entries/batch', {
-      method: 'POST',
-      auth: true,
-      body: { entries },
-    });
+    // Batch idempotency: one key for the whole batch. Server stores the full
+    // list of txids against it; retry returns the same list (#8).
+    const idempotencyKey = generateIdempotencyKey();
+    const res = await this.#fetchBatch(entries, idempotencyKey);
 
     if (res.status !== 200) {
       throw new Error(`Batch create failed: ${res.json?.error || res.status}`);
     }
 
     return res.json.entries;
+  }
+
+  async #fetchBatch(entries, idempotencyKey) {
+    // Batch posts can't use #fetch because we need the custom header. Inline
+    // the request setup here to keep the fetch-with-retry path.
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.#jwt}`,
+      'X-Idempotency-Key': idempotencyKey,
+    };
+    const raw = await this.#fetchRaw('/api/v1/entries/batch', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ entries }),
+    }, { retry: true });
+    const text = await raw.text();
+    let json; try { json = JSON.parse(text); } catch { json = null; }
+    return { status: raw.status, json, text };
   }
 
   /**
@@ -305,7 +325,7 @@ export class TarnClient {
           console.warn(`Failed to decrypt inline entry ${entry.txid}:`, err.message);
         }
       } else {
-        // No inline data — need to fetch from gateway (backfill not yet done)
+        // No inline data — need to fetch from Arweave gateway (backfill not yet done)
         needsFetch.push(entry);
       }
     }
@@ -360,10 +380,11 @@ export class TarnClient {
       headers: {
         'Authorization': `Bearer ${this.#jwt}`,
         'X-Arweave-Tags': JSON.stringify(tags),
+        'X-Idempotency-Key': generateIdempotencyKey(), // retry-safe (#8)
         'Content-Type': 'application/octet-stream',
       },
       body: encrypted,
-    });
+    }, { retry: true });
 
     const json = await res.json().catch(() => null);
     if (res.status !== 200) {
@@ -398,10 +419,11 @@ export class TarnClient {
       headers: {
         'Authorization': `Bearer ${this.#jwt}`,
         'X-Arweave-Tags': JSON.stringify(tags),
+        'X-Idempotency-Key': generateIdempotencyKey(), // retry-safe (#8)
         'Content-Type': 'application/octet-stream',
       },
       body: encrypted,
-    });
+    }, { retry: true });
 
     const json = await res.json().catch(() => null);
     if (res.status !== 200) {
@@ -418,76 +440,12 @@ export class TarnClient {
   /** True if the client has a session (JWT may auto-refresh transparently). */
   get isAuthenticated() { return !!(this.#jwt || this.#signingKeyPair); }
 
-  // ============ SESSION PERSISTENCE (Bookish addition) ============
-  // TarnClient upstream has no session persistence. These methods allow
-  // saving/restoring client state across page refreshes without requiring
-  // the user to re-enter their password.
-
   /**
-   * Export all session state as a JSON-serializable object.
-   * The caller is responsible for encrypting this at rest.
-   * @returns {Promise<Object|null>} Serialized session state
+   * Test-only: expose the current JWT for deployed smoke tests that need to
+   * hand-craft raw requests (e.g., idempotency testing). Do not use in
+   * production code; call the public methods instead.
    */
-  async exportSession() {
-    if (!this.#dataEncryptionKey) return null;
-
-    const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
-
-    const [dataKeyRaw, credGcmRaw, credKwRaw, sigPrivPkcs8, sigPubSpki] = await Promise.all([
-      crypto.subtle.exportKey('raw', this.#dataEncryptionKey),
-      crypto.subtle.exportKey('raw', this.#credentialEncryptionKey.gcmKey),
-      crypto.subtle.exportKey('raw', this.#credentialEncryptionKey.kwKey),
-      crypto.subtle.exportKey('pkcs8', this.#signingKeyPair.privateKey),
-      crypto.subtle.exportKey('spki', this.#signingKeyPair.publicKey),
-    ]);
-
-    return {
-      v: 1,
-      jwt: this.#jwt,
-      dataLookupKey: this.#dataLookupKey,
-      credentialLookupKey: this.#credentialLookupKey,
-      dataEncryptionKey: b64(dataKeyRaw),
-      credentialEncryptionKey: { gcm: b64(credGcmRaw), kw: b64(credKwRaw) },
-      signingKeyPair: { priv: b64(sigPrivPkcs8), pub: b64(sigPubSpki) },
-    };
-  }
-
-  /**
-   * Restore a TarnClient from a previously exported session.
-   * @param {string} apiBaseUrl
-   * @param {string} appId
-   * @param {Object} session — output of exportSession()
-   * @returns {Promise<TarnClient>}
-   */
-  static async fromSession(apiBaseUrl, appId, session) {
-    if (!session || session.v !== 1) throw new Error('Invalid session format');
-
-    const b2u = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-
-    const client = new TarnClient(apiBaseUrl, appId);
-
-    const [dataKey, gcmKey, kwKey, privateKey, publicKey] = await Promise.all([
-      crypto.subtle.importKey('raw', b2u(session.dataEncryptionKey),
-        { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']),
-      crypto.subtle.importKey('raw', b2u(session.credentialEncryptionKey.gcm),
-        { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']),
-      crypto.subtle.importKey('raw', b2u(session.credentialEncryptionKey.kw),
-        'AES-KW', true, ['wrapKey', 'unwrapKey']),
-      crypto.subtle.importKey('pkcs8', b2u(session.signingKeyPair.priv),
-        { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign']),
-      crypto.subtle.importKey('spki', b2u(session.signingKeyPair.pub),
-        { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']),
-    ]);
-
-    client.#jwt = session.jwt;
-    client.#dataLookupKey = session.dataLookupKey;
-    client.#credentialLookupKey = session.credentialLookupKey;
-    client.#dataEncryptionKey = dataKey;
-    client.#credentialEncryptionKey = { gcmKey, kwKey };
-    client.#signingKeyPair = { privateKey, publicKey };
-
-    return client;
-  }
+  _testJwt() { return this.#jwt; }
 
   // ============ PRIVATE ============
 
@@ -527,6 +485,7 @@ export class TarnClient {
   async #authenticate() {
     const challengeRes = await this.#fetch('/api/v1/auth/challenge', {
       method: 'POST',
+      retry: true, // fresh nonce per call — safe to retry
       body: { credential_lookup_key: this.#credentialLookupKey },
     });
 
@@ -571,21 +530,112 @@ export class TarnClient {
     return null;
   }
 
-  async #fetch(path, { method = 'GET', body = null, auth = false } = {}) {
+  /**
+   * Internal fetch wrapper with transparent retry on transient failures.
+   *
+   * Retry policy:
+   *   - 5xx or 429 responses → retry (honoring Retry-After on 429)
+   *   - Network errors (fetch throws) → retry
+   *   - 4xx → do not retry (permanent answers: validation, auth, conflict, etc.)
+   *
+   * Retry is enabled by default for idempotent operations:
+   *   - Any GET
+   *   - POSTs explicitly marked retry-safe by the caller (retry: true)
+   *     e.g. /auth/register (idempotent since #6), /auth/challenge (fresh nonce
+   *     per call), or writes that set an X-Idempotency-Key (see #8).
+   *
+   * Retry is disabled for side-effectful operations without idempotency support
+   * (/auth/verify, credential change, account delete) where a retry could
+   * consume a now-invalid nonce or produce duplicate destructive effects.
+   */
+  async #fetch(path, { method = 'GET', body = null, auth = false, retry = method === 'GET' } = {}) {
     const headers = { 'Content-Type': 'application/json' };
     if (auth && this.#jwt) headers['Authorization'] = `Bearer ${this.#jwt}`;
 
     const opts = { method, headers };
     if (body) opts.body = JSON.stringify(body);
 
-    const res = await fetch(`${this.#apiBase}${path}`, opts);
+    const res = await this.#executeFetch(`${this.#apiBase}${path}`, opts, retry);
     const text = await res.text();
     let json;
     try { json = JSON.parse(text); } catch { json = null; }
     return { status: res.status, json, text };
   }
 
-  async #fetchRaw(path, opts) {
-    return await fetch(`${this.#apiBase}${path}`, opts);
+  async #fetchRaw(path, opts, { retry = opts?.method === 'GET' } = {}) {
+    return await this.#executeFetch(`${this.#apiBase}${path}`, opts, retry);
   }
+
+  async #executeFetch(url, opts, allowRetry) {
+    const MAX_ATTEMPTS = allowRetry ? 3 : 1;
+    let lastErr;
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch(url, opts);
+        const isTransient = res.status >= 500 || res.status === 429;
+        if (!isTransient || attempt === MAX_ATTEMPTS - 1) {
+          return res;
+        }
+
+        // Drain body before retry so the underlying connection can be reused.
+        try { await res.body?.cancel(); } catch {}
+
+        const retryAfterSec = parseRetryAfter(res.headers.get('Retry-After'));
+        const waitMs = retryAfterSec != null ? retryAfterSec * 1000 : backoffMs(attempt);
+        console.warn(`[TarnClient] ${res.status} on ${url} — retrying in ${Math.round(waitMs)}ms (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+        await sleep(waitMs);
+      } catch (err) {
+        // Network error (fetch threw: DNS, TLS, connection reset, etc).
+        lastErr = err;
+        if (attempt === MAX_ATTEMPTS - 1) throw err;
+        const waitMs = backoffMs(attempt);
+        console.warn(`[TarnClient] network error on ${url} (${err.message}) — retrying in ${Math.round(waitMs)}ms (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+        await sleep(waitMs);
+      }
+    }
+    throw lastErr; // unreachable
+  }
+}
+
+// ============ Retry + idempotency helpers ============
+
+/**
+ * Generate a fresh idempotency key for a write. Clients include this in the
+ * X-Idempotency-Key header; the server returns the original response on any
+ * retry with the same key, preventing duplicate DataItems on Arweave.
+ * See tarn #8.
+ */
+function generateIdempotencyKey() {
+  // crypto.randomUUID is available in modern browsers and Node 15+.
+  return crypto.randomUUID();
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Exponential backoff with ±25% jitter.
+ * Attempt 0 → ~500ms, attempt 1 → ~1500ms.
+ */
+function backoffMs(attempt) {
+  const base = 500 * Math.pow(3, attempt);
+  const jitter = base * (Math.random() * 0.5 - 0.25);
+  return base + jitter;
+}
+
+/**
+ * Parse Retry-After header value. Returns seconds (number) or null if absent/invalid.
+ * Supports both the delta-seconds form (e.g., "60") and the HTTP-date form.
+ */
+function parseRetryAfter(value) {
+  if (!value) return null;
+  const n = parseInt(value, 10);
+  if (!isNaN(n) && n >= 0) return n;
+  const date = Date.parse(value);
+  if (!isNaN(date)) {
+    return Math.max(0, Math.floor((date - Date.now()) / 1000));
+  }
+  return null;
 }
