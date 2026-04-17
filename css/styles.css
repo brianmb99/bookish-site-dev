@@ -1528,10 +1528,7 @@ html.modal-transitioning::view-transition-new(root){
     box-sizing:border-box;
     height:100%;
     max-height:none;
-    padding:16px 14px;
-    /* 48px min top padding — see same rationale on .modal-inner */
-    padding-top:max(56px,env(safe-area-inset-top));
-    padding-bottom:max(16px,env(safe-area-inset-bottom));
+    padding:20px 14px;
     animation:slideUpSheet .3s ease-out;
     margin:0;
   }
@@ -1864,24 +1861,17 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
      own overflow-y:auto. */
   .modal{align-items:flex-end;padding:0;overflow:hidden}
   .modal-inner{
-    padding:16px 14px;
+    padding:20px 14px;
     max-width:100%;
     border-radius:16px 16px 0 0;
     /* 100% of the visible viewport (parent .modal is position:fixed;
        inset:0). box-sizing:border-box so padding is INCLUDED in height —
-       otherwise 100% + padding totals more than the viewport and, with
-       align-items:flex-end on .modal, the top spills above the visible
-       area (making the status/tabs row appear cut off behind the system bar). */
+       otherwise 100% + padding overflows, and with align-items:flex-end
+       the overflow spills above the visible viewport. */
     box-sizing:border-box;
     height:100%;
     overflow-y:auto;
     animation:slideUpSheet .3s ease-out;
-    /* Safe-area insets for top (status bar) and bottom (home indicator /
-       gesture nav). 56px minimum because Chrome on Android in installed
-       PWA mode often returns 0 for env(safe-area-inset-top) even when the
-       status bar IS overlaying content. */
-    padding-top:max(56px,env(safe-area-inset-top));
-    padding-bottom:max(16px,env(safe-area-inset-bottom));
   }
   .modal-inner.sheet-dismissing{
     animation:slideDownSheet .25s ease-in forwards;
@@ -3078,27 +3068,6 @@ body.modal-open{overscroll-behavior-y:contain}
 /* Suppress browser pull-to-refresh in standalone mode */
 @media (display-mode:standalone){
   body{overscroll-behavior-y:contain}
-}
-
-/* Installed PWA: belt-and-suspenders status-bar clearance.
-   Matches ALL display modes that an installed PWA might use
-   (standalone, fullscreen, minimal-ui, window-controls-overlay) —
-   we don't know which Chrome on Android will pick for a given device.
-   Also pointer-agnostic (Samsung S-Pen can report pointer:fine).
-   72px clears any Android status bar; env() takes precedence when
-   it reports a larger inset (iPhone notch devices). */
-@media (display-mode:standalone), (display-mode:fullscreen), (display-mode:minimal-ui), (display-mode:window-controls-overlay){
-  .modal-inner, .account-modal{
-    padding-top:max(72px,env(safe-area-inset-top)) !important;
-  }
-}
-/* Safety net for installed PWA: also pad the page header. If env(safe-area-inset-top)
-   is returning 0 on this device, the main shelf header could be under the status
-   bar too. 32px minimum floor. */
-@media (display-mode:standalone), (display-mode:fullscreen), (display-mode:minimal-ui), (display-mode:window-controls-overlay){
-  #mainHeader{
-    padding-top:max(32px,env(safe-area-inset-top)) !important;
-  }
 }
 
 /* ============================================================================
