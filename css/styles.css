@@ -1205,14 +1205,12 @@ html.modal-transitioning::view-transition-old(root),
 html.modal-transitioning::view-transition-new(root){
   animation:none;
 }
-/* Year switches suppress the root crossfade too — the old and new year's
-   covers would otherwise translucently layer during the 200ms blend,
-   reading as "multiple covers flipping through." The per-card exit
-   animation still runs, which is what you actually want to see. */
-html.year-switching::view-transition-old(root),
-html.year-switching::view-transition-new(root){
-  animation:none;
-}
+/* Year-switch fade: container-level opacity transition. When navigateYear
+   triggers, we add .cards-fading (opacity 0), swap content, then remove
+   the class on the next frame so CSS animates the fade-in. Simpler and
+   cleaner than per-card exit choreography that briefly overlapped years. */
+.cards{transition:opacity .2s ease}
+.cards.cards-fading{opacity:0;transition:opacity .15s ease}
 
 /* View Transition API — hero cover image transition */
 ::view-transition-old(book-cover),

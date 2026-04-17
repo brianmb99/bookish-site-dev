@@ -1853,16 +1853,27 @@ function clearHeroCover(){
 // perceptible" qualifier applies; View Transition API handles the visual crossfade.)
 function navigateYear(year){
   selectedYear = year;
-  // Suppress the root crossfade during year switches — the old and new
-  // year's book covers would blend translucently for ~200ms, looking
-  // like "multiple covers flipping." Cards still animate (card-exit
-  // fades old out, new cards instantly appear) — but without the root
-  // blend there's no ghostly layering artifact.
-  if(document.startViewTransition && !prefersReducedMotion()){
-    document.documentElement.classList.add('year-switching');
-    const transition = document.startViewTransition(()=> render());
-    const clearFlag = () => document.documentElement.classList.remove('year-switching');
-    transition.finished.then(clearFlag).catch(clearFlag);
+  // Simple, clean transition: fade the cards container out, instantly
+  // swap the content, fade back in. No per-card exit animation, no
+  // DOM overlap. The existing `.card { animation: card-enter }` handles
+  // the per-card appearance on fade-in.
+  //
+  // This replaces the previous view-transition + card-exit choreography,
+  // which was visually noisy (books of two years briefly overlapped) and
+  // had grid-reflow bugs. One container-level opacity transition is both
+  // simpler and cleaner.
+  if(cardsEl && !prefersReducedMotion()){
+    cardsEl.classList.add('cards-fading');
+    setTimeout(() => {
+      // Clear immediately so existingMap is empty → render() treats all
+      // entries as "new" and they play their card-enter animation.
+      cardsEl.innerHTML = '';
+      render();
+      // Next frame: remove fade class so transition plays the fade-in.
+      requestAnimationFrame(() => {
+        cardsEl.classList.remove('cards-fading');
+      });
+    }, 150);
   } else {
     render();
   }
