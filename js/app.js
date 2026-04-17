@@ -157,7 +157,9 @@ function showMarkAsReadToastWithUndo(key, snapshot) {
 function showOptionalField(name, show, animate){
   const option=addDetailMenu?.querySelector(`.add-detail-option[data-field="${name}"]`);
   const field=optFieldsZone?.querySelector(`.optional-field[data-field="${name}"]`);
-  if(option) option.style.display=show?'none':'block';
+  // Chip visibility: remove inline style to let CSS flex handle layout;
+  // setting 'block' would break the chip row layout (#103).
+  if(option) option.style.display=show?'none':'';
   if(field){
     field.style.display=show?'block':'none';
     if(show && animate){
@@ -282,10 +284,11 @@ tagsInputEl?.addEventListener('blur',()=>{
   if(parts.length){ parts.forEach(t=>addTagPill(t)); tagsInputEl.value=''; activateField('tags'); updateDirty(); }
 });
 
-// Add detail popover toggle
+// Add detail chip menu toggle (#103)
 addDetailBtn?.addEventListener('click',()=>{
   if(!addDetailMenu) return;
-  addDetailMenu.style.display=addDetailMenu.style.display==='none'?'block':'none';
+  // Clear inline style to let CSS flex-row chips show; 'none' to hide.
+  addDetailMenu.style.display=addDetailMenu.style.display==='none'?'':'none';
 });
 // Add detail menu option click → activate field
 addDetailMenu?.addEventListener('click',e=>{
@@ -364,13 +367,18 @@ function openModalWithHero(entry, cardEl){
   }
   // Old state: card cover has the transition name
   setHeroCover(cardEl);
-  document.startViewTransition(()=>{
+  // Suppress root crossfade during modal open to eliminate desktop flicker (#102).
+  // The hero book-cover morph still runs; only the page fade is disabled.
+  document.documentElement.classList.add('modal-transitioning');
+  const transition = document.startViewTransition(()=>{
     // New state: move transition name to modal cover
     const cardCover = cardEl.querySelector('.cover');
     if(cardCover) cardCover.style.viewTransitionName = '';
     if(tileCoverClick) tileCoverClick.style.viewTransitionName = 'book-cover';
     openModal(entry);
   });
+  const clearFlag = () => document.documentElement.classList.remove('modal-transitioning');
+  transition.finished.then(clearFlag).catch(clearFlag);
 }
 
 function openModal(entry, forceIntent){
@@ -529,13 +537,16 @@ function closeModal(fromPopstate = false){
       // Old state: modal cover has the transition name
       if(tileCoverClick) tileCoverClick.style.viewTransitionName = 'book-cover';
       const cardEl = _heroSourceCard;
+      // Suppress root crossfade during close too — keep only the hero morph (#102)
+      document.documentElement.classList.add('modal-transitioning');
+      const clearFlag = () => document.documentElement.classList.remove('modal-transitioning');
       document.startViewTransition(()=>{
         // New state: move transition name to card cover
         if(tileCoverClick) tileCoverClick.style.viewTransitionName = '';
         const cardCover = cardEl.querySelector('.cover');
         if(cardCover) cardCover.style.viewTransitionName = 'book-cover';
         _finalizeCloseModal(fromPopstate);
-      }).finished.then(()=> clearHeroCover()).catch(()=> clearHeroCover());
+      }).finished.then(()=>{ clearFlag(); clearHeroCover(); }).catch(()=>{ clearFlag(); clearHeroCover(); });
     } else {
       _finalizeCloseModal(fromPopstate);
       clearHeroCover();

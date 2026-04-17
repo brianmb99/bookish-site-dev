@@ -1050,6 +1050,13 @@ button.secondary:hover, .btn.secondary:hover{
 @keyframes vt-fade-out{from{opacity:1}to{opacity:0}}
 @keyframes vt-fade-in{from{opacity:0}to{opacity:1}}
 
+/* Modal-open transitions: suppress the root crossfade to eliminate flicker (#102).
+   The hero book-cover morph is still animated; only the root fade is removed. */
+html.modal-transitioning::view-transition-old(root),
+html.modal-transitioning::view-transition-new(root){
+  animation:none;
+}
+
 /* View Transition API — hero cover image transition */
 ::view-transition-old(book-cover),
 ::view-transition-new(book-cover){
@@ -1412,6 +1419,8 @@ form.inline label{
 }
 @keyframes slideUpSheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
 @keyframes slideDownSheet{from{transform:translateY(0)}to{transform:translateY(100%)}}
+/* Modal close button — SVG × with clean strokes (#105).
+   Container is 32x32 for comfortable touch target; icon is 16px. */
 .modal-close-btn{
   position:absolute;
   top:12px;
@@ -1420,11 +1429,10 @@ form.inline label{
   border:none;
   color:var(--color-text-muted);
   border-radius:50%;
-  width:28px;
-  height:28px;
-  font-size:16px;
+  width:32px;
+  height:32px;
   cursor:pointer;
-  transition:all .2s ease;
+  transition:background .15s ease,color .15s ease,opacity .15s ease,transform .1s ease;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -1432,14 +1440,16 @@ form.inline label{
   padding:0;
   min-height:auto;
   z-index:1;
-  opacity:.6;
+  opacity:.7;
 }
+/* Enlarged hit area without visual change */
 .modal-close-btn::before{content:'';position:absolute;inset:-6px;border-radius:50%}
+.modal-close-btn svg{display:block;pointer-events:none}
+.modal-close-btn:active{transform:scale(.95)}
 .modal-close-btn:hover{
-  background:var(--color-bg-surface);
+  background:rgba(255,255,255,.06);
   color:var(--color-text-primary);
   opacity:1;
-  border-color:var(--color-border-default);
 }
 .row-actions{display:flex;gap:8px;margin-top:16px}
 .danger{background:var(--color-error)}
@@ -1741,46 +1751,55 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 /* === Optional Fields: Progressive Disclosure === */
 .optional-fields-zone{width:100%;margin-top:10px}
 .add-detail-wrap{position:relative;margin-bottom:4px}
+/* Subtle text link, matching .change-cover-link treatment (#101).
+   !important overrides the global button rule (blue gradient + shadow). */
 .add-detail-btn{
-  background:transparent;
-  border:none;
-  color:var(--color-primary);
-  font-size:.7rem;
-  font-weight:600;
+  background:none!important;
+  border:none!important;
+  box-shadow:none!important;
+  border-radius:0!important;
+  color:var(--color-primary)!important;
+  font-size:.65rem!important;
+  font-weight:500;
   cursor:pointer;
-  padding:6px 0;
-  min-height:32px;
-  transition:opacity .2s;
+  padding:2px 0!important;
+  min-height:auto!important;
+  letter-spacing:.02em;
+  opacity:.8;
+  transition:opacity .15s;
 }
-.add-detail-btn:hover{opacity:.8}
+.add-detail-btn:hover{opacity:1;transform:none!important}
+/* Chip-style menu (#103): horizontal row of pills, wraps on narrow screens.
+   Replaces previous stacked popover. */
 .add-detail-menu{
-  position:absolute;
-  top:100%;
-  left:0;
-  z-index:100;
-  background:var(--color-bg-elevated);
-  border:1px solid var(--color-border-subtle);
-  border-radius:10px;
-  box-shadow:0 4px 16px rgba(0,0,0,.25);
-  padding:4px 0;
-  min-width:140px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:6px;
+  margin-bottom:4px;
   animation:fadeIn .15s ease;
 }
 .add-detail-option{
-  display:block;
-  width:100%;
-  background:transparent;
-  border:none;
-  color:var(--color-text-secondary);
-  font-size:.75rem;
-  font-weight:500;
-  text-align:left;
-  padding:8px 14px;
+  background:transparent!important;
+  border:1px solid var(--color-border-subtle)!important;
+  box-shadow:none!important;
+  color:var(--color-primary)!important;
+  font-size:.72rem!important;
+  font-weight:500!important;
+  padding:5px 12px!important;
+  border-radius:999px!important;
   cursor:pointer;
-  transition:background .15s,color .15s;
-  min-height:auto;
+  transition:background .15s,border-color .15s,opacity .15s!important;
+  min-height:auto!important;
+  line-height:1.3;
+  opacity:.9;
 }
-.add-detail-option:hover{background:var(--color-bg-surface);color:var(--color-text-primary)}
+.add-detail-option:hover{
+  background:var(--color-bg-surface)!important;
+  border-color:var(--color-primary)!important;
+  opacity:1;
+  transform:none!important;
+}
 .optional-field{margin-top:10px}
 .optional-field.field-reveal{animation:fieldSlideDown .25s ease}
 @keyframes fieldSlideDown{
