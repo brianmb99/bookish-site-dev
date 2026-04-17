@@ -13,6 +13,7 @@ import { haptic } from './core/haptic.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
 import { attachKeyboardHandler } from './core/keyboard_viewport.js';
 import { initPullToRefresh } from './core/pull_to_refresh.js';
+import { getFieldPref, setFieldPref } from './core/field_prefs.js';
 
 // --- Version logging (always visible in console) ---
 {
@@ -175,14 +176,27 @@ function activateField(name){
   const field=optFieldsZone?.querySelector(`.optional-field[data-field="${name}"]`);
   if(field && field.style.display!=='none') return;
   showOptionalField(name, true, true);
+  // Explicit user action: remember this choice for future books (#104).
+  setFieldPref(name, true);
 }
 function deactivateField(name){
   showOptionalField(name, false);
+  // Only update pref + toast if the preference actually changes — avoids
+  // confusing "hidden by default" toast when the user dismisses a field
+  // that was only shown because the book has existing data.
+  const wasShownByDefault = getFieldPref(name);
+  if(wasShownByDefault){
+    setFieldPref(name, false);
+    const label = name.charAt(0).toUpperCase() + name.slice(1);
+    showStatusToast(`${label} hidden by default. Use "+ Add detail" to show it again.`);
+  }
 }
 function initOptionalFields(entry){
   OPTIONAL_FIELDS.forEach(name=>{
     const hasData = entry && ((name==='notes' && entry.notes) || (name==='rating' && entry.rating) || (name==='owned' && entry.owned) || (name==='tags' && entry.tags));
-    showOptionalField(name, !!hasData);
+    // Show if the book has data OR the user has opted-in via preference (#104)
+    const shouldShow = !!hasData || getFieldPref(name);
+    showOptionalField(name, shouldShow);
   });
   closeAddDetailMenu();
 }
