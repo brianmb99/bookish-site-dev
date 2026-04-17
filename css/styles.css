@@ -1523,7 +1523,11 @@ html.modal-transitioning::view-transition-new(root){
     border-left:none;
     border-right:none;
     border-bottom:none;
-    height:100dvh;
+    /* 100% of the visible viewport (parent .modal-overlay is position:fixed;
+       inset:0). 100dvh can be taller than actually visible when the browser
+       URL bar is showing — which caused the modal to overflow above the
+       viewport, making the header appear "cut off" under the status bar. */
+    height:100%;
     max-height:none;
     padding:16px 14px;
     /* 48px min top padding — see same rationale on .modal-inner */
@@ -1861,8 +1865,12 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
     padding:16px 14px;
     max-width:100%;
     border-radius:16px 16px 0 0;
-    /* Full viewport height; safe area handled via padding-top below. */
-    height:100dvh;
+    /* 100% of the visible viewport (parent .modal is position:fixed;
+       inset:0). 100dvh can be taller than actually visible when the browser
+       URL bar is showing — which caused the modal to overflow above the
+       viewport, making "Want to Read/Reading/Read" tabs appear cut off
+       behind the status bar. */
+    height:100%;
     overflow-y:auto;
     animation:slideUpSheet .3s ease-out;
     /* Safe-area insets for top (status bar) and bottom (home indicator /
