@@ -25,7 +25,7 @@ const SVG_DOWNLOAD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none
  */
 async function performLogout() {
   stopSync();
-  tarnService.logout();
+  await tarnService.logout();
   subscription.resetStatus();
 
   // Clear IndexedDB cache so next user doesn't see stale books

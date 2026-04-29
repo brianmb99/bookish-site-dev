@@ -1,6 +1,9 @@
-// tarn_service.js — Singleton TarnClient wrapper for Bookish
-// Manages session persistence, JWT auto-refresh, and provides
-// a single access point for all Tarn operations.
+// tarn_service.js — Singleton TarnClient wrapper for Bookish.
+//
+// Owns session persistence (Tarn SDK Section 7) and exposes a single access
+// point for all Tarn operations. The SDK handles at-rest encryption of the
+// session via a non-extractable AES-256-GCM key in IndexedDB; this wrapper
+// just hands the opaque blob to localStorage and back.
 
 import { TarnClient } from '../lib/tarn/tarn-client.bundle.js';
 
@@ -10,7 +13,6 @@ const APP_NAME = 'Bookish';
 
 const STORAGE_KEYS = {
   SESSION: 'bookish.tarn.session',
-  SESSION_KEY: 'bookish.tarn.sessionKey',
   EMAIL: 'bookish.email',
   DISPLAY_NAME: 'bookish.displayName',
   ACTIVE_FIELDS: 'bookish_active_fields',
@@ -19,82 +21,22 @@ const STORAGE_KEYS = {
 /** @type {TarnClient|null} */
 let _client = null;
 
-// ============ SESSION ENCRYPTION ============
-// Session data is encrypted at rest with a random AES-256-GCM key.
-//
-// THREAT MODEL:
-// The encrypted session AND the session key are both in localStorage.
-// This protects against casual inspection (someone browsing localStorage
-// can't read raw key material), but NOT against a determined attacker
-// with JS execution on this origin (XSS). An XSS attacker can read both
-// localStorage values and decrypt the session.
-//
-// This is the same limitation every web app faces. The real protection is
-// the browser's same-origin policy. Browsers don't offer a persistent,
-// origin-scoped secret store inaccessible to JS. Alternatives considered:
-//   - sessionStorage: clears on tab close → users re-enter password per tab
-//   - Non-extractable CryptoKeys in IndexedDB: can't serialize for AES-GCM use
-// Both degrade UX without meaningful security improvement.
-//
-// The primary defense is XSS prevention (CSP, input sanitization, no inline
-// scripts with user data). If an attacker achieves JS execution on the
-// origin, session key storage is moot — they can call TarnClient directly.
-
-async function generateSessionKey() {
-  return await crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
-  );
-}
-
-async function encryptSession(sessionData, key) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(JSON.stringify(sessionData));
-  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv }, key, encoded
-  ));
-  const result = new Uint8Array(iv.length + ciphertext.length);
-  result.set(iv, 0);
-  result.set(ciphertext, iv.length);
-  return btoa(String.fromCharCode(...result));
-}
-
-async function decryptSession(base64, key) {
-  const bin = atob(base64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const iv = bytes.slice(0, 12);
-  const ciphertext = bytes.slice(12);
-  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-  return JSON.parse(new TextDecoder().decode(decrypted));
-}
-
-async function exportSessionKey(key) {
-  const raw = await crypto.subtle.exportKey('raw', key);
-  return btoa(String.fromCharCode(...new Uint8Array(raw)));
-}
-
-async function importSessionKey(base64) {
-  const bin = atob(base64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return await crypto.subtle.importKey(
-    'raw', bytes, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
-  );
-}
-
 // ============ SESSION PERSISTENCE ============
+//
+// Threat model: the persisted blob is opaque base64url ciphertext encrypted
+// under an origin-scoped, non-extractable AES-256-GCM key in IndexedDB. An
+// XSS attacker on this origin can call resumeSession() to act as the user
+// up to the blob's 7-day hard expiry, but cannot exfiltrate the wrapping
+// key for off-origin replay. Credential change / recovery / delete clear
+// the wrapping key and invalidate every previously-emitted blob.
+//
+// See TARN_PROTOCOL.md § Session persistence (Section 7) for the full
+// threat-model discussion.
 
 async function saveSession(client, email) {
   try {
-    const sessionData = await client.exportSession();
-    if (!sessionData) return;
-
-    const sessionKey = await generateSessionKey();
-    const encrypted = await encryptSession(sessionData, sessionKey);
-    const keyBase64 = await exportSessionKey(sessionKey);
-
-    localStorage.setItem(STORAGE_KEYS.SESSION, encrypted);
-    localStorage.setItem(STORAGE_KEYS.SESSION_KEY, keyBase64);
+    const blob = await client.serializeSession();
+    localStorage.setItem(STORAGE_KEYS.SESSION, blob);
     if (email) localStorage.setItem(STORAGE_KEYS.EMAIL, email);
   } catch (err) {
     console.warn('[TarnService] Failed to save session:', err.message);
@@ -102,24 +44,22 @@ async function saveSession(client, email) {
 }
 
 async function restoreSession() {
-  try {
-    const encrypted = localStorage.getItem(STORAGE_KEYS.SESSION);
-    const keyBase64 = localStorage.getItem(STORAGE_KEYS.SESSION_KEY);
-    if (!encrypted || !keyBase64) return null;
-
-    const sessionKey = await importSessionKey(keyBase64);
-    const sessionData = await decryptSession(encrypted, sessionKey);
-    return await TarnClient.fromSession(TARN_API, APP_ID, sessionData);
-  } catch (err) {
-    console.warn('[TarnService] Failed to restore session:', err.message);
-    clearSession();
-    return null;
+  const blob = localStorage.getItem(STORAGE_KEYS.SESSION);
+  if (!blob) return null;
+  // resumeSession returns null (never throws) on any recoverable failure:
+  // expired, tampered, schema-mismatched, wrong origin, IndexedDB error.
+  const client = await TarnClient.resumeSession(TARN_API, APP_ID, blob);
+  if (!client) {
+    // Stale blob — the wrapping key has been rotated (changeCredentials,
+    // recoverAccount, deleteAccount) or the blob itself expired. Drop the
+    // localStorage entry so future restoreSession() calls short-circuit.
+    localStorage.removeItem(STORAGE_KEYS.SESSION);
   }
+  return client;
 }
 
-function clearSession() {
+function clearLocalStorage() {
   localStorage.removeItem(STORAGE_KEYS.SESSION);
-  localStorage.removeItem(STORAGE_KEYS.SESSION_KEY);
   localStorage.removeItem(STORAGE_KEYS.EMAIL);
   localStorage.removeItem(STORAGE_KEYS.DISPLAY_NAME);
 }
@@ -186,11 +126,24 @@ export async function login(email, password) {
 }
 
 /**
- * Log out — clears session and in-memory state.
+ * Log out — clears in-memory state and the persisted session blob
+ * synchronously, then schedules the IndexedDB wrapping-key wipe. After
+ * the IndexedDB wipe completes, any previously-emitted session blob on
+ * this origin is unreadable. Awaiting the returned promise ensures both
+ * have completed; a fire-and-forget call still gets immediate
+ * isLoggedIn() === false and the persisted blob removed.
+ *
+ * @returns {Promise<void>}
  */
-export function logout() {
+export async function logout() {
+  const client = _client;
   _client = null;
-  clearSession();
+  clearLocalStorage();
+  if (client) {
+    try { await client.clearSession(); } catch (err) {
+      console.warn('[TarnService] clearSession failed:', err.message);
+    }
+  }
 }
 
 /**
@@ -202,15 +155,13 @@ export function isLoggedIn() {
 }
 
 /**
- * Get the TarnClient instance. Auto-refreshes JWT if expired.
+ * Get the TarnClient instance. JWT expiry is handled inside the SDK
+ * (challenge-response refresh on first authenticated call).
  * @returns {Promise<TarnClient>}
  * @throws if not logged in
  */
 export async function getClient() {
   if (!_client) throw new Error('Not logged in');
-  // TarnClient.#requireAuth() handles JWT expiry internally —
-  // it auto-refreshes via challenge-response when the JWT expires.
-  // No need to check or refresh here.
   return _client;
 }
 
@@ -244,7 +195,10 @@ export function displayName(name) {
 }
 
 /**
- * Update saved session (call after operations that change JWT).
+ * Re-emit the persisted session blob. Call after operations that mutate
+ * the in-memory client state in a way the persisted blob should reflect
+ * (e.g., a fresh JWT after silent reauth). The SDK does not auto-refresh
+ * `expiresAt` on use — every call here resets the 7-day window.
  */
 export async function persistSession() {
   if (_client) {
