@@ -209,12 +209,12 @@ function renderCreateAccountForm(content) {
       </div>
 
       <div class="auth-note">
-        Your reading list is private — even Bookish can't read it or reset your password. A recovery code will be emailed at signup; save it somewhere safe (spam folder, too).
+        Your reading list is private — even Bookish can't read it or reset your password. After signup we'll show you a 24-word recovery phrase and email you a PDF copy. Save them both somewhere safe.
       </div>
 
       <label class="auth-consent">
         <input type="checkbox" id="recoveryConsent" />
-        <span>I'll save the recovery code I'll be emailed. Without it and my password, my data can't be recovered.</span>
+        <span>I understand I'll be shown a 24-word recovery phrase and that without it and my password, my data can't be recovered.</span>
       </label>
 
       <button id="createAccountBtn" class="btn primary auth-submit" disabled>
@@ -316,13 +316,15 @@ function renderCreateAccountForm(content) {
     progress.textContent = 'Creating account...';
 
     try {
-      // Step 1: Register with Tarn (PBKDF2 derivation + challenge-response)
+      // Step 1: Register with Tarn. The SDK derives keys, generates a
+      // 24-word recovery phrase + PDF, and (by default) forwards the PDF
+      // through the recovery-email forwarder.
       progress.textContent = 'Deriving encryption keys...';
-      const { dataLookupKey } = await tarnService.register(email, password);
+      const reg = await tarnService.register(email, password);
+      const { dataLookupKey, recoveryPhrase, pdfBytes, emailDelivered } = reg;
 
-      // Step 2: Set free-tier rules + send welcome email via Bookish API.
-      // This is critical — without rules, writes are denied.
-      // Retry up to 3 times with backoff.
+      // Step 2: Set free-tier rules via Bookish API. Critical — without
+      // rules, writes are denied. Retry up to 3 times with backoff.
       progress.textContent = 'Setting up your account...';
       let provisioned = false;
       for (let attempt = 1; attempt <= 3; attempt++) {
@@ -344,8 +346,6 @@ function renderCreateAccountForm(content) {
       }
 
       if (!provisioned) {
-        // Account exists in Tarn but writes will be denied until provisioned.
-        // Store flag so we can retry on next login/sync.
         localStorage.setItem('bookish.needsProvisioning', JSON.stringify({ email, dataLookupKey }));
         console.warn('[AccountUI] Provisioning failed after 3 attempts — will retry later');
       }
@@ -354,36 +354,33 @@ function renderCreateAccountForm(content) {
       tarnService.displayName(email.split('@')[0]);
       localStorage.setItem('bookish.hasHadAccount', 'true');
 
-      // Step 4: Success
       transientState.justCreated = true;
       transientState.createdTime = Date.now();
       markInitialSyncDone(); // New account — no books to sync
 
-      // New account starts on the free tier; prime the cache (#74).
       subscription.resetStatus();
       subscription.fetchStatus().catch(() => {});
 
-      // Show a recovery-code-first success message instead of a quick "Account
-      // created!" — Tarn emails a recovery code at signup, and users need to
-      // know to look for it (could land in spam).
-      progress.innerHTML = provisioned
-        ? '✓ Account created<br><span class="auth-success-sub">Check your email for a recovery code and save it somewhere safe.</span>'
-        : '✓ Account created<br><span class="auth-success-sub">Check your email for a recovery code. Cloud sync setup will retry shortly.</span>';
-      progress.classList.add('auth-success');
-      setTimeout(() => {
-        closeAccountModal();
-        startSync();
-        uiStatusManager.refresh();
-        if (typeof window.updateBookDots === 'function') window.updateBookDots();
-        // Post-close toast reinforces the "check your email" message in case
-        // the modal message was skimmed during the ~3s it was visible.
-        setTimeout(() => {
-          if (typeof window.bookishApp?.showStatusToast === 'function') {
-            window.bookishApp.showStatusToast('Check email for your recovery code — save it somewhere safe.');
-          }
-        }, 400);
-      }, provisioned ? 3000 : 3500);
+      // Step 4: Hand off to the recovery-phrase view. The user CANNOT
+      // dismiss this until they acknowledge having saved the phrase —
+      // that's the whole point of surfacing it. Hold sync until then so
+      // the post-modal startSync() runs from the same code path.
+      renderRecoveryPhraseView(content, {
+        phrase: recoveryPhrase,
+        pdfBytes,
+        emailDelivered,
+        provisioned,
+        onContinue: () => {
+          closeAccountModal();
+          startSync();
+          uiStatusManager.refresh();
+          if (typeof window.updateBookDots === 'function') window.updateBookDots();
+        },
+      });
 
+      // Drop the in-memory phrase + PDF reference from this scope. The
+      // SDK already doesn't cache them; the recovery view holds its own
+      // closure-scoped copy until dismiss.
     } catch (e) {
       console.error('[AccountUI] Registration failed:', e);
       let msg = e.message || 'Registration failed. Please try again.';
@@ -399,6 +396,119 @@ function renderCreateAccountForm(content) {
   switchLink.addEventListener('click', (e) => {
     e.preventDefault();
     renderSignInForm(content);
+  });
+}
+
+// ============================================================================
+// RECOVERY PHRASE VIEW (post-register)
+// ============================================================================
+
+/**
+ * Render the post-register recovery-phrase view. Shows the 24 words in a
+ * numbered grid, a Download PDF button, an email-delivery indicator, and
+ * an acknowledgment checkbox that gates the Continue button.
+ *
+ * The user cannot dismiss this except by acknowledging — modal close is
+ * also locked while this view is mounted.
+ *
+ * @param {HTMLElement} content
+ * @param {{
+ *   phrase: string,
+ *   pdfBytes: Uint8Array,
+ *   emailDelivered: boolean,
+ *   provisioned: boolean,
+ *   onContinue: () => void,
+ * }} opts
+ */
+function renderRecoveryPhraseView(content, opts) {
+  const { phrase, pdfBytes, emailDelivered, provisioned, onContinue } = opts;
+  const words = phrase.trim().split(/\s+/);
+
+  // Lock modal close while this view is mounted — there's no other way
+  // for the user to see the phrase.
+  const modal = document.getElementById('accountModal');
+  if (modal) modal.dataset.allowClose = 'false';
+
+  const wordCells = words.map((w, i) => {
+    const n = String(i + 1).padStart(2, '0');
+    return `<li class="recovery-word"><span class="recovery-word-num">${n}</span><span class="recovery-word-text">${w}</span></li>`;
+  }).join('');
+
+  const emailMessage = emailDelivered
+    ? `<div class="recovery-email-status recovery-email-ok">We also sent the PDF to your email — save it somewhere safe and delete the email. Inboxes are a common attack target.</div>`
+    : `<div class="recovery-email-status recovery-email-warn">Email delivery failed. Please download the PDF before continuing — it's the only copy you'll see.</div>`;
+
+  const provisioningNote = provisioned
+    ? ''
+    : `<div class="recovery-email-status recovery-email-warn" style="margin-top:8px;">Cloud sync setup will retry shortly — your account is ready, but writes may be delayed by a few seconds.</div>`;
+
+  content.innerHTML = `
+    <div class="auth-form recovery-phrase-view">
+      <div class="auth-header">
+        <div class="auth-icon">${SVG_SHIELD}</div>
+        <h2>Save your recovery phrase</h2>
+        <p>These 24 words are the only way to recover your account if you forget your password. Bookish never sees them.</p>
+      </div>
+
+      <ol class="recovery-phrase-grid">${wordCells}</ol>
+
+      <div class="recovery-actions-row">
+        <button id="recoveryCopyBtn" type="button" class="btn secondary">Copy words</button>
+        <button id="recoveryDownloadBtn" type="button" class="btn secondary">${SVG_DOWNLOAD} Download PDF</button>
+      </div>
+
+      ${emailMessage}
+      ${provisioningNote}
+
+      <label class="auth-consent">
+        <input type="checkbox" id="recoverySavedAck" />
+        <span>I've saved my recovery phrase. I understand that without it, I cannot recover my account if I forget my password.</span>
+      </label>
+
+      <button id="recoveryContinueBtn" class="btn primary auth-submit" disabled>
+        Continue to Bookish
+      </button>
+    </div>
+  `;
+
+  const ackCheckbox = content.querySelector('#recoverySavedAck');
+  const continueBtn = content.querySelector('#recoveryContinueBtn');
+  const copyBtn = content.querySelector('#recoveryCopyBtn');
+  const downloadBtn = content.querySelector('#recoveryDownloadBtn');
+
+  ackCheckbox.addEventListener('change', () => {
+    continueBtn.disabled = !ackCheckbox.checked;
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(phrase);
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => { copyBtn.textContent = 'Copy words'; }, 1500);
+    } catch {
+      copyBtn.textContent = "Couldn't copy";
+      setTimeout(() => { copyBtn.textContent = 'Copy words'; }, 1500);
+    }
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    // pdfBytes is a Uint8Array from the SDK. Wrap in a Blob so the
+    // browser triggers a download with the right MIME type.
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bookish-recovery-phrase.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  });
+
+  continueBtn.addEventListener('click', () => {
+    if (!ackCheckbox.checked) return;
+    if (modal) modal.dataset.allowClose = 'true';
+    onContinue();
   });
 }
 

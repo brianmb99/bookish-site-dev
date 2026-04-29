@@ -2681,6 +2681,70 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   text-decoration: underline;
 }
 
+/* Recovery-phrase view (post-register) — surfaces the 24-word phrase
+   and PDF download. The user cannot dismiss this until acknowledging. */
+.recovery-phrase-grid {
+  list-style: none;
+  margin: 18px 0 14px;
+  padding: 14px;
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+.recovery-word {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+.recovery-word-num {
+  flex-shrink: 0;
+  width: 1.6em;
+  text-align: right;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+}
+.recovery-word-text {
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  color: var(--color-text-primary);
+  word-break: break-all;
+}
+.recovery-actions-row {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.recovery-actions-row .btn {
+  flex: 1;
+}
+.recovery-email-status {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+.recovery-email-ok {
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+}
+.recovery-email-warn {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--color-error);
+}
+@media (max-width: 480px) {
+  .recovery-phrase-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* Account panel (logged in) */
 .account-panel-header {
   display: flex;

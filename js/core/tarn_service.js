@@ -2,10 +2,11 @@
 // Manages session persistence, JWT auto-refresh, and provides
 // a single access point for all Tarn operations.
 
-import { TarnClient } from '../lib/tarn/tarn.js';
+import { TarnClient } from '../lib/tarn/tarn-client.bundle.js';
 
 const TARN_API = window.BOOKISH_API_BASE || 'https://api.tarn.dev';
 const APP_ID = 'bookish';
+const APP_NAME = 'Bookish';
 
 const STORAGE_KEYS = {
   SESSION: 'bookish.tarn.session',
@@ -138,13 +139,33 @@ export async function init() {
 
 /**
  * Register a new account.
+ *
+ * The Tarn SDK generates a 24-word BIP39 recovery phrase + a rendered PDF
+ * client-side, and (by default) forwards the PDF to the user's email via
+ * Tarn's recovery-email forwarder. The phrase + PDF are returned in-memory
+ * so the caller can also display the words + offer a local download.
+ *
+ * The caller MUST surface the phrase to the user. The SDK does not cache
+ * either the phrase or the PDF bytes — Bookish never persists them either;
+ * the user is the only durable store.
+ *
  * @param {string} email
  * @param {string} password
- * @returns {Promise<{dataLookupKey: string}>}
+ * @returns {Promise<{
+ *   dataLookupKey: string,
+ *   recoveryPhrase: string,
+ *   pdfBytes: Uint8Array,
+ *   emailDelivered: boolean,
+ * }>}
  */
 export async function register(email, password) {
   const client = new TarnClient(TARN_API, APP_ID);
-  const result = await client.register(email, password);
+  const result = await client.register(email, password, {
+    recoveryAcknowledged: true,
+    emailRecoveryKit: true,
+    recipientEmail: email,
+    appName: APP_NAME,
+  });
   _client = client;
   await saveSession(client, email);
   return result;
