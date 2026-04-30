@@ -3681,7 +3681,11 @@ body.modal-open{overscroll-behavior-y:contain}
 .friend-shelf-overlay{
   position:fixed;inset:0;
   z-index:5500;
-  background:var(--color-bg-page);
+  /* Match the page chrome (linear gradient on body) so the overlay reads
+     as a route, not a translucent panel. Use the deeper of the two
+     gradient stops so text contrast still works against the same surface
+     classes Library cards already render on. */
+  background:linear-gradient(180deg,var(--color-bg-deep) 0%,var(--color-bg-base) 100%);
   display:none;
   animation:fadeIn .2s ease-out;
 }
@@ -3724,6 +3728,12 @@ body.modal-open{overscroll-behavior-y:contain}
 }
 .friend-shelf-actions{
   display:flex;align-items:center;gap:8px;flex-shrink:0;
+}
+/* Override the global .modal-close-btn absolute positioning — inside the
+   friend-shelf header it sits inline with the Mute button in a flex row,
+   not pinned to the chrome corner. */
+.friend-shelf-actions .modal-close-btn{
+  position:static;
 }
 .friend-shelf-mute{
   background:transparent;
