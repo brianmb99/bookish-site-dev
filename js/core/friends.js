@@ -366,6 +366,158 @@ export async function pollForConnectionUpdates() {
   } catch { /* ignore */ }
 }
 
+// ============ Friend's-shelf read flow (issue #123) ============
+
+// Tarn blob format prefix (5 bytes 'T','A','R','N',0x02). The owner-side
+// SDK strips this internally; we re-implement the recipient-side decrypt
+// here because the SDK does not (yet) expose a helper that takes a
+// share-log CEK and a blob and returns plaintext.
+//
+// Per TARN_PROTOCOL.md §"Reading":
+//   "A recipient with a CEK from a share log skips the wrapped portion
+//    and decrypts directly."
+//
+// Layout: magic(5) || wrapped_CEK(40) || iv(12) || ciphertext+GCM_tag
+// The friend has the bare CEK from the share log, so we read iv at
+// bytes 45..56 and decrypt bytes 57..end with AES-GCM(CEK).
+const TARN_BLOB_MAGIC = new Uint8Array([0x54, 0x41, 0x52, 0x4e, 0x02]);
+const WRAPPED_CEK_LEN = 40;
+const IV_LEN = 12;
+
+function hasTarnBlobMagic(bytes) {
+  if (!bytes || bytes.length < TARN_BLOB_MAGIC.length) return false;
+  for (let i = 0; i < TARN_BLOB_MAGIC.length; i++) {
+    if (bytes[i] !== TARN_BLOB_MAGIC[i]) return false;
+  }
+  return true;
+}
+
+function base64UrlToBytes(b64url) {
+  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(b64url.length / 4) * 4, '=');
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Decrypt a Tarn blob using a CEK from a share log. Returns the parsed
+ * JSON payload. Throws on malformed magic or decrypt failure (caller
+ * decides whether to skip or surface).
+ *
+ * Exported for unit tests.
+ */
+export async function _decryptSharedBlobForTest(blobBytes, cekBase64Url) {
+  if (!hasTarnBlobMagic(blobBytes)) {
+    throw new Error('Blob does not have TARN magic prefix');
+  }
+  if (blobBytes.length < TARN_BLOB_MAGIC.length + WRAPPED_CEK_LEN + IV_LEN + 16) {
+    throw new Error('Blob too short for new format');
+  }
+  const ivStart = TARN_BLOB_MAGIC.length + WRAPPED_CEK_LEN;
+  const iv = blobBytes.slice(ivStart, ivStart + IV_LEN);
+  const ciphertext = blobBytes.slice(ivStart + IV_LEN);
+  const cekBytes = base64UrlToBytes(cekBase64Url);
+  const cekKey = await crypto.subtle.importKey(
+    'raw', cekBytes, { name: 'AES-GCM' }, false, ['decrypt'],
+  );
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv }, cekKey, ciphertext,
+  );
+  return JSON.parse(new TextDecoder().decode(decrypted));
+}
+
+const ARWEAVE_GATEWAYS = [
+  'https://turbo-gateway.com/',
+  'https://arweave.net/',
+];
+
+/**
+ * Fetch a single Arweave blob with gateway fallback. Returns the raw bytes
+ * or null on total failure. Pure function — no logging, no caching.
+ */
+async function fetchArweaveBlob(txId, fetchImpl = globalThis.fetch) {
+  for (const gw of ARWEAVE_GATEWAYS) {
+    try {
+      const res = await fetchImpl(`${gw}${encodeURIComponent(txId)}`, {
+        signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+          ? AbortSignal.timeout(10000)
+          : undefined,
+      });
+      if (res.ok) return new Uint8Array(await res.arrayBuffer());
+    } catch {
+      // Try next gateway.
+    }
+  }
+  return null;
+}
+
+/**
+ * Fetch a friend's published library by reading their share log and
+ * decrypting each shared blob. Returns book records in the same shape the
+ * Library grid renders (so the friend's-shelf view can pass the result
+ * straight to the existing card builders without extra adapter work).
+ *
+ * Empty share log → empty array (the friend hasn't published anything).
+ * Per-entry decrypt or fetch failure → that entry is skipped with a
+ * console.warn; the remaining entries are returned. The view treats a
+ * total fetch failure (readShareLog throws) as the error state.
+ *
+ * Note on architecture: today, Bookish does not yet *publish* books to
+ * the share log — that wiring lands with issue #8 (per-book privacy)
+ * which gates publication on the per-book privacy flag. Until issue #8
+ * ships, every friend's `readShareLog` call returns the empty handshake
+ * snapshot and this function returns []. The empty-state UI handles that
+ * case naturally.
+ *
+ * @param {{ share_pub: string, signing_pub: string, label?: string|null }} connection
+ * @param {{ fetchImpl?: typeof fetch }} [opts] - injectable fetch for tests
+ * @returns {Promise<Array<Object>>}
+ */
+export async function fetchFriendLibrary(connection, opts = {}) {
+  if (!connection || !connection.share_pub || !connection.signing_pub) {
+    throw new Error('fetchFriendLibrary: connection.share_pub and signing_pub are required');
+  }
+  const fetchImpl = opts.fetchImpl || globalThis.fetch;
+  const client = await tarnService.getClient();
+
+  // readShareLog returns { content_id: { tx_id, cek } }. Empty object means
+  // the friend has published nothing (or only the handshake snapshot).
+  const state = await client.readShareLog(connection);
+  const entries = Object.entries(state || {});
+  if (entries.length === 0) return [];
+
+  // Fetch + decrypt each shared blob in parallel (bounded). Skips any
+  // entry that fails so a single bad entry can't blank the whole shelf.
+  const CONCURRENCY = 10;
+  const results = [];
+  for (let i = 0; i < entries.length; i += CONCURRENCY) {
+    const batch = entries.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.allSettled(batch.map(async ([contentId, info]) => {
+      if (!info || !info.tx_id || !info.cek) return null;
+      const blob = await fetchArweaveBlob(info.tx_id, fetchImpl);
+      if (!blob) {
+        console.warn('[Bookish:Friends] fetchFriendLibrary: blob fetch failed for', contentId);
+        return null;
+      }
+      try {
+        const data = await _decryptSharedBlobForTest(blob, info.cek);
+        // Normalize to the Library entry shape: txid + spread payload.
+        // The friend's shelf view never writes back, so we don't carry
+        // status / pending / sync flags.
+        return { txid: info.tx_id, ...data };
+      } catch (err) {
+        console.warn('[Bookish:Friends] fetchFriendLibrary: decrypt failed for', contentId, err.message);
+        return null;
+      }
+    }));
+    for (const r of batchResults) {
+      if (r.status === 'fulfilled' && r.value) results.push(r.value);
+    }
+  }
+  return results;
+}
+
 // Storage key exports for tests + cleanup paths.
 export const STORAGE_KEYS = {
   PENDING_LABELS: PENDING_LABELS_KEY,

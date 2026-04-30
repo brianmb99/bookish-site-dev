@@ -3669,3 +3669,146 @@ body.modal-open{overscroll-behavior-y:contain}
   width:28px;height:28px;
   font-size:.8rem;
 }
+
+/* --- Friend's-shelf full-screen view (#123) ----------------------------- */
+
+/* Full-screen overlay — sits above Library and the friends drawer chrome.
+   Mobile: full-bleed; desktop: full-bleed too. The friction of "you must
+   re-open the drawer to visit another friend" makes this overlay feel
+   like a page rather than a modal, even though it's structurally an
+   overlay. z-index sits between the friends drawer (5000) and any
+   modals/toasts that may want to surface above it (kept below 6000). */
+.friend-shelf-overlay{
+  position:fixed;inset:0;
+  z-index:5500;
+  background:var(--color-bg-page);
+  display:none;
+  animation:fadeIn .2s ease-out;
+}
+.friend-shelf-chrome{
+  display:flex;flex-direction:column;
+  width:100%;height:100%;
+  /* Phone-first: full-bleed. Desktop: cap width like the Library main
+     column does so the cards line up with the user's own grid layout. */
+  max-width:920px;margin:0 auto;
+  padding:0 16px 24px;
+  box-sizing:border-box;
+  overflow:hidden;
+}
+.friend-shelf-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 0 12px;
+  flex-shrink:0;
+  border-bottom:1px solid var(--color-border-subtle);
+  margin-bottom:12px;
+}
+.friend-shelf-identity{
+  display:flex;align-items:center;gap:12px;min-width:0;
+}
+.friend-shelf-avatar-host{flex-shrink:0;display:flex}
+.friend-shelf-avatar-host .friend-avatar{width:40px;height:40px;font-size:1rem}
+.friend-shelf-name-block{
+  display:flex;flex-direction:column;min-width:0;
+}
+.friend-shelf-name{
+  font-family:var(--font-display);
+  font-size:1.15rem;font-weight:600;
+  color:var(--color-text-primary);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  outline:none;
+}
+.friend-shelf-name-sub{
+  font-size:.72rem;
+  color:var(--color-text-muted);
+  letter-spacing:.04em;
+}
+.friend-shelf-actions{
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
+}
+.friend-shelf-mute{
+  background:transparent;
+  border:1px solid var(--color-border-subtle);
+  color:var(--color-text-secondary);
+  padding:6px 12px;
+  border-radius:6px;
+  font-size:.78rem;
+  font-family:var(--font-body);
+  cursor:pointer;
+  min-height:36px;
+  transition:background .15s,border-color .15s,color .15s;
+}
+.friend-shelf-mute:hover,
+.friend-shelf-mute:focus-visible{
+  background:var(--color-bg-surface);
+  border-color:var(--color-border-default);
+  color:var(--color-text-primary);
+}
+.friend-shelf-body{
+  flex:1 1 auto;min-height:0;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+/* The friend's-shelf cards reuse the global .cards / .card styles. The
+   only override is the cursor — friend cards are not (yet) interactive,
+   so the pointer cursor would be misleading. Issue 6 may flip this back
+   on if we wire up a friend-book detail modal. */
+.friend-shelf-cards .card{cursor:default}
+.friend-shelf-cards .card:hover{transform:none;box-shadow:none;background:var(--color-bg-surface);border-color:var(--color-border-subtle)}
+
+/* States: empty + error live in the same slot inside the body, swapped
+   in by the view module. The skeleton state reuses the global card-skeleton
+   markup so loading visually matches the user's own Library cold-load. */
+.friend-shelf-state[hidden]{display:none}
+.friend-shelf-empty,
+.friend-shelf-error{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;
+  padding:48px 16px;
+  color:var(--color-text-secondary);
+}
+.friend-shelf-empty-icon,
+.friend-shelf-error-icon{
+  font-size:2.4rem;margin-bottom:12px;opacity:.85;
+}
+.friend-shelf-empty-headline,
+.friend-shelf-error-headline{
+  font-family:var(--font-display);
+  font-size:1rem;
+  color:var(--color-text-primary);
+  margin-bottom:6px;
+}
+.friend-shelf-empty-sub{font-size:.85rem;color:var(--color-text-muted)}
+.friend-shelf-retry{
+  margin-top:14px;
+  background:var(--color-primary);
+  color:#fff;
+  border:none;
+  padding:8px 18px;
+  border-radius:6px;
+  font-family:var(--font-body);
+  font-size:.85rem;font-weight:600;
+  cursor:pointer;
+  min-height:40px;
+  transition:background .15s;
+}
+.friend-shelf-retry:hover,
+.friend-shelf-retry:focus-visible{
+  background:var(--color-primary-hover);
+}
+
+/* Lightweight toast for the Mute stub. Issue 10 will replace this with
+   the proper mute action and confirmation. */
+.friend-shelf-toast{
+  position:fixed;
+  left:50%;bottom:24px;transform:translateX(-50%);
+  background:var(--color-bg-elevated);
+  color:var(--color-text-primary);
+  border:1px solid var(--color-border-subtle);
+  padding:10px 16px;
+  border-radius:8px;
+  font-size:.85rem;
+  z-index:6000;
+  box-shadow:0 6px 18px -8px rgba(0,0,0,.5);
+  animation:fadeIn .15s ease-out;
+}
+.friend-shelf-toast.hiding{opacity:0;transition:opacity .25s}

@@ -18,6 +18,7 @@ import { getFieldPref, setFieldPref } from './core/field_prefs.js';
 import * as subscription from './core/subscription.js';
 import * as friendsRouter from './core/friends_router.js';
 import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend-glyph-trigger.js';
+import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCardDetails, generatedCoverColor as sharedGeneratedCoverColor, escapeHtml as sharedEscapeHtml } from './components/book-card.js';
 
 // Friends invite-link routing (#118). Capture the invite parameters from
 // /invite/:token_id#:payload_key BEFORE anything else touches window.location
@@ -382,7 +383,10 @@ if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e
 if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.add('no-cover'); updateDirty(); if(form.priorTxid.value) _autoSaveIfDirty(); }); }
 
 // --- Helpers ---
-function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// escapeHtml + buildCardHTML + buildCardDetails + generatedCoverColor moved to
+// components/book-card.js (#123) so the friend's-shelf view can reuse the
+// same builders verbatim. Local aliases preserve the rest of app.js.
+const escapeHtml = sharedEscapeHtml;
 function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>No cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); }
 function showCoverLoaded(){ if(coverRemoveBtn) coverRemoveBtn.style.display='inline-flex'; }
 
@@ -1008,8 +1012,14 @@ window.addEventListener('popstate', () => {
   } else {
     const accountModal = document.getElementById('accountModal');
     const friendsOverlay = document.getElementById('friendsOverlay');
+    const friendShelfOverlay = document.getElementById('friendShelfOverlay');
     if (accountModal && accountModal.style.display === 'flex') {
       if (closeAccountModalFn) closeAccountModalFn(true);
+    } else if (friendShelfOverlay && friendShelfOverlay.style.display === 'block') {
+      // Friend's shelf full-screen view (#123). Topmost peer of the friends
+      // drawer; closed via popstate so the PWA system back button returns
+      // the user to their Library.
+      import('./components/friend-shelf-view.js').then(m => m.closeFriendShelfView(true)).catch(() => {});
     } else if (friendsOverlay && friendsOverlay.style.display === 'block') {
       // Friends drawer (#122) — stack peer of WTR. Closed via popstate so the
       // PWA system back button dismisses it just like any other overlay.
@@ -1064,108 +1074,17 @@ export function hideAccountNudge(){
 }
 
 
-// --- Generated cover color palette ---
-const COVER_PALETTE=[
-  'linear-gradient(145deg,#6b2137 0%,#4a1528 100%)', // burgundy
-  'linear-gradient(145deg,#1e3a5f 0%,#152a45 100%)', // navy
-  'linear-gradient(145deg,#2d4a3e 0%,#1c332b 100%)', // forest
-  'linear-gradient(145deg,#5b4a3f 0%,#3d312a 100%)', // umber
-  'linear-gradient(145deg,#4a3b6b 0%,#332852 100%)', // plum
-  'linear-gradient(145deg,#3a5043 0%,#263830 100%)', // sage
-  'linear-gradient(145deg,#5a3e3e 0%,#3d2929 100%)', // clay
-  'linear-gradient(145deg,#2a4a5a 0%,#1c3340 100%)', // slate
-  'linear-gradient(145deg,#5a4a2a 0%,#3d3220 100%)', // olive
-  'linear-gradient(145deg,#4a2a4a 0%,#331e33 100%)', // aubergine
-];
-function generatedCoverColor(title){
-  let h=0; for(let i=0;i<title.length;i++) h=((h<<5)-h+title.charCodeAt(i))|0;
-  return COVER_PALETTE[Math.abs(h)%COVER_PALETTE.length];
-}
+// Generated cover color palette + generatedCoverColor() live in
+// components/book-card.js (#123). Local alias preserves callers in this file.
+const generatedCoverColor = sharedGeneratedCoverColor;
 
 // --- Render ---
 function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false; const key=entry.txid||entry.id||''; const el=key?document.querySelector('.card[data-txid="'+key+'"]'):null; if(el){ el.classList.add('deleting'); el.style.pointerEvents='none'; el.style.opacity='0.35'; } }
 
-/**
- * Build the slim details row for a card. Single horizontal line:
- *   `date · [status if reading] · [rating if set]`
- *
- * Date label by shelf:
- *   - reading: plain "<Mon YYYY>" from readingStartedAt (fallback createdAt).
- *              The ✓ Reading status that follows provides the "started" semantic.
- *   - read:    plain "<Mon YYYY>" from dateRead
- *   - wtr:     "Added <Mon YYYY>" from createdAt
- *
- * Status: inline "✓ Reading" pill on currently-reading cards (was previously
- * its own row above the meta — collapsed inline in #121 to keep cards a
- * uniform single-line meta).
- *
- * Rating: filled-star glyphs (e.g. 4 → "★★★★"). Variable width — placed last
- * so it clips first if the row overflows on narrow cards.
- *
- * Format glyph (print/ebook/audio) was removed in #121 — it added visual
- * noise on libraries dominated by one format and isn't book-intrinsic
- * metadata. Format is still surfaced in the detail view.
- */
-function buildCardDetails(e, shelfContext){
-  const parts = [];
-  // 1. Date (always first — symmetry across shelves).
-  let dateText = '';
-  if(shelfContext === 'reading'){
-    dateText = formatMonthYearDisplay(e.readingStartedAt || e.createdAt);
-  } else if(shelfContext === 'wtr'){
-    const d = formatMonthYearDisplay(e.createdAt);
-    if(d) dateText = `Added ${d}`;
-  } else {
-    // 'read' (default)
-    dateText = formatMonthYearDisplay(e.dateRead);
-  }
-  if(dateText) parts.push(`<span class="card-date">${escapeHtml(dateText)}</span>`);
-  // 2. Status (currently-reading only — inline).
-  if(shelfContext === 'reading'){
-    parts.push(`<span class="card-reading-status" aria-label="Currently reading">✓ Reading</span>`);
-  }
-  // 3. Rating (last — variable width, clips first on overflow).
-  if(e.rating && e.rating>=1 && e.rating<=5){
-    const stars = '★'.repeat(e.rating);
-    parts.push(`<span class="card-rating" aria-label="Rated ${e.rating} out of 5">${stars}</span>`);
-  }
-  if(!parts.length) return '';
-  return `<div class="details">${parts.join('<span class="card-meta-sep" aria-hidden="true"> · </span>')}</div>`;
-}
-
-/** Build inner HTML for a single book card */
-function buildCardHTML(e, isWtrResult){
-  const coverDataUrl = e.coverImage ? `data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}` : '';
-  const rs = normalizeReadingStatus(e);
-  const isReading = rs === READING_STATUS.READING;
-  // Determine shelf context for date semantics.
-  let shelfContext = 'read';
-  if(isWtrResult || rs === READING_STATUS.WANT_TO_READ){
-    shelfContext = 'wtr';
-  } else if(isReading){
-    shelfContext = 'reading';
-  }
-  // #121: status pill is now inline in the meta row (built inside
-  // buildCardDetails), not a separate row above. The standalone
-  // mark-as-read (✓) button on the card was removed with it — that
-  // affordance lives in the detail view.
-  const detailsRow = buildCardDetails(e, shelfContext);
-  // Hover overlay (desktop only via @media (hover: hover) in CSS).
-  // aria-hidden because the sr-only span below already announces the
-  // same content to assistive tech, avoiding double-announcement.
-  const titleSafe = escapeHtml(e.title || 'Untitled');
-  const authorSafe = escapeHtml(e.author || '');
-  const overlay = `<div class="cover-hover" aria-hidden="true"><div class="cover-hover-title">${titleSafe}</div>${authorSafe ? `<div class="cover-hover-author">${authorSafe}</div>` : ''}</div>`;
-  // Screen-reader-only label: redundant for sighted users (cover does this),
-  // but essential for AT navigation.
-  const srLabel = `<span class="sr-only">${titleSafe}${authorSafe ? ` by ${authorSafe}` : ''}</span>`;
-  return `
-      <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}" data-fit="${e.coverFit||'contain'}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}${overlay}</div>
-      <div class="meta">
-        ${srLabel}
-        ${detailsRow}
-      </div>`;
-}
+// buildCardDetails + buildCardHTML live in components/book-card.js (#123).
+// Local aliases preserve the rest of app.js.
+const buildCardDetails = sharedBuildCardDetails;
+const buildCardHTML = sharedBuildCardHTML;
 
 /** Quick fingerprint for change detection — avoids unnecessary innerHTML rewrites */
 function entryFingerprint(e){

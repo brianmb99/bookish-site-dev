@@ -91,19 +91,14 @@ async function refreshStrip() {
 }
 
 /**
- * Stub for issue #4 — friend's full-screen shelf. For now we log and stay
- * in the drawer so the user can see the breadcrumb and we don't paint over
- * an undefined surface.
+ * Tap on a friend avatar → dismiss the drawer and open the friend's
+ * full-screen shelf view (issue #123). Per FRIENDS.md Surface 2: closing
+ * the shelf returns to the user's Library, NOT to the drawer.
+ *
+ * The window hook is preserved (browser tests in #122 + #123 use it as a
+ * smoke-test signal that doesn't depend on console capture).
  */
 function handleAvatarTap(connection) {
-  // Issue 4 will replace this with a proper shelf navigation. The console
-  // log doubles as a smoke-test signal for the browser test in this issue.
-  console.log('[Bookish:Friends] tap friend (issue 4 stub):', {
-    label: connection.label,
-    share_pub: (connection.share_pub || '').slice(0, 8),
-  });
-  // Surface a hook on window so the browser test can detect the call without
-  // depending on console output capture (which is flaky across browsers).
   if (typeof window !== 'undefined') {
     window.__bookishLastFriendTap = {
       label: connection.label || null,
@@ -111,6 +106,18 @@ function handleAvatarTap(connection) {
       at: Date.now(),
     };
   }
+  // Close the drawer first so the shelf overlay isn't stacked on top of an
+  // already-modal surface — the spec is explicit that the drawer dismisses
+  // when an avatar is tapped. Lazy-import the shelf view so we don't pay
+  // its weight on drawer-open if the user just glances and dismisses.
+  closeFriendsDrawer();
+  import('./friend-shelf-view.js').then(m => {
+    m.openFriendShelfView(connection).catch(err => {
+      console.warn('[Bookish:FriendsDrawer] openFriendShelfView failed:', err.message);
+    });
+  }).catch(err => {
+    console.error('[Bookish:FriendsDrawer] friend-shelf-view import failed:', err);
+  });
 }
 
 /**
