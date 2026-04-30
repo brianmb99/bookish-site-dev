@@ -2586,6 +2586,23 @@ async function initCacheLayer(){
       setStatus('Signed in');
     }
 
+    // If the session blob couldn't be restored (expired / tampered /
+    // schema-mismatched / wrapping-key rotated), wipe the IndexedDB book cache
+    // before loadFromCache() runs. Otherwise the user — who appears logged out
+    // — would see all their previously-decrypted books rendered on screen
+    // (privacy leak), and on a shared device a different user signing in would
+    // start syncing on top of the prior user's cache. tarnService.init() has
+    // already dropped the stale localStorage blob inside restoreSession(); the
+    // IndexedDB cache is the only remaining residue. See #113.
+    //
+    // Mid-session auth failures (401 during sync) are intentionally NOT handled
+    // here — that requires distinguishing real auth death from transient network
+    // hiccups inside sync_manager.js, which is its own design problem. See the
+    // follow-up issue.
+    if (!tarnService.isLoggedIn()) {
+      await window.bookishCache.clearAll();
+    }
+
     // Create the BookRepository — single owner of all book data operations
     bookRepo = new BookRepository({
       cache: window.bookishCache,
