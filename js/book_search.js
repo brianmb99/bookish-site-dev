@@ -25,13 +25,25 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
   let lastQuery=''; let queryTokens=[]; let strictActive=false;
   let olDocs=[]; let itunesItems=[];
   let debounceTimer=null; let currentWork=null; let currentAudio=null; let editions=[]; let editionIndex=0; let coverOnlyMode=false; let itunesCoverState=null;
+  // Captured at search-result selection time and read by the form save handler.
+  // Reset whenever the search state is cleared. See window.bookSearch.getSearchMeta().
+  let currentWorkKey=''; let currentIsbn13='';
+  function pickIsbn13(isbnList){
+    if(!Array.isArray(isbnList)) return '';
+    for(const raw of isbnList){
+      if(typeof raw!=='string') continue;
+      const digits=raw.replace(/[^0-9Xx]/g,'');
+      if(digits.length===13 && /^\d{13}$/.test(digits)) return digits;
+    }
+    return '';
+  }
   let searchCounter=0;
   let abortController=null;
   function markDirty(){ try{ form.dispatchEvent(new Event('input',{bubbles:true})); }catch{} }
   function showUI(isEdit){ ui.style.display=isEdit?'none':'block'; if(isEdit) clearSearchState(); }
   function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; if(changeCoverLink) changeCoverLink.style.display='none'; if(coverActionsEl) coverActionsEl.style.display='none'; }
   function hideCoverNav(){ prevBtn.style.display='none'; nextBtn.style.display='none'; editionInfo.style.display='none'; }
-  function clearSearchState(){ if(abortController){ abortController.abort(); abortController=null; } if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; } currentWork=null; currentAudio=null; editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null; olDocs=[]; itunesItems=[]; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; hideCoverNav(); if(uploadCoverBtn) uploadCoverBtn.style.display='none'; if(changeCoverLink) changeCoverLink.style.display='none'; if(coverActionsEl) coverActionsEl.style.display='none'; lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all'; }
+  function clearSearchState(){ if(abortController){ abortController.abort(); abortController=null; } if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; } currentWork=null; currentAudio=null; currentWorkKey=''; currentIsbn13=''; editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null; olDocs=[]; itunesItems=[]; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; hideCoverNav(); if(uploadCoverBtn) uploadCoverBtn.style.display='none'; if(changeCoverLink) changeCoverLink.style.display='none'; if(coverActionsEl) coverActionsEl.style.display='none'; lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all'; }
   function prepareQuery(q){ lastQuery=q.trim(); queryTokens=coreTokenize(lastQuery); }
   function showSkeletonCards(){
     resultsEl.innerHTML='<div class="search-status">Searching\u2026</div>'+
@@ -93,8 +105,10 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     if(!failTitle && failBroad){ rows.push('<div style="opacity:.45;font-size:.6rem;padding:2px 4px">Broad search unavailable (exact only).</div>'); }
     const safeJson=(obj)=>encodeURIComponent(JSON.stringify(obj)).replace(/'/g,'%27');
     dedupIt.forEach(item=>{ const title=item._bestTitle||cleanTitle(item.collectionName||item.trackName||''); const author=item._bestAuthor||(item.artistName||''); const safe=highlight(title.replace(/</g,'&lt;')); const safeAuthor=highlight(author.replace(/</g,'&lt;')); const payload={ title, author, year:'', artwork:item.artworkUrl100||'', narrator:author, rawNarrators:author, olWorkKeys:item._olWorkKeys||[], olCoverUrls:item._olCoverUrls||[] }; rows.push(`<div class="res res-itunes" data-src="it" data-json='${safeJson(payload)}'>${safe} <span style="opacity:.6">${safeAuthor}</span></div>`); });
-    booksFiltered.forEach(d=>{ const title=d._bestTitle||cleanTitle(d.title||''); const sub=d.subtitle?(': '+d.subtitle):''; const safe=title.replace(/</g,'&lt;'); const safeSub=sub.replace(/</g,'&lt;'); const combined=highlight(safe+safeSub); const author=d._bestAuthor||((d.author_name&&d.author_name[0])?d.author_name[0]:''); const safeAuthor=highlight(author.replace(/</g,'&lt;')); const metaTitle=title+(d.subtitle?(': '+d.subtitle):''); rows.push(`<div class="res" data-src="ol" data-work='${d.key}' data-cover='${d.cover_url||''}' data-json='${safeJson({title:metaTitle,author,cover_url:d.cover_url||'',key:d.key})}'>${combined} <span style="opacity:.6">${safeAuthor}</span></div>`); }); if(!rows.length){ resultsEl.innerHTML='<div style="opacity:.5">No results</div>'; return; } resultsEl.innerHTML=rows.slice(0,60).join(''); }
+    booksFiltered.forEach(d=>{ const title=d._bestTitle||cleanTitle(d.title||''); const sub=d.subtitle?(': '+d.subtitle):''; const safe=title.replace(/</g,'&lt;'); const safeSub=sub.replace(/</g,'&lt;'); const combined=highlight(safe+safeSub); const author=d._bestAuthor||((d.author_name&&d.author_name[0])?d.author_name[0]:''); const safeAuthor=highlight(author.replace(/</g,'&lt;')); const metaTitle=title+(d.subtitle?(': '+d.subtitle):''); const isbnList=Array.isArray(d.isbn)?d.isbn:[]; const payload={title:metaTitle,author,cover_url:d.cover_url||'',key:d.key,isbn:isbnList}; rows.push(`<div class="res" data-src="ol" data-work='${d.key}' data-cover='${d.cover_url||''}' data-json='${safeJson(payload)}'>${combined} <span style="opacity:.6">${safeAuthor}</span></div>`); }); if(!rows.length){ resultsEl.innerHTML='<div style="opacity:.5">No results</div>'; return; } resultsEl.innerHTML=rows.slice(0,60).join(''); }
   function selectWork(meta){ currentAudio=null; currentWork=meta; editions=[]; editionIndex=0; coverOnlyMode=false; hideCoverNav();
+    currentWorkKey=(meta&&typeof meta.key==='string')?meta.key:'';
+    currentIsbn13=pickIsbn13(meta&&meta.isbn);
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
     populateFromBasic(meta); loadEditionsFromSearch(meta); }
   // fetchAndValidateCover and MIN_COVER_BYTES imported from cover_pipeline.js
@@ -277,6 +291,8 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
   }
   // isEnglishBook and editionCoverSort imported from cover_pipeline.js
   async function selectItunes(payload){ currentWork=null; editions=[]; editionIndex=0; hideCoverNav(); currentAudio=payload;
+    currentWorkKey=(payload&&Array.isArray(payload.olWorkKeys)&&payload.olWorkKeys.length)?String(payload.olWorkKeys[0]||''):'';
+    currentIsbn13='';
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
     form.title.value = cleanTitle(payload.title || '');
     form.author.value = payload.author || '';
@@ -547,6 +563,13 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       }
     },
     selectWork(meta){ selectWork(meta); },
-    selectItunes(payload){ selectItunes(payload); }
+    selectItunes(payload){ selectItunes(payload); },
+    /**
+     * Returns identifiers captured from the most recent search-result selection.
+     * Consumed by the form submit handler in app.js to persist friend-matching keys.
+     * Returns empty strings when the user hasn't picked a search result (e.g. manual entry).
+     * @returns {{ work_key: string, isbn13: string }}
+     */
+    getSearchMeta(){ return { work_key: currentWorkKey || '', isbn13: currentIsbn13 || '' }; }
   };
 })();

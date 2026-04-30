@@ -41,6 +41,11 @@ function buildPayloadFromEntry(entry) {
   if (entry.createdAt) payload.createdAt = entry.createdAt;
   if (entry.modifiedAt) payload.modifiedAt = entry.modifiedAt;
   if (entry.wtrPosition != null) payload.wtrPosition = entry.wtrPosition;
+  // Friend-matching identifiers (issue #111). Optional — only present when the
+  // book was added via search and the source supplied them. Pre-existing books
+  // and manual entries simply don't carry these.
+  if (entry.work_key) payload.work_key = entry.work_key;
+  if (entry.isbn13) payload.isbn13 = entry.isbn13;
   return payload;
 }
 
