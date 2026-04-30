@@ -10,6 +10,11 @@ import { attachSwipeDismiss } from './core/swipe_dismiss.js';
 import { msToDateInputUtc } from './core/id_core.js';
 import * as friends from './core/friends.js';
 import * as friendsRouter from './core/friends_router.js';
+import {
+  isFriendsHiddenFromHeader,
+  setHideFriendsFromHeader,
+  FRIENDS_VISIBILITY_EVENT,
+} from './components/friend-glyph-trigger.js';
 
 // Track the swipe-dismiss cleanup so we can detach on close.
 let _accountResetSwipe = null;
@@ -717,8 +722,14 @@ function renderAccountPanel(content) {
         <div class="account-panel-sub-label">Friends</div>
         <!-- #122: "+ Add a friend" entry moved to the Friends drawer (header glyph).
              Account keeps the read-only Connections + Pending invites lists for
-             power-user verification. To invite someone now, open the Friends drawer
-             from the header and tap "+ Add". -->
+             power-user verification. To invite someone, open the Friends drawer
+             from the header and tap "+ Add".
+             #124: added the "Show in header" toggle so users who hid the glyph
+             from the drawer have a clear path to re-enable it. -->
+        <label class="account-friends-toggle" for="accountFriendsShowToggle">
+          <span class="account-friends-toggle-label">Show in header</span>
+          <input type="checkbox" id="accountFriendsShowToggle" />
+        </label>
         <div class="account-friends-section" id="accountConnectionsSection" style="display:none;">
           <div class="account-friends-heading">Connections</div>
           <ul class="account-friends-list" id="accountConnectionsList"></ul>
@@ -794,6 +805,44 @@ function renderAccountPanel(content) {
   refreshFriendsSection(content).catch(err =>
     console.warn('[AccountUI] friends hydrate failed:', err?.message || err)
   );
+
+  // "Show in header" toggle (#124). Reflects the per-device localStorage
+  // flag and writes back through setHideFriendsFromHeader, which dispatches
+  // FRIENDS_VISIBILITY_EVENT so the header glyph updates live without a
+  // reload. This is the canonical re-enable path for users who hid the
+  // glyph via the drawer link.
+  const showInHeaderToggle = content.querySelector('#accountFriendsShowToggle');
+  if (showInHeaderToggle) {
+    // checked = visible (i.e. NOT hidden). Default = visible.
+    showInHeaderToggle.checked = !isFriendsHiddenFromHeader();
+    showInHeaderToggle.addEventListener('change', () => {
+      setHideFriendsFromHeader(!showInHeaderToggle.checked);
+    });
+    // Keep the toggle in sync if the preference changes elsewhere (e.g. the
+    // drawer's hide link fires while Account is open in another tab — rare
+    // but cheap to handle, and keeps the surfaces consistent).
+    const onVisibilityChange = (e) => {
+      const hidden = !!(e?.detail?.hidden);
+      showInHeaderToggle.checked = !hidden;
+    };
+    window.addEventListener(FRIENDS_VISIBILITY_EVENT, onVisibilityChange);
+    // Detach when the modal closes — the next render() rebuilds the panel
+    // and re-binds, so a stale listener would just leak. Hook it via the
+    // existing modal close path: a one-shot listener on the modal's hide.
+    const accountModal = document.getElementById('accountModal');
+    if (accountModal) {
+      const cleanup = () => {
+        window.removeEventListener(FRIENDS_VISIBILITY_EVENT, onVisibilityChange);
+      };
+      // MutationObserver on display:none is overkill; just clean up on the
+      // close button + backdrop click paths the modal already uses.
+      const closeBtn = document.getElementById('accountModalClose');
+      if (closeBtn) closeBtn.addEventListener('click', cleanup, { once: true });
+      accountModal.addEventListener('click', (e) => {
+        if (e.target === accountModal) cleanup();
+      }, { once: true });
+    }
+  }
 
   // Logout
   content.querySelector('#logoutBtn').addEventListener('click', async () => {

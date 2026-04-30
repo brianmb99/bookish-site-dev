@@ -2684,19 +2684,17 @@ loadStatus(); initCacheLayer(); // wallet init + sync started in initCacheLayer
 // Initialize account UI
 (async function initAccount(){ try { const { initAccountUI } = await import('./account_ui.js'); await initAccountUI(); } catch(e){ console.error('Failed to init account UI:', e); } })();
 
-// Friends drawer header trigger (#122). Wire the click listener immediately
-// so the glyph is functional the moment it's revealed; refresh visibility
-// async because listConnections() makes Tarn calls that need login.
+// Friends drawer header trigger (#122, #124). Wire the click listener and
+// then refresh visibility based on the local "hidden" preference. After
+// #124 the trigger is visible by default whenever the user is logged in;
+// the refresh is purely a localStorage read, so no async needed.
 wireFriendGlyphTrigger();
-refreshFriendGlyphTrigger().catch(err =>
-  console.warn('[Bookish] Friends glyph initial refresh failed:', err?.message || err)
-);
-// Re-evaluate visibility when an invite redeem completes — the
-// recipient's connection materializes asynchronously after pollForConnectionUpdates.
-// This event is dispatched by the accept-invite-modal flow on success;
-// callers fall through harmlessly if no listener is attached.
+refreshFriendGlyphTrigger();
+// Re-evaluate visibility when connections change (e.g. after an invite
+// redeem) so the glyph state stays consistent if any future logic ever
+// branches on connection presence again.
 window.addEventListener('bookish:connections-changed', () => {
-  refreshFriendGlyphTrigger().catch(() => {});
+  refreshFriendGlyphTrigger();
 });
 window.addEventListener('online',()=>{ uiStatusManager.refresh(); if(bookRepo) bookRepo.replayPending(); });
 

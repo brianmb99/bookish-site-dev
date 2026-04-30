@@ -101,9 +101,36 @@ export function renderFriendStrip(container, connections, opts = {}) {
 
   const sorted = sortConnectionsForStrip(connections || []);
 
-  // Build a stable scaffold first so the +Add button always exists even
-  // when the connections array is empty (drawer-trigger gate keeps that
-  // unreachable today, but the strip should still render correctly).
+  // Empty-state branch (#124). When the user has no friends yet, swap the
+  // compact strip for a friendly empty state with a prominent "+ Add" CTA.
+  // This is now reachable because the header glyph is always visible (the
+  // 0-friends auto-hide was removed in #124), so opening the drawer with
+  // zero connections is a valid first-run path. The empty state keeps the
+  // section heading "Your circle" so the drawer's structural layout stays
+  // recognizable across states.
+  if (sorted.length === 0) {
+    container.innerHTML = `
+      <div class="friend-strip-section friend-strip-section-empty">
+        <div class="friend-strip-header">
+          <span class="friend-strip-heading">Your circle</span>
+        </div>
+        <div class="friend-strip-empty">
+          <p class="friend-strip-empty-message">No friends yet — invite someone to start.</p>
+          <button class="btn primary friend-strip-empty-add" type="button" data-friend-add>+ Add</button>
+        </div>
+      </div>
+    `;
+    const addBtn = container.querySelector('[data-friend-add]');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        if (typeof opts.onAddClick === 'function') opts.onAddClick();
+      });
+    }
+    return;
+  }
+
+  // Build a stable scaffold first so the +Add button always exists alongside
+  // the populated strip.
   container.innerHTML = `
     <div class="friend-strip-section">
       <div class="friend-strip-header">

@@ -1,4 +1,4 @@
-// friends-drawer.js — Surface 1 of the Friends feature (issue #122).
+// friends-drawer.js — Surface 1 of the Friends feature (issues #122, #124).
 //
 // The drawer is a peer of the existing WTR drawer. It uses the same chrome
 // pattern (bottom sheet on touch / right panel on desktop), the same
@@ -11,9 +11,15 @@
 //     fills it. Implemented as a slot we leave unmounted so the drawer
 //     degrades cleanly into "Region B only" until then.
 //
-//   Region B — friend strip. See friend-strip.js. Always present when the
-//     drawer is open (the trigger gate in app.js means the drawer can only
-//     open when ≥1 connection exists).
+//   Region B — friend strip. See friend-strip.js. When 0 connections, the
+//     strip renders an empty state with a friendly message + prominent
+//     "+ Add" button (#124 — the trigger is now always visible, so the
+//     drawer must handle the zero-friends case gracefully).
+//
+// The drawer also exposes a small "Hide friends from header" link at the
+// bottom (#124). Tapping it sets a per-device preference, hides the glyph
+// immediately, shows a toast, and closes the drawer. Re-enable lives on
+// the Account screen.
 //
 // The trigger glyph in the header lives in friend-glyph-trigger.js. This
 // module owns drawer chrome + lifecycle + region rendering only.
@@ -22,6 +28,7 @@ import * as friends from '../core/friends.js';
 import { attachSwipeDismiss } from '../core/swipe_dismiss.js';
 import { pushOverlayState, popOverlayState } from '../core/overlay_history.js';
 import { renderFriendStrip } from './friend-strip.js';
+import { setHideFriendsFromHeader } from './friend-glyph-trigger.js';
 
 const OVERLAY_ID = 'friendsOverlay';
 const DRAWER_ID = 'friendsDrawer';
@@ -29,6 +36,7 @@ const BACKDROP_ID = 'friendsBackdrop';
 const STRIP_HOST_ID = 'friendsStripHost';
 const EVENTS_HOST_ID = 'friendsEventsHost';
 const CLOSE_ID = 'friendsClose';
+const HIDE_LINK_ID = 'friendsHideFromHeader';
 
 let _isOpen = false;
 let _resetSwipe = null;
@@ -57,12 +65,56 @@ function ensureMarkup() {
       </div>
       <div class="friends-events" id="${EVENTS_HOST_ID}"></div>
       <div class="friends-strip-host" id="${STRIP_HOST_ID}"></div>
+      <div class="friends-drawer-footer">
+        <button type="button" class="friends-hide-link" id="${HIDE_LINK_ID}">
+          Hide friends from header
+        </button>
+      </div>
     </div>
   `;
   document.body.appendChild(root);
 
   document.getElementById(BACKDROP_ID).addEventListener('click', () => closeFriendsDrawer());
   document.getElementById(CLOSE_ID).addEventListener('click', () => closeFriendsDrawer());
+  const hideLink = document.getElementById(HIDE_LINK_ID);
+  if (hideLink) hideLink.addEventListener('click', handleHideFromHeader);
+}
+
+/**
+ * Handle the "Hide friends from header" link. Per #124 acceptance criterion 4:
+ * sets the local flag (which fires a visibility-changed event the trigger
+ * listens to), shows a brief confirmation toast, closes the drawer.
+ *
+ * We don't ask for confirmation — the action is fully reversible from
+ * Account → Friends, and the toast tells the user where to undo it.
+ */
+function handleHideFromHeader() {
+  setHideFriendsFromHeader(true);
+  showHideConfirmationToast();
+  closeFriendsDrawer();
+}
+
+/**
+ * Lightweight toast — same shape as showStatusToast in app.js (deliberately
+ * inlined so the drawer stays self-contained and doesn't import app.js).
+ * Lives 3.5s, slightly longer than the default 2s to give the user time to
+ * register the "Re-enable in Account" wayfinding hint.
+ */
+function showHideConfirmationToast() {
+  if (typeof document === 'undefined') return;
+  const existing = document.getElementById('bookishStatusToast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = 'bookishStatusToast';
+  toast.className = 'toast status-toast';
+  toast.setAttribute('role', 'status');
+  toast.innerHTML = `<span class="toast-message">Friends hidden. Re-enable in Account.</span>`;
+  toast.style.cssText = 'position:fixed;top:calc(var(--header-height) + env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:9001;';
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('hiding');
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
 }
 
 /**
