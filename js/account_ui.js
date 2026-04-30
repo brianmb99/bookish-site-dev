@@ -8,6 +8,8 @@ import * as subscription from './core/subscription.js';
 import { pushOverlayState, popOverlayState } from './core/overlay_history.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
 import { msToDateInputUtc } from './core/id_core.js';
+import * as friends from './core/friends.js';
+import * as friendsRouter from './core/friends_router.js';
 
 // Track the swipe-dismiss cleanup so we can detach on close.
 let _accountResetSwipe = null;
@@ -376,6 +378,11 @@ function renderCreateAccountForm(content) {
           startSync();
           uiStatusManager.refresh();
           if (typeof window.updateBookDots === 'function') window.updateBookDots();
+          // Friends invite redemption (#118). If the user signed up because
+          // they clicked an invite link, fire the accept modal now.
+          friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
+            console.warn('[Bookish:AccountUI] friends invite handler failed:', err?.message || err)
+          );
         },
       });
 
@@ -606,6 +613,12 @@ function renderSignInForm(content) {
         startSync();
         uiStatusManager.refresh();
         if (typeof window.updateBookDots === 'function') window.updateBookDots();
+        // Friends invite redemption (#118). If the user signed in to redeem
+        // an invite they clicked while logged out, fire the accept modal
+        // now that auth is ready.
+        friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
+          console.warn('[Bookish:AccountUI] friends invite handler failed:', err?.message || err)
+        );
       }, 500);
 
     } catch (e) {
@@ -700,6 +713,20 @@ function renderAccountPanel(content) {
         <button type="button" id="accountArchiveBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Open archive <span aria-hidden="true" class="external-link-icon">\u2197</span></button>
       </div>
 
+      <div class="account-panel-friends" id="accountPanelFriends">
+        <div class="account-panel-sub-label">Friends</div>
+        <button type="button" id="accountAddFriendBtn" class="account-panel-sub-btn">+ Add a friend</button>
+        <div class="account-friends-section" id="accountConnectionsSection" style="display:none;">
+          <div class="account-friends-heading">Connections</div>
+          <ul class="account-friends-list" id="accountConnectionsList"></ul>
+        </div>
+        <div class="account-friends-section" id="accountPendingInvitesSection" style="display:none;">
+          <div class="account-friends-heading">Pending invites</div>
+          <ul class="account-friends-list" id="accountPendingInvitesList"></ul>
+        </div>
+        <div class="account-friends-status" id="accountFriendsStatus" style="display:none;"></div>
+      </div>
+
       <div class="account-actions">
         <button id="exportCsvBtn" class="btn secondary account-csv-btn">
           ${SVG_DOWNLOAD} Export CSV
@@ -757,6 +784,25 @@ function renderAccountPanel(content) {
     });
   }
 
+  // Friends section (#118 — Surface 6 entry point lives in Account for issue 2;
+  // moves to the drawer in issue 3). Lazy-load the invite modal on demand.
+  const addFriendBtn = content.querySelector('#accountAddFriendBtn');
+  if (addFriendBtn) {
+    addFriendBtn.addEventListener('click', async () => {
+      try {
+        const mod = await import('./components/invite-modal.js');
+        await mod.openInviteModal();
+      } catch (err) {
+        console.error('[AccountUI] Failed to open invite modal:', err);
+      }
+    });
+  }
+  // Hydrate the friends section async — listConnections / listIssuedInvites
+  // hit Tarn and may take a beat.
+  refreshFriendsSection(content).catch(err =>
+    console.warn('[AccountUI] friends hydrate failed:', err?.message || err)
+  );
+
   // Logout
   content.querySelector('#logoutBtn').addEventListener('click', async () => {
     closeAccountModal();
@@ -798,6 +844,102 @@ function renderAccountPanel(content) {
       if (e.key === 'Enter') save();
     });
   });
+}
+
+// ============================================================================
+// FRIENDS SECTION (#118 — issue 2 of the Friends rollout)
+// ============================================================================
+
+/**
+ * Hydrate the Account → Friends section: list connections by label and list
+ * outstanding issued invites with revoke buttons. Both are temporary
+ * verification surfaces for issue 2; the proper drawer ships in issue 3.
+ *
+ * @param {HTMLElement} content
+ */
+async function refreshFriendsSection(content) {
+  const connSection = content.querySelector('#accountConnectionsSection');
+  const connList = content.querySelector('#accountConnectionsList');
+  const invSection = content.querySelector('#accountPendingInvitesSection');
+  const invList = content.querySelector('#accountPendingInvitesList');
+  const status = content.querySelector('#accountFriendsStatus');
+  if (!connSection || !connList || !invSection || !invList || !status) return;
+
+  let connections = [];
+  let invites = [];
+  try {
+    [connections, invites] = await Promise.all([
+      friends.listConnections(),
+      friends.listIssuedInvites(),
+    ]);
+  } catch (err) {
+    status.style.display = 'block';
+    status.textContent = "Couldn't load friends — try reopening Account.";
+    console.warn('[AccountUI] friends fetch failed:', err.message);
+    return;
+  }
+  status.style.display = 'none';
+
+  // Connections list
+  if (connections.length > 0) {
+    connSection.style.display = 'block';
+    connList.innerHTML = connections
+      .map(c => {
+        const label = (c.label && c.label.trim()) || (c.email ? c.email : c.share_pub.slice(0, 8));
+        return `<li class="account-friend-row"><span class="account-friend-label">${escapeHtml(label)}</span></li>`;
+      })
+      .join('');
+  } else {
+    connSection.style.display = 'none';
+    connList.innerHTML = '';
+  }
+
+  // Pending invites list
+  const outstanding = invites.filter(i => !i.redeemed_at);
+  if (outstanding.length > 0) {
+    invSection.style.display = 'block';
+    invList.innerHTML = outstanding
+      .map(inv => {
+        const expires = inv.expires_at
+          ? new Date(inv.expires_at * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' })
+          : '';
+        const namePart = inv.display_name?.trim()
+          ? `for ${escapeHtml(inv.display_name)}`
+          : 'unnamed';
+        return `
+          <li class="account-friend-row" data-pending-token="${escapeHtml(inv.token_id)}">
+            <span class="account-friend-label">Invite ${namePart}</span>
+            <span class="account-friend-meta">${expires ? 'Expires ' + escapeHtml(expires) : ''}</span>
+            <button type="button" class="btn-link account-friend-revoke" data-revoke-token="${escapeHtml(inv.token_id)}">Revoke</button>
+          </li>
+        `;
+      })
+      .join('');
+    invList.querySelectorAll('[data-revoke-token]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tokenId = btn.dataset.revokeToken;
+        btn.disabled = true;
+        btn.textContent = 'Revoking…';
+        try {
+          await friends.revokeInvite(tokenId);
+          await refreshFriendsSection(content);
+        } catch (err) {
+          console.error('[AccountUI] revoke failed:', err);
+          btn.disabled = false;
+          btn.textContent = 'Try again';
+        }
+      });
+    });
+  } else {
+    invSection.style.display = 'none';
+    invList.innerHTML = '';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, ch => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+  ));
 }
 
 // ============================================================================

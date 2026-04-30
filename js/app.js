@@ -16,6 +16,13 @@ import { attachKeyboardHandler } from './core/keyboard_viewport.js';
 import { initPullToRefresh } from './core/pull_to_refresh.js';
 import { getFieldPref, setFieldPref } from './core/field_prefs.js';
 import * as subscription from './core/subscription.js';
+import * as friendsRouter from './core/friends_router.js';
+
+// Friends invite-link routing (#118). Capture the invite parameters from
+// /invite/:token_id#:payload_key BEFORE anything else touches window.location
+// so a reload after signup doesn't lose the link. Stashes in sessionStorage;
+// the accept-invite modal is opened after auth completes.
+friendsRouter.captureInviteFromUrl();
 
 // --- Version logging (always visible in console) ---
 {
@@ -2693,8 +2700,20 @@ async function initCacheLayer(){
       );
       // Handle return from Stripe Checkout (?sub=success / ?sub=cancel).
       handleStripeReturn();
+      // Friends invite redemption (#118). If the user landed on /invite/:token_id
+      // and is already logged in, open the accept modal. Lazy import keeps the
+      // friends modules out of the boot bundle for users who never click invites.
+      friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
+        console.warn('[Bookish] Friends invite handler failed:', err?.message || err)
+      );
     } else {
       console.log('[Bookish] User not logged in, sync loop will not start');
+      // Friends invite redemption (#118) — if they landed via /invite/... and
+      // are logged out, prompt for signup/sign-in so the post-auth hook can
+      // fire the accept modal.
+      friendsRouter.maybePromptSignupForInvite().catch(err =>
+        console.warn('[Bookish] Friends signup prompt failed:', err?.message || err)
+      );
     }
   } catch(err) {
     console.error('[Bookish] IndexedDB failed to initialize:', err);
