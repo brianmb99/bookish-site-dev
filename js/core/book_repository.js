@@ -10,6 +10,44 @@
 //   await repo.loadFromCache();
 
 import { pickWinner } from './cache_core.js';
+import { dateStringToMsNoonUtc } from './id_core.js';
+
+/**
+ * Coerce a remote payload from any pre-v0.3.0 shape into the v0.3.0 in-memory
+ * shape. We do not rewrite Arweave — the canonical bytes stay as the user
+ * originally wrote them. The only goal here is to keep render + sort + dedup
+ * code on a single shape, so legacy entries don't break newer code paths.
+ *
+ * Pre-v0.3.0 differences handled (issue #112):
+ *   - dateRead used to be a YYYY-MM-DD string; v0.3.0 made it a noon-UTC
+ *     ms-epoch number. Coerce strings via dateStringToMsNoonUtc; drop the
+ *     field if the string is unparseable (better than crashing the sort).
+ *   - edition was a required string; v0.3.0 dropped the field entirely.
+ *     Strip it so it doesn't pollute renders or the cache_core content-hash
+ *     (which now intentionally hashes without it).
+ *
+ * Schema/version strings are left as-is — those describe the on-Arweave
+ * bytes, which we are not rewriting. This shim is a read-time view only.
+ *
+ * @param {Object|undefined} data
+ * @returns {Object|undefined}
+ */
+export function normalizeLegacyEntry(data) {
+  if (!data || typeof data !== 'object') return data;
+  let touched = false;
+  const out = { ...data };
+  if (typeof out.dateRead === 'string') {
+    const ms = dateStringToMsNoonUtc(out.dateRead);
+    if (ms != null) out.dateRead = ms;
+    else delete out.dateRead;
+    touched = true;
+  }
+  if ('edition' in out) {
+    delete out.edition;
+    touched = true;
+  }
+  return touched ? out : data;
+}
 
 export const READING_STATUS = {
   WANT_TO_READ: 'want_to_read',
@@ -355,9 +393,11 @@ export class BookRepository {
       const remoteEntries = await client.getEntries('entry');
       console.log('[BookRepository] Fetched', remoteEntries.length, 'entries from Tarn');
 
-      // Build remote entries in cache format
+      // Build remote entries in cache format. normalizeLegacyEntry coerces
+      // any pre-v0.3.0 shape (string dateRead, edition field) into the
+      // current shape so the rest of the pipeline can assume one schema.
       const remote = remoteEntries.map(e => ({
-        ...e.data,
+        ...normalizeLegacyEntry(e.data),
         txid: e.txid,
         id: e.txid,
         status: 'confirmed',
@@ -388,10 +428,14 @@ export class BookRepository {
         if (!alreadyRemote) merged.push(pending);
       }
 
-      // Sort: newest first
+      // Sort: newest first. Schema v0.3.0 made dateRead a ms-epoch number;
+      // legacy entries have already been coerced by normalizeLegacyEntry, so
+      // a numeric subtraction is safe here. Missing/non-numeric dateRead
+      // sorts to the bottom (treated as 0).
       merged.sort((a, b) => {
-        const da = a.dateRead || '0000-00-00', db = b.dateRead || '0000-00-00';
-        if (da !== db) return db.localeCompare(da);
+        const da = typeof a.dateRead === 'number' ? a.dateRead : 0;
+        const db = typeof b.dateRead === 'number' ? b.dateRead : 0;
+        if (da !== db) return db - da;
         return (b.createdAt || 0) - (a.createdAt || 0);
       });
 
