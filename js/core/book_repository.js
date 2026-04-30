@@ -28,10 +28,13 @@ function buildPayloadFromEntry(entry) {
     title: entry.title,
     author: entry.author,
     format: entry.format,
-    dateRead: entry.dateRead || '',
     readingStatus: entry.readingStatus || READING_STATUS.READ,
     bookId: entry.bookId
   };
+  // dateRead is now an optional ms-epoch number (schema v0.3.0). Only forward
+  // it when present so we don't write empty strings (which would fail the
+  // schema's `type: number`) for entries that aren't on the read shelf.
+  if (entry.dateRead != null && entry.dateRead !== '') payload.dateRead = entry.dateRead;
   if (entry.coverImage) { payload.coverImage = entry.coverImage; if (entry.mimeType) payload.mimeType = entry.mimeType; }
   if (entry.notes) payload.notes = entry.notes;
   if (entry.rating) payload.rating = entry.rating;
@@ -240,7 +243,9 @@ export class BookRepository {
       entry.readingStartedAt = Date.now();
     }
     if (newStatus === READING_STATUS.READ && !entry.dateRead) {
-      entry.dateRead = new Date().toISOString().slice(0, 10);
+      // Schema v0.3.0: dateRead is a ms-epoch number at noon UTC.
+      const now = new Date();
+      entry.dateRead = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0);
     }
 
     if (this._cache) await this._cache.putEntry(entry);

@@ -21,6 +21,11 @@ export function filterBySearch(entries, query) {
  * "Currently reading" books (readingStatus === 'reading') are placed in the current year.
  * Entries without dateRead go into "Undated" at the end.
  * Returns a Map ordered by year descending, with "Undated" last.
+ *
+ * `dateRead` is a ms-epoch number (schema v0.3.0). Year is read in UTC so the
+ * grouping matches the calendar day the user picked, regardless of viewer
+ * timezone.
+ *
  * @param {Array} entries - book entries (already sorted within each status group)
  * @returns {Map<string, Array>} year -> entries, ordered by year desc, "Undated" last
  */
@@ -36,7 +41,11 @@ export function groupByYear(entries) {
       yearMap.get(currentYear).push(e);
       continue;
     }
-    const year = e.dateRead?.slice(0, 4);
+    let year = null;
+    if (e.dateRead != null && e.dateRead !== '') {
+      const d = new Date(e.dateRead);
+      if (!isNaN(d.getTime())) year = String(d.getUTCFullYear());
+    }
     if (year && /^\d{4}$/.test(year)) {
       if (!yearMap.has(year)) yearMap.set(year, []);
       yearMap.get(year).push(e);

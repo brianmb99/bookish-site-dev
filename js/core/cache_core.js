@@ -3,11 +3,11 @@
 
 /**
  * Compute SHA-256 based content hash for an entry
- * @param {Object} entry - Entry object with title, author, edition, format, dateRead
+ * @param {Object} entry - Entry object with title, author, format, dateRead
  * @returns {Promise<string>} - Hash in format "sha256-<hex>"
  */
 export async function computeContentHash(entry) {
-  const base = (entry.title || '') + '|' + (entry.author || '') + '|' + (entry.edition || '') + '|' + (entry.format || '') + '|' + (entry.dateRead || '');
+  const base = (entry.title || '') + '|' + (entry.author || '') + '|' + (entry.format || '') + '|' + (entry.dateRead || '');
   const enc = new TextEncoder().encode(base);
   const buf = await crypto.subtle.digest('SHA-256', enc);
   const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -111,7 +111,6 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
       const contentHash = await computeContentHash({
         title: r.title,
         author: r.author,
-        edition: r.edition,
         format: r.format,
         dateRead: r.dateRead
       });

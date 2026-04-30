@@ -1795,8 +1795,6 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   .card .title{font-size:calc(1rem * var(--mobile-scale));}
   .card .author{font-size:calc(.85rem * var(--mobile-scale));}
   .card .details{font-size:calc(.65rem * var(--mobile-scale));}
-  .card .details span.edition-hide{display:inline}
-  :root[data-cols='3'] .card .details span.edition-hide{display:none}
 }
 @media (max-width:599px){
   /* Phase 4: Mobile polish */

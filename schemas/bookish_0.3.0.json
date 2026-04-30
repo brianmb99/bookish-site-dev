@@ -1,0 +1,28 @@
+{
+  "$id": "https://your.repo/bookish/schemas/reading-0.3.0.json",
+  "title": "Bookish Reading v0.3.0",
+  "description": "Book reading entry stored on Arweave, keyed by wallet address",
+  "type": "object",
+  "required": ["schema", "version", "bookId", "title", "author", "format"],
+  "properties": {
+    "schema": { "const": "reading" },
+    "version": { "const": "0.3.0" },
+    "bookId": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "author": { "type": "string", "minLength": 1 },
+    "format": { "type": "string", "enum": ["paperback", "hardcover", "ebook", "audiobook", "other"] },
+    "dateRead": { "type": "number", "description": "JS millisecond epoch timestamp. Date-only values use noon UTC (YYYY-MM-DDT12:00:00.000Z)." },
+    "mimeType": { "type": "string" },
+    "coverImage": { "type": "string", "description": "base64-encoded image data" },
+    "readingStatus": { "type": "string", "enum": ["want_to_read", "reading", "read"], "default": "want_to_read", "description": "Reading status of the book" },
+    "readingStartedAt": { "type": "number", "description": "Timestamp when book was moved to reading status" },
+    "wtrPosition": { "type": "integer", "minimum": 0, "description": "Sort position within the want-to-read list (0 = top)" },
+    "work_key": { "type": "string", "description": "OpenLibrary work key (e.g., /works/OL5193815W). Used for friend-matching via strict equality. Captured at search time when the source is OL or iTunes-with-OL cross-reference." },
+    "isbn13": { "type": "string", "pattern": "^\\d{13}$", "description": "ISBN-13 of the chosen variant. Optional fallback identifier captured from search results when available." }
+  },
+  "allOf": [
+    { "if": { "required": ["coverImage"] }, "then": { "required": ["mimeType"] } }
+  ],
+  "additionalProperties": true,
+  "$comment": "Arweave tags: App-Name=Bookish, Type=reading, Pub-Addr=<walletAddress>"
+}

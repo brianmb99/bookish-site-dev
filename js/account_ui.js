@@ -7,6 +7,7 @@ import * as tarnService from './core/tarn_service.js';
 import * as subscription from './core/subscription.js';
 import { pushOverlayState, popOverlayState } from './core/overlay_history.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
+import { msToDateInputUtc } from './core/id_core.js';
 
 // Track the swipe-dismiss cleanup so we can detach on close.
 let _accountResetSwipe = null;
@@ -817,7 +818,7 @@ function exportBooksToCSV() {
     const rows = entries.map(e => [
       csvEscape(e.title || ''),
       csvEscape(e.author || ''),
-      csvEscape(e.dateRead || ''),
+      csvEscape(msToDateInputUtc(e.dateRead)),
       e.rating || '',
       csvEscape(e.format || ''),
       csvEscape(e.notes || ''),

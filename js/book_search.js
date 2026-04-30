@@ -429,7 +429,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
         const hi=bestIt.artworkUrl100.replace(/100x100/,'600x600');
         try{ itunesCover=await fetchAndValidateCoverLocal(hi,'itunes'); }catch{}
       }
-      // Fetch Amazon covers from OL edition ISBNs for work keys found
+      // Fetch Amazon covers from OL print-variant ISBNs for work keys found
       const workKeys=[...new Set(allOLDocs.map(d=>d.key).filter(Boolean))];
       console.info('[Bookish:Covers] findCovers: %d OL docs, %d work keys, first=%s', allOLDocs.length, workKeys.length, workKeys[0]||'none');
       const amazonCovers=[];

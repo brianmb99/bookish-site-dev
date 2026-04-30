@@ -2341,7 +2341,9 @@ aes-js/lib.esm/aes.js:
     var headers=['Title','Author','ISBN','Date Added','Date Read','Rating','Status','Notes'];
     var rows=books.map(function(e){
       var status=e.readingStatus||e.status||'';
-      var dateRead=e.dateRead||'';
+      // dateRead is a ms-epoch number (schema v0.3.0). formatDateAdded normalises
+      // numeric timestamps to YYYY-MM-DD via Date — reuse it for dateRead too.
+      var dateRead=formatDateAdded(e.dateRead);
       var dateAdded=formatDateAdded(e.createdAt||e.created);
       var rating=(e.rating>=1&&e.rating<=5)?String(e.rating):'';
       return[
@@ -2427,7 +2429,7 @@ aes-js/lib.esm/aes.js:
     var detailsInner='';
     if(isWtr)detailsInner='<div class="card-wtr-label">Want to Read</div>';
     else if(isReading)detailsInner='<div class="card-reading-label"><span>\u25d0 Reading</span></div>';
-    else if(b.dateRead)detailsInner='<span class="read-date">Read '+escapeHtml(b.dateRead)+'</span>';
+    else if(b.dateRead)detailsInner='<span class="read-date">Read '+escapeHtml(formatDateAdded(b.dateRead))+'</span>';
     // Notes
     var notes=b.notes||'';
     if(notes.length>200)notes=notes.slice(0,200)+'...';

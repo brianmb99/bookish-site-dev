@@ -8,6 +8,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
 import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
 import { stripNoise } from './core/search_core.js';
+import { dateStringToMsNoonUtc, msToDateInputUtc, formatDateReadDisplay } from './core/id_core.js';
 import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
 import { haptic } from './core/haptic.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
@@ -386,14 +387,23 @@ function orderEntries(){
     const sa = statusOrder[normalizeReadingStatus(a)] ?? 1;
     const sb = statusOrder[normalizeReadingStatus(b)] ?? 1;
     if(sa !== sb) return sa - sb;
-    const da=a.dateRead||''; const db=b.dateRead||'';
-    if(da!==db) return db.localeCompare(da);
+    const da=a.dateRead||0; const db=b.dateRead||0;
+    if(da!==db) return db - da;
     const ca=a.createdAt||0; const cb=b.createdAt||0;
     if(ca!==cb) return cb-ca;
     return 0;
   });
 }
-function formatDisplayDate(iso){ if(!iso) return ''; const d=new Date(iso+'T00:00:00Z'); if(isNaN(d)) return iso; return d.toLocaleDateString(undefined,{month:'short',year:'numeric'}); }
+// dateRead is now a ms-epoch number (schema v0.3.0). Format using UTC components
+// so noon-UTC values render as the picked calendar day in every viewer timezone.
+function formatDisplayDate(ms){
+  if(ms == null || ms === '') return '';
+  const n = typeof ms === 'number' ? ms : Number(ms);
+  if(!Number.isFinite(n)) return '';
+  const d = new Date(n);
+  if(isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(d);
+}
 function mapFormat(f){ const v=(f||'').toLowerCase(); if(v==='ebook') return 'ebook'; if(v==='audiobook'||v==='audio') return 'audio'; return 'print'; }
 
 // --- Modal helpers ---
@@ -446,14 +456,15 @@ function openModal(entry, forceIntent){
   form.format.value=entry?mapFormat(entry.format):'print';
   if(entry){
     const rs = normalizeReadingStatus(entry);
+    const todayStr = new Date().toISOString().slice(0,10);
     if(rs === READING_STATUS.WANT_TO_READ){
       const ts = entry.createdAt;
-      form.dateRead.value = ts ? new Date(ts).toISOString().slice(0,10) : (entry.dateRead || new Date().toISOString().slice(0,10));
+      form.dateRead.value = ts ? new Date(ts).toISOString().slice(0,10) : (msToDateInputUtc(entry.dateRead) || todayStr);
     } else if(rs === READING_STATUS.READING){
       const ts = entry.readingStartedAt;
-      form.dateRead.value = ts ? new Date(ts).toISOString().slice(0,10) : (entry.dateRead || new Date().toISOString().slice(0,10));
+      form.dateRead.value = ts ? new Date(ts).toISOString().slice(0,10) : (msToDateInputUtc(entry.dateRead) || todayStr);
     } else {
-      form.dateRead.value = entry.dateRead || new Date().toISOString().slice(0,10);
+      form.dateRead.value = msToDateInputUtc(entry.dateRead) || todayStr;
     }
   } else {
     form.dateRead.value = new Date().toISOString().slice(0,10);
@@ -526,7 +537,7 @@ function applyIntentUI(intent){
       if(dateLabel) dateLabel.textContent = 'Completed';
       if(dateInput){
         const entry = form.priorTxid.value ? entries.find(e=>(e.txid||e.id)===form.priorTxid.value) : null;
-        if(dateInput.readOnly || !dateInput.value) dateInput.value = entry?.dateRead || new Date().toISOString().slice(0,10);
+        if(dateInput.readOnly || !dateInput.value) dateInput.value = msToDateInputUtc(entry?.dateRead) || new Date().toISOString().slice(0,10);
         dateInput.readOnly = false;
         dateBlock.classList.remove('date-readonly');
       }
@@ -803,7 +814,7 @@ function buildCardHTML(e, isWtrResult){
     : '';
   const showDate = !isReading && dateDisp;
   const wtrLabel = isWtrResult ? '<div class="card-wtr-label">Want to Read</div>' : '';
-  const yearBadge = e._showYearBadge && e.dateRead ? `<span class="card-year-badge">${escapeHtml(e.dateRead.slice(0,4))}</span>` : '';
+  const yearBadge = e._showYearBadge && e.dateRead ? `<span class="card-year-badge">${escapeHtml(String(new Date(e.dateRead).getUTCFullYear()))}</span>` : '';
   return `
       <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}" data-fit="${e.coverFit||'contain'}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
       <div class="meta">
@@ -896,7 +907,7 @@ function render(){
 
   // Sort each list
   readingList.sort((a,b)=> (b.readingStartedAt||b.createdAt||0) - (a.readingStartedAt||a.createdAt||0));
-  readList.sort((a,b)=>{ const da=a.dateRead||''; const db=b.dateRead||''; if(da!==db) return db.localeCompare(da); return (b.createdAt||0)-(a.createdAt||0); });
+  readList.sort((a,b)=>{ const da=a.dateRead||0; const db=b.dateRead||0; if(da!==db) return db - da; return (b.createdAt||0)-(a.createdAt||0); });
   sortWtrList(wantList);
 
   // Main grid shows: reading first, then read
@@ -2148,7 +2159,7 @@ cardsEl?.addEventListener('click', (ev)=>{
     if(!entry || normalizeReadingStatus(entry) !== READING_STATUS.READING) return;
     const snapshot = {
       readingStatus: READING_STATUS.READING,
-      dateRead: entry.dateRead || '',
+      dateRead: entry.dateRead || null,
       readingStartedAt: entry.readingStartedAt
     };
     bookRepo.changeStatus(key, READING_STATUS.READ).then((result) => {
@@ -2220,7 +2231,7 @@ async function deleteServerless(priorTxid) {
 
 // --- Form handlers ---
 let _formSubmitting = false;
-form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) return; _formSubmitting=true; const priorTxid=form.priorTxid.value||undefined; const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ; const dateVal = form.dateRead.value; const payload={ title:form.title.value.trim(), author:form.author.value.trim(), format:form.format.value, dateRead:'', readingStatus:rsValue }; if(rsValue === READING_STATUS.READ){ payload.dateRead = dateVal; } else if(rsValue === READING_STATUS.READING){ payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now(); } if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; if(coverPreview.dataset.fit) payload.coverFit=coverPreview.dataset.fit; } else if(priorTxid){ payload.coverImage=''; payload.mimeType=''; } const notesVal=(notesInput?.value||'').trim(); if(notesVal) payload.notes=notesVal; const optVals=getOptionalFieldValues(); if(priorTxid){ payload.rating=optVals.rating||0; payload.owned=!!optVals.owned; payload.tags=optVals.tags||''; if(!notesVal) payload.notes=''; } else { if(optVals.rating) payload.rating=optVals.rating; if(optVals.owned) payload.owned=optVals.owned; if(optVals.tags) payload.tags=optVals.tags; }
+form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) return; _formSubmitting=true; const priorTxid=form.priorTxid.value||undefined; const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ; const dateVal = form.dateRead.value; const payload={ title:form.title.value.trim(), author:form.author.value.trim(), format:form.format.value, readingStatus:rsValue }; if(rsValue === READING_STATUS.READ){ const ms = dateStringToMsNoonUtc(dateVal); if(ms != null) payload.dateRead = ms; } else if(rsValue === READING_STATUS.READING){ payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now(); } if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; if(coverPreview.dataset.fit) payload.coverFit=coverPreview.dataset.fit; } else if(priorTxid){ payload.coverImage=''; payload.mimeType=''; } const notesVal=(notesInput?.value||'').trim(); if(notesVal) payload.notes=notesVal; const optVals=getOptionalFieldValues(); if(priorTxid){ payload.rating=optVals.rating||0; payload.owned=!!optVals.owned; payload.tags=optVals.tags||''; if(!notesVal) payload.notes=''; } else { if(optVals.rating) payload.rating=optVals.rating; if(optVals.owned) payload.owned=optVals.owned; if(optVals.tags) payload.tags=optVals.tags; }
   // Friend-matching identifiers: capture from search state for new books only.
   // Edits leave the existing work_key/isbn13 untouched (book_repository.update merges).
   if(!priorTxid && window.bookSearch?.getSearchMeta){
