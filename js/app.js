@@ -8,7 +8,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
 import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
 import { stripNoise } from './core/search_core.js';
-import { dateStringToMsNoonUtc, msToDateInputUtc, formatDateReadDisplay } from './core/id_core.js';
+import { dateStringToMsNoonUtc, msToDateInputUtc, formatDateReadDisplay, formatMonthYearDisplay } from './core/id_core.js';
 import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
 import { haptic } from './core/haptic.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
@@ -412,16 +412,6 @@ function orderEntries(){
     if(ca!==cb) return cb-ca;
     return 0;
   });
-}
-// dateRead is now a ms-epoch number (schema v0.3.0). Format using UTC components
-// so noon-UTC values render as the picked calendar day in every viewer timezone.
-function formatDisplayDate(ms){
-  if(ms == null || ms === '') return '';
-  const n = typeof ms === 'number' ? ms : Number(ms);
-  if(!Number.isFinite(n)) return '';
-  const d = new Date(n);
-  if(isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(d);
 }
 function mapFormat(f){ const v=(f||'').toLowerCase(); if(v==='ebook') return 'ebook'; if(v==='audiobook'||v==='audio') return 'audio'; return 'print'; }
 
@@ -1082,53 +1072,78 @@ function generatedCoverColor(title){
 // --- Render ---
 function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false; const key=entry.txid||entry.id||''; const el=key?document.querySelector('.card[data-txid="'+key+'"]'):null; if(el){ el.classList.add('deleting'); el.style.pointerEvents='none'; el.style.opacity='0.35'; } }
 
+/**
+ * Build the slim details row (rating · format glyph · date) for a card.
+ * Date source depends on shelf context:
+ *   - reading: "Started <Mon YYYY>" from readingStartedAt (fallback createdAt)
+ *   - read:    plain "<Mon YYYY>" from dateRead
+ *   - wtr:     "Added <Mon YYYY>" from createdAt
+ */
+function buildCardDetails(e, shelfContext){
+  const parts = [];
+  if(e.rating && e.rating>=1 && e.rating<=5){
+    parts.push(`<span class="card-rating" aria-label="Rated ${e.rating} out of 5">★ ${e.rating}</span>`);
+  }
+  const fmt = (e.format||'').toLowerCase();
+  if(fmt === 'audiobook' || fmt === 'audio'){
+    parts.push('<span class="card-format" aria-label="Audiobook">🎧</span>');
+  } else if(fmt === 'ebook'){
+    parts.push('<span class="card-format" aria-label="Ebook">📖</span>');
+  }
+  let dateText = '';
+  if(shelfContext === 'reading'){
+    const d = formatMonthYearDisplay(e.readingStartedAt || e.createdAt);
+    if(d) dateText = `Started ${d}`;
+  } else if(shelfContext === 'wtr'){
+    const d = formatMonthYearDisplay(e.createdAt);
+    if(d) dateText = `Added ${d}`;
+  } else {
+    // 'read' (default)
+    dateText = formatMonthYearDisplay(e.dateRead);
+  }
+  if(dateText) parts.push(`<span class="card-date">${escapeHtml(dateText)}</span>`);
+  if(!parts.length) return '';
+  return `<div class="details">${parts.join('')}</div>`;
+}
+
 /** Build inner HTML for a single book card */
 function buildCardHTML(e, isWtrResult){
-  const dateDisp=formatDisplayDate(e.dateRead);
-  const notesSnippet = e.notes ? `<p class="card-notes">${escapeHtml(e.notes)}</p>` : '';
-  const metaStrip = buildCardMetadata(e);
   const coverDataUrl = e.coverImage ? `data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}` : '';
   const rs = normalizeReadingStatus(e);
   const isReading = rs === READING_STATUS.READING;
   const cardKey = e.txid || e.id || '';
+  // Determine shelf context for date semantics.
+  let shelfContext = 'read';
+  if(isWtrResult || rs === READING_STATUS.WANT_TO_READ){
+    shelfContext = 'wtr';
+  } else if(isReading){
+    shelfContext = 'reading';
+  }
   const readingRow = isReading
     ? `<div class="card-reading-label"><span class="card-reading-text">◐ Reading</span><button type="button" class="card-done-check" data-done-key="${escapeHtml(cardKey)}" title="Mark as read" aria-label="Mark as read">✓</button></div>`
     : '';
-  const showDate = !isReading && dateDisp;
-  const wtrLabel = isWtrResult ? '<div class="card-wtr-label">Want to Read</div>' : '';
-  const yearBadge = e._showYearBadge && e.dateRead ? `<span class="card-year-badge">${escapeHtml(String(new Date(e.dateRead).getUTCFullYear()))}</span>` : '';
+  const detailsRow = buildCardDetails(e, shelfContext);
+  // Hover overlay (desktop only via @media (hover: hover) in CSS).
+  // aria-hidden because the sr-only span below already announces the
+  // same content to assistive tech, avoiding double-announcement.
+  const titleSafe = escapeHtml(e.title || 'Untitled');
+  const authorSafe = escapeHtml(e.author || '');
+  const overlay = `<div class="cover-hover" aria-hidden="true"><div class="cover-hover-title">${titleSafe}</div>${authorSafe ? `<div class="cover-hover-author">${authorSafe}</div>` : ''}</div>`;
+  // Screen-reader-only label: redundant for sighted users (cover does this),
+  // but essential for AT navigation.
+  const srLabel = `<span class="sr-only">${titleSafe}${authorSafe ? ` by ${authorSafe}` : ''}</span>`;
   return `
-      <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}" data-fit="${e.coverFit||'contain'}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}</div>
+      <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}" data-fit="${e.coverFit||'contain'}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}${overlay}</div>
       <div class="meta">
-        <p class="title">${e.title||'<i>Untitled</i>'}</p>
-        <p class="author">${e.author||''}</p>
-        ${metaStrip}
-        <div class="details">${wtrLabel}${yearBadge}${readingRow}${showDate ? `<span class="read-date">Read ${dateDisp}</span>` : ''}</div>
-        ${notesSnippet}
+        ${srLabel}
+        ${readingRow}
+        ${detailsRow}
       </div>`;
-}
-
-function buildCardMetadata(e){
-  const parts=[];
-  if(e.rating && e.rating>=1 && e.rating<=5){
-    const filled='★'.repeat(e.rating);
-    const empty='☆'.repeat(5-e.rating);
-    parts.push(`<span class="card-rating" aria-label="Rated ${e.rating} out of 5">${filled}<span class="stars-empty">${empty}</span></span>`);
-  }
-  if(e.owned){
-    parts.push('<span class="card-owned">📖 Owned</span>');
-  }
-  if(e.tags){
-    const tagList=e.tags.split(',').map(t=>t.trim()).filter(Boolean).slice(0,3);
-    if(tagList.length) parts.push('<span class="card-tags">'+tagList.map(t=>escapeHtml(t)).join(' · ')+'</span>');
-  }
-  if(!parts.length) return '';
-  return '<div class="card-metadata">'+parts.join('<span class="meta-sep">·</span>')+'</div>';
 }
 
 /** Quick fingerprint for change detection — avoids unnecessary innerHTML rewrites */
 function entryFingerprint(e){
-  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.notes||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e.onArweave?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'')+'\t'+(e.owned?'1':'0')+'\t'+(e.tags||'')+'\t'+(e._showYearBadge?'1':'0');
+  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.readingStartedAt||'')+'\t'+(e.createdAt||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'');
 }
 
 /**
@@ -1329,34 +1344,39 @@ function render(){
     desiredKeys.add(key);
     const fp = entryFingerprint(e) + (e._wtrResult ? '\twtr' : '');
     const isReading = normalizeReadingStatus(e) === READING_STATUS.READING;
-
-    const isSyncPending = tarnService.isLoggedIn() && !e.onArweave && !e._deleting;
+    // Cards expose title + author via aria-label so screen readers and
+    // keyboard focus announcements work without visible text below the cover.
+    const ariaLabel = (e.title || 'Untitled') + (e.author ? ` by ${e.author}` : '');
 
     let card = existingMap.get(key);
     if(card){
       if(card.dataset._fp !== fp){
         const rawFmt=(e.format||'').toLowerCase();
         const fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
-        card.className='card'+(e._deleting?' deleting':'')+(isSyncPending?' sync-pending':'');
+        card.className='card'+(e._deleting?' deleting':'');
         card.dataset.fmt=fmtVariant;
         card.dataset.format=rawFmt;
         if(isReading) card.dataset.reading='true'; else delete card.dataset.reading;
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('aria-label', ariaLabel);
         card.innerHTML=buildCardHTML(e, e._wtrResult);
         card.dataset._fp=fp;
         if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
         else { card.style.pointerEvents=''; card.style.opacity=''; }
-      } else {
-        card.classList.toggle('sync-pending', isSyncPending);
       }
     } else {
       card=document.createElement('div');
       const rawFmt=(e.format||'').toLowerCase();
       const fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
-      card.className='card'+(e._deleting?' deleting':'')+(isSyncPending?' sync-pending':'');
+      card.className='card'+(e._deleting?' deleting':'');
       card.dataset.txid=key;
       card.dataset.fmt=fmtVariant;
       card.dataset.format=rawFmt;
       if(isReading) card.dataset.reading='true';
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('aria-label', ariaLabel);
       card.innerHTML=buildCardHTML(e, e._wtrResult);
       card.dataset._fp=fp;
       if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
@@ -1367,6 +1387,18 @@ function render(){
       for(const n of path){
         if(n instanceof Element && n.classList?.contains('card-done-check')) return;
       }
+      openModalWithHero(e, card);
+    };
+    // Keyboard activation: Enter/Space opens detail (matches role="button" affordance).
+    card.onkeydown=(ev)=>{
+      if(e._deleting) return;
+      if(ev.key !== 'Enter' && ev.key !== ' ') return;
+      // Don't intercept when focus is inside the inner done-check button.
+      const path=typeof ev.composedPath==='function'?ev.composedPath():[];
+      for(const n of path){
+        if(n instanceof Element && n.classList?.contains('card-done-check')) return;
+      }
+      ev.preventDefault();
       openModalWithHero(e, card);
     };
     orderedCards.push(card);

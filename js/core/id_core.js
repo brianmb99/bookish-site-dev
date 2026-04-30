@@ -82,6 +82,27 @@ export function formatDateReadDisplay(ms) {
   }).format(d);
 }
 
+/**
+ * Compact "Mon YYYY" formatter for the slim card details row (e.g. "Mar 2026").
+ * Same UTC rationale as formatDateReadDisplay — the noon-UTC value renders as
+ * the picked calendar month in every viewer timezone.
+ *
+ * @param {number|null|undefined} ms
+ * @returns {string} e.g. "Mar 2026" or '' if input is invalid
+ */
+export function formatMonthYearDisplay(ms) {
+  if (ms == null || ms === '') return '';
+  const n = typeof ms === 'number' ? ms : Number(ms);
+  if (!Number.isFinite(n)) return '';
+  const d = new Date(n);
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(d);
+}
+
 // Helper for tests to build a fake base64 cover (not used in production import)
 export function fakeCoverBytes(len=128){
   const arr=new Uint8Array(len); for(let i=0;i<len;i++) arr[i]=i%256; return arr;

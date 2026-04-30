@@ -404,28 +404,89 @@ button.secondary:hover, .btn.secondary:hover{
 }
 .cover img{width:100%;height:100%;object-fit:contain;display:block;position:relative;z-index:1}
 .cover img[data-fit="cover"]{object-fit:cover}
-/* Dim text below card when generated cover shows title/author */
-.card:has(.generated-cover) .meta .title,
-.card:has(.generated-cover) .meta .author{opacity:.5}
 .meta{flex:1;min-width:0}
-.title{
+/* Title/author text below the cover is now hidden — the cover does the
+   labeling, and accessibility is provided by the .sr-only span + the card's
+   aria-label (#116). DOM markers .title/.author are no longer rendered, but
+   the rules remain so any cached/legacy HTML stays hidden. */
+.title,
+.author{display:none}
+/* Slim details row: rating · format glyph · date. Single horizontal line. */
+.details{
+  font-size:.7rem;
+  color:var(--color-text-muted);
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  line-height:1.3;
+  margin:0;
+}
+.details .card-rating{color:var(--color-warning);letter-spacing:.5px;flex-shrink:0}
+.details .card-format{flex-shrink:0;font-size:.85em;line-height:1}
+.details .card-date{overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* Visually hidden, accessible to screen readers and keyboard navigation. */
+.sr-only{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+/* Hover overlay over the bottom of the cover — desktop only. */
+.cover-hover{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  padding:12px;
+  background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,0.75) 100%);
+  color:#fff;
+  opacity:0;
+  transform:translateY(4px);
+  transition:opacity .15s ease-out,transform .15s ease-out;
+  pointer-events:none;
+  z-index:3;
+  box-sizing:border-box;
+  border-radius:0 0 inherit inherit;
+}
+.cover-hover-title{
   font-family:var(--font-body);
   font-size:1rem;
   font-weight:600;
   line-height:1.2;
-  margin:0 0 4px 0;
-  color:var(--color-text-primary);
+  color:#fff;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
 }
-.author{
+.cover-hover-author{
   font-family:var(--font-body);
-  font-size:.875rem;
-  font-weight:500;
-  color:var(--color-text-secondary);
-  margin:0 0 6px 0;
+  font-size:.8rem;
+  color:rgba(255,255,255,.85);
+  margin-top:2px;
+  display:-webkit-box;
+  -webkit-line-clamp:1;
+  line-clamp:1;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
 }
-.details{font-size:.65rem;opacity:.65;display:flex;flex-wrap:wrap;gap:6px}
-.details{flex-direction:column;align-items:flex-start;gap:2px}
-.details .read-date{display:block;opacity:.7;}
+@media (hover: hover){
+  .card:hover .cover-hover,
+  .card:focus-visible .cover-hover{
+    opacity:1;
+    transform:translateY(0);
+  }
+}
 /* Empty state - Phase 2 redesign */
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;min-height:300px}
 .empty-illustration{font-size:4rem;margin-bottom:24px;opacity:.9;animation:gentleBounce 1s ease-in-out 1}
@@ -999,19 +1060,6 @@ button.secondary:hover, .btn.secondary:hover{
 .card-skeleton:nth-child(2) .skel-author{animation-delay:.25s}
 .card-skeleton:nth-child(3) .skel-line{animation-delay:.3s}
 .card-skeleton:nth-child(3) .skel-author{animation-delay:.4s}
-
-/* Sync-pending shimmer overlay on real cards */
-.card.sync-pending::after{
-  content:'';
-  position:absolute;
-  inset:0;
-  border-radius:12px;
-  background:linear-gradient(90deg,transparent 0%,rgba(59,130,246,.06) 50%,transparent 100%);
-  background-size:200% 100%;
-  animation:shimmer 2s ease-in-out infinite;
-  pointer-events:none;
-  z-index:2;
-}
 
 /* ── Year header — plain text, clickable ── */
 .year-header{
@@ -1751,10 +1799,6 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   0%,100%{box-shadow:0 0 0 0 rgba(234,179,8,.4);}
   50%{box-shadow:0 0 0 4px rgba(234,179,8,0);}
 }
-.status-dot.syncing{
-  background:var(--color-success);
-  box-shadow:0 0 6px 1px rgba(16,185,129,.3);
-}
 .card.deleting{opacity:.35;filter:grayscale(.85)}
 /* (Legacy in-modal book search UI removed in #114 — adding starts from omnibox.) */
 /* Cover navigation arrows overlaid on tile */
@@ -1778,14 +1822,10 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   font-size:.55rem;padding:2px 8px;border-radius:10px;z-index:4;
   pointer-events:none;white-space:nowrap;letter-spacing:.02em;
 }
-.cards .title{transition:font-size .2s}
-.cards .author{transition:font-size .2s}
 .cards .details{transition:font-size .2s}
 @media (max-width:599px){
   body{font-size:calc(14px * var(--mobile-scale));}
-  .card .title{font-size:calc(1rem * var(--mobile-scale));}
-  .card .author{font-size:calc(.85rem * var(--mobile-scale));}
-  .card .details{font-size:calc(.65rem * var(--mobile-scale));}
+  .card .details{font-size:calc(.7rem * var(--mobile-scale));}
 }
 @media (max-width:599px){
   /* Phase 4: Mobile polish */
@@ -1838,8 +1878,6 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   .cover .generated-title{font-size:.8rem;-webkit-line-clamp:5;line-clamp:5}
   .cover .generated-author{font-size:.6rem}
   .meta{padding:4px 2px 0}
-  .title{font-size:1rem}
-  .author{font-size:.85rem}
 }
 /* Mobile modal: bottom sheet anchored to bottom (touch devices) */
 @media (pointer: coarse){
@@ -1907,8 +1945,6 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 /* Large desktop: larger tiles */
 @media (min-width:900px){
   .cards{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:26px}
-  .title{font-size:1.05rem}
-  .author{font-size:.85rem}
 }
 /* Tile layout for book modal (shared by add & edit) */
 .modal-inner.add-mode{border:2px solid #2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15);border-radius:16px}
@@ -2191,24 +2227,8 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 }
 .tag-pill-remove:hover{opacity:1;color:var(--color-error)}
 
-/* Card metadata strip */
-.card-metadata{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  font-size:.6rem;
-  opacity:.6;
-  margin:2px 0 0;
-  overflow:hidden;
-  white-space:nowrap;
-  text-overflow:ellipsis;
-  line-height:1.3;
-}
-.card-rating{letter-spacing:1px;color:var(--color-warning)}
-.card-rating .stars-empty{color:var(--color-border-default);opacity:.4}
-.card-owned{display:inline-flex;align-items:center;gap:3px}
-.card-tags{color:var(--color-text-muted)}
-.meta-sep{opacity:.3;margin:0 1px}
+/* Card metadata strip removed in #116 — slim .details row in cards.js owns
+   rating + format + date now. .card-rating styling lives with .details. */
 
 /* Mobile adjustments for optional fields */
 @media(max-width:599px){
@@ -3036,7 +3056,7 @@ body.modal-open{overscroll-behavior-y:contain}
    7d: Text selection control
    ============================================================================ */
 @media (pointer:coarse){
-  header,.spine-panel,button,.btn,.status-selector,.card .meta,.card .title,.card .author{user-select:none;-webkit-user-select:none}
+  header,.spine-panel,button,.btn,.status-selector,.card .meta{user-select:none;-webkit-user-select:none}
   .notes-content,.modal-inner input,.modal-inner textarea{user-select:auto;-webkit-user-select:auto}
 }
 @media (pointer:fine){
