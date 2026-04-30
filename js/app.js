@@ -1072,6 +1072,15 @@ function generatedCoverColor(title){
 // --- Render ---
 function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false; const key=entry.txid||entry.id||''; const el=key?document.querySelector('.card[data-txid="'+key+'"]'):null; if(el){ el.classList.add('deleting'); el.style.pointerEvents='none'; el.style.opacity='0.35'; } }
 
+// Lucide-style line-art SVG glyphs for card format icons (#120 follow-up to #116).
+// 14×14, currentColor stroke — visual weight matches the WTR header `book` icon
+// (which is 18×18 in the header; 14×14 in the meta row keeps it subtle next to
+// the 0.7rem text). aria-hidden on the SVG itself; the wrapping <span> carries
+// the accessible label.
+const FORMAT_ICON_PRINT = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
+const FORMAT_ICON_EBOOK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
+const FORMAT_ICON_AUDIO = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H4a1 1 0 0 1-1-1z"/><path d="M21 14h-3a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2a1 1 0 0 0 1-1z"/><path d="M3 14a9 9 0 0 1 18 0"/></svg>';
+
 /**
  * Build the slim details row (rating · format glyph · date) for a card.
  * Date source depends on shelf context:
@@ -1086,9 +1095,12 @@ function buildCardDetails(e, shelfContext){
   }
   const fmt = (e.format||'').toLowerCase();
   if(fmt === 'audiobook' || fmt === 'audio'){
-    parts.push('<span class="card-format" aria-label="Audiobook">🎧</span>');
+    parts.push(`<span class="card-format" aria-label="Audiobook">${FORMAT_ICON_AUDIO}</span>`);
   } else if(fmt === 'ebook'){
-    parts.push('<span class="card-format" aria-label="Ebook">📖</span>');
+    parts.push(`<span class="card-format" aria-label="Ebook">${FORMAT_ICON_EBOOK}</span>`);
+  } else {
+    // Print is the default. Per #120, always show a glyph — never omit.
+    parts.push(`<span class="card-format" aria-label="Print book">${FORMAT_ICON_PRINT}</span>`);
   }
   let dateText = '';
   if(shelfContext === 'reading'){

@@ -426,7 +426,11 @@ button.secondary:hover, .btn.secondary:hover{
   margin:0;
 }
 .details .card-rating{color:var(--color-warning);letter-spacing:.5px;flex-shrink:0}
-.details .card-format{flex-shrink:0;font-size:.85em;line-height:1}
+/* #120: card-format wraps an inline SVG glyph (print/ebook/audio). inline-flex
+   centers the SVG against the surrounding 0.7rem text without baseline jitter.
+   color flows to the SVG via currentColor on stroke. */
+.details .card-format{flex-shrink:0;display:inline-flex;align-items:center;line-height:1}
+.details .card-format svg{display:block;width:14px;height:14px}
 .details .card-date{overflow:hidden;text-overflow:ellipsis;min-width:0}
 /* Visually hidden, accessible to screen readers and keyboard navigation. */
 .sr-only{
