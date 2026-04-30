@@ -1079,40 +1079,33 @@ function generatedCoverColor(title){
 // --- Render ---
 function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false; const key=entry.txid||entry.id||''; const el=key?document.querySelector('.card[data-txid="'+key+'"]'):null; if(el){ el.classList.add('deleting'); el.style.pointerEvents='none'; el.style.opacity='0.35'; } }
 
-// Lucide-style line-art SVG glyphs for card format icons (#120 follow-up to #116).
-// 14×14, currentColor stroke — visual weight matches the WTR header `book` icon
-// (which is 18×18 in the header; 14×14 in the meta row keeps it subtle next to
-// the 0.7rem text). aria-hidden on the SVG itself; the wrapping <span> carries
-// the accessible label.
-const FORMAT_ICON_PRINT = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
-const FORMAT_ICON_EBOOK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
-const FORMAT_ICON_AUDIO = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H4a1 1 0 0 1-1-1z"/><path d="M21 14h-3a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2a1 1 0 0 0 1-1z"/><path d="M3 14a9 9 0 0 1 18 0"/></svg>';
-
 /**
- * Build the slim details row (rating · format glyph · date) for a card.
- * Date source depends on shelf context:
- *   - reading: "Started <Mon YYYY>" from readingStartedAt (fallback createdAt)
+ * Build the slim details row for a card. Single horizontal line:
+ *   `date · [status if reading] · [rating if set]`
+ *
+ * Date label by shelf:
+ *   - reading: plain "<Mon YYYY>" from readingStartedAt (fallback createdAt).
+ *              The ✓ Reading status that follows provides the "started" semantic.
  *   - read:    plain "<Mon YYYY>" from dateRead
  *   - wtr:     "Added <Mon YYYY>" from createdAt
+ *
+ * Status: inline "✓ Reading" pill on currently-reading cards (was previously
+ * its own row above the meta — collapsed inline in #121 to keep cards a
+ * uniform single-line meta).
+ *
+ * Rating: filled-star glyphs (e.g. 4 → "★★★★"). Variable width — placed last
+ * so it clips first if the row overflows on narrow cards.
+ *
+ * Format glyph (print/ebook/audio) was removed in #121 — it added visual
+ * noise on libraries dominated by one format and isn't book-intrinsic
+ * metadata. Format is still surfaced in the detail view.
  */
 function buildCardDetails(e, shelfContext){
   const parts = [];
-  if(e.rating && e.rating>=1 && e.rating<=5){
-    parts.push(`<span class="card-rating" aria-label="Rated ${e.rating} out of 5">★ ${e.rating}</span>`);
-  }
-  const fmt = (e.format||'').toLowerCase();
-  if(fmt === 'audiobook' || fmt === 'audio'){
-    parts.push(`<span class="card-format" aria-label="Audiobook">${FORMAT_ICON_AUDIO}</span>`);
-  } else if(fmt === 'ebook'){
-    parts.push(`<span class="card-format" aria-label="Ebook">${FORMAT_ICON_EBOOK}</span>`);
-  } else {
-    // Print is the default. Per #120, always show a glyph — never omit.
-    parts.push(`<span class="card-format" aria-label="Print book">${FORMAT_ICON_PRINT}</span>`);
-  }
+  // 1. Date (always first — symmetry across shelves).
   let dateText = '';
   if(shelfContext === 'reading'){
-    const d = formatMonthYearDisplay(e.readingStartedAt || e.createdAt);
-    if(d) dateText = `Started ${d}`;
+    dateText = formatMonthYearDisplay(e.readingStartedAt || e.createdAt);
   } else if(shelfContext === 'wtr'){
     const d = formatMonthYearDisplay(e.createdAt);
     if(d) dateText = `Added ${d}`;
@@ -1121,8 +1114,17 @@ function buildCardDetails(e, shelfContext){
     dateText = formatMonthYearDisplay(e.dateRead);
   }
   if(dateText) parts.push(`<span class="card-date">${escapeHtml(dateText)}</span>`);
+  // 2. Status (currently-reading only — inline).
+  if(shelfContext === 'reading'){
+    parts.push(`<span class="card-reading-status" aria-label="Currently reading">✓ Reading</span>`);
+  }
+  // 3. Rating (last — variable width, clips first on overflow).
+  if(e.rating && e.rating>=1 && e.rating<=5){
+    const stars = '★'.repeat(e.rating);
+    parts.push(`<span class="card-rating" aria-label="Rated ${e.rating} out of 5">${stars}</span>`);
+  }
   if(!parts.length) return '';
-  return `<div class="details">${parts.join('')}</div>`;
+  return `<div class="details">${parts.join('<span class="card-meta-sep" aria-hidden="true"> · </span>')}</div>`;
 }
 
 /** Build inner HTML for a single book card */
@@ -1130,7 +1132,6 @@ function buildCardHTML(e, isWtrResult){
   const coverDataUrl = e.coverImage ? `data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}` : '';
   const rs = normalizeReadingStatus(e);
   const isReading = rs === READING_STATUS.READING;
-  const cardKey = e.txid || e.id || '';
   // Determine shelf context for date semantics.
   let shelfContext = 'read';
   if(isWtrResult || rs === READING_STATUS.WANT_TO_READ){
@@ -1138,9 +1139,10 @@ function buildCardHTML(e, isWtrResult){
   } else if(isReading){
     shelfContext = 'reading';
   }
-  const readingRow = isReading
-    ? `<div class="card-reading-label"><span class="card-reading-text">◐ Reading</span><button type="button" class="card-done-check" data-done-key="${escapeHtml(cardKey)}" title="Mark as read" aria-label="Mark as read">✓</button></div>`
-    : '';
+  // #121: status pill is now inline in the meta row (built inside
+  // buildCardDetails), not a separate row above. The standalone
+  // mark-as-read (✓) button on the card was removed with it — that
+  // affordance lives in the detail view.
   const detailsRow = buildCardDetails(e, shelfContext);
   // Hover overlay (desktop only via @media (hover: hover) in CSS).
   // aria-hidden because the sr-only span below already announces the
@@ -1155,7 +1157,6 @@ function buildCardHTML(e, isWtrResult){
       <div class="cover"${coverDataUrl?` style="--cover-url:url('${coverDataUrl}')"`:''}>${e.coverImage?`<img src="${coverDataUrl}" data-fit="${e.coverFit||'contain'}">`:`<div class="generated-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="generated-title">${escapeHtml(e.title||'Untitled')}</span>${e.author?`<span class="generated-author">${escapeHtml(e.author)}</span>`:''}</div>`}${overlay}</div>
       <div class="meta">
         ${srLabel}
-        ${readingRow}
         ${detailsRow}
       </div>`;
 }
@@ -1402,21 +1403,12 @@ function render(){
     }
     card.onclick=(ev)=>{
       if(e._deleting) return;
-      const path=typeof ev.composedPath==='function'?ev.composedPath():[];
-      for(const n of path){
-        if(n instanceof Element && n.classList?.contains('card-done-check')) return;
-      }
       openModalWithHero(e, card);
     };
     // Keyboard activation: Enter/Space opens detail (matches role="button" affordance).
     card.onkeydown=(ev)=>{
       if(e._deleting) return;
       if(ev.key !== 'Enter' && ev.key !== ' ') return;
-      // Don't intercept when focus is inside the inner done-check button.
-      const path=typeof ev.composedPath==='function'?ev.composedPath():[];
-      for(const n of path){
-        if(n instanceof Element && n.classList?.contains('card-done-check')) return;
-      }
       ev.preventDefault();
       openModalWithHero(e, card);
     };
@@ -2480,26 +2472,11 @@ wtrListEl?.addEventListener('click', (ev)=>{
   }
 });
 
-// Mark as read (checkmark) on Currently Reading cards — toast with Undo
-cardsEl?.addEventListener('click', (ev)=>{
-  const doneBtn = ev.target.closest('.card-done-check');
-  if(doneBtn){
-    ev.stopPropagation();
-    ev.preventDefault();
-    const key = doneBtn.dataset.doneKey;
-    if(!key || !bookRepo) return;
-    const entry = bookRepo.getById(key);
-    if(!entry || normalizeReadingStatus(entry) !== READING_STATUS.READING) return;
-    const snapshot = {
-      readingStatus: READING_STATUS.READING,
-      dateRead: entry.dateRead || null,
-      readingStartedAt: entry.readingStartedAt
-    };
-    bookRepo.changeStatus(key, READING_STATUS.READ).then((result) => {
-      if (result) showMarkAsReadToastWithUndo(key, snapshot);
-    });
-  }
-});
+// #121: Removed the per-card mark-as-read (.card-done-check) click handler.
+// The button was deleted from card chrome along with the multi-line reading
+// label so the meta row could be a single uniform line. Mark-as-read flows
+// through the detail view. The showMarkAsReadToastWithUndo helper above is
+// retained for any future callers (e.g. detail-view bulk actions).
 
 // ESC closes WTR drawer
 document.addEventListener('keydown', (e)=>{

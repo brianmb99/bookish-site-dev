@@ -411,27 +411,34 @@ button.secondary:hover, .btn.secondary:hover{
    the rules remain so any cached/legacy HTML stays hidden. */
 .title,
 .author{display:none}
-/* Slim details row: rating · format glyph · date. Single horizontal line. */
+/* Slim details row: date · [status if reading] · [rating if set]. Single
+   horizontal line. Reordered in #121: date first (symmetry across shelves),
+   rating last (variable width — clips first if row overflows on narrow cards).
+   Format glyph removed in #121 (lives in detail view). */
 .details{
   font-size:.7rem;
   color:var(--color-text-muted);
   display:flex;
   flex-direction:row;
-  align-items:center;
-  gap:8px;
+  align-items:baseline;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
   line-height:1.3;
   margin:0;
+  min-width:0;
 }
-.details .card-rating{color:var(--color-warning);letter-spacing:.5px;flex-shrink:0}
-/* #120: card-format wraps an inline SVG glyph (print/ebook/audio). inline-flex
-   centers the SVG against the surrounding 0.7rem text without baseline jitter.
-   color flows to the SVG via currentColor on stroke. */
-.details .card-format{flex-shrink:0;display:inline-flex;align-items:center;line-height:1}
-.details .card-format svg{display:block;width:14px;height:14px}
-.details .card-date{overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* Date — fixed leading edge across cards in a shelf. */
+.details .card-date{flex-shrink:0}
+/* Inline "✓ Reading" status pill (replaces the standalone .card-reading-label
+   row that used to sit above the meta — collapsed inline in #121). */
+.details .card-reading-status{color:var(--color-primary);opacity:.85;flex-shrink:0}
+/* Rating renders as filled stars (e.g. ★★★★). Variable width — placed last
+   so it shrinks/clips first when the row overflows. */
+.details .card-rating{color:var(--color-warning);letter-spacing:.5px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* Middle-dot separator between meta parts. Subtle — half-opacity of the
+   surrounding muted text. aria-hidden on the element itself. */
+.details .card-meta-sep{flex-shrink:0;opacity:.55;padding:0 2px}
 /* Visually hidden, accessible to screen readers and keyboard navigation. */
 .sr-only{
   position:absolute;
@@ -571,41 +578,10 @@ button.secondary:hover, .btn.secondary:hover{
   background:linear-gradient(180deg,var(--color-primary) 0%,var(--color-primary-hover) 100%)!important;
   box-shadow:0 0 8px 1px rgba(59,130,246,.2);
 }
-.card-reading-label{
-  font-size:.7rem;
-  color:var(--color-primary);
-  opacity:.85;
-  display:flex;
-  flex-direction:row;
-  align-items:center;
-  gap:6px;
-  flex-wrap:wrap;
-}
-.card-reading-text{flex:0 1 auto;line-height:1.2}
-.card-done-check{
-  font-size:.8rem;
-  line-height:1;
-  color:var(--color-text-muted);
-  cursor:pointer;
-  padding:12px;
-  margin:-12px -12px -12px 0;
-  border-radius:6px;
-  transition:color .15s,background .15s;
-  font-weight:600;
-  font-family:var(--font-body);
-  background:transparent;
-  border:none;
-  min-width:44px;
-  min-height:44px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  box-shadow:none;
-}
-.card-done-check:hover{
-  color:var(--color-success);
-  background:rgba(16,185,129,.12);
-}
+/* #121: Removed .card-reading-label / .card-reading-text / .card-done-check
+   rules. The reading-status pill is now inline in .details (.card-reading-status),
+   and the per-card mark-as-read button was removed — that affordance is in
+   the detail view. */
 
 /* Header WTR badge + Omnibox */
 /* WTR header button with badge */
