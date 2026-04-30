@@ -5,7 +5,8 @@ import { resizeImageToBase64 } from './core/image_utils.js';
 import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions, insertByRank, buildCoverEdition, fetchAndValidateCover, MIN_COVER_BYTES } from './core/cover_pipeline.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
-  const ui=document.getElementById('bookSearchUI'); const input=document.getElementById('bookSearchInput'); const resultsEl=document.getElementById('bookSearchResults');
+  // #114: in-modal #bookSearchUI (search input + results) deleted; the cover-edition
+  // browser is now invoked via the "Browse covers" button via browseCoversForEntry(workKey).
   const prevBtn=document.getElementById('prevEdition'); const nextBtn=document.getElementById('nextEdition'); const editionInfo=document.getElementById('editionInfo');
   const findCoversBtn=document.getElementById('findCoversBtn');
   const uploadCoverBtn=document.getElementById('uploadCoverBtn');
@@ -40,10 +41,20 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
   let searchCounter=0;
   let abortController=null;
   function markDirty(){ try{ form.dispatchEvent(new Event('input',{bubbles:true})); }catch{} }
-  function showUI(isEdit){ ui.style.display=isEdit?'none':'block'; if(isEdit) clearSearchState(); }
   function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; if(changeCoverLink) changeCoverLink.style.display='none'; if(coverActionsEl) coverActionsEl.style.display='none'; }
   function hideCoverNav(){ prevBtn.style.display='none'; nextBtn.style.display='none'; editionInfo.style.display='none'; }
-  function clearSearchState(){ if(abortController){ abortController.abort(); abortController=null; } if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; } currentWork=null; currentAudio=null; currentWorkKey=''; currentIsbn13=''; editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null; olDocs=[]; itunesItems=[]; input.value=''; resultsEl.innerHTML=''; resultsEl.style.display='none'; hideCoverNav(); if(uploadCoverBtn) uploadCoverBtn.style.display='none'; if(changeCoverLink) changeCoverLink.style.display='none'; if(coverActionsEl) coverActionsEl.style.display='none'; lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all'; }
+  function clearSearchState(){
+    if(abortController){ abortController.abort(); abortController=null; }
+    if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; }
+    currentWork=null; currentAudio=null; currentWorkKey=''; currentIsbn13='';
+    editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null;
+    olDocs=[]; itunesItems=[];
+    hideCoverNav();
+    if(uploadCoverBtn) uploadCoverBtn.style.display='none';
+    if(changeCoverLink){ changeCoverLink.style.display='none'; changeCoverLink.setAttribute('aria-expanded','false'); }
+    if(coverActionsEl) coverActionsEl.style.display='none';
+    lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all';
+  }
   function prepareQuery(q){ lastQuery=q.trim(); queryTokens=coreTokenize(lastQuery); }
   function showSkeletonCards(){
     resultsEl.innerHTML='<div class="search-status">Searching\u2026</div>'+
@@ -376,10 +387,23 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     } catch(e) {
       setCoverPlaceholder(ph,'no-cover');
     } }
-  input.addEventListener('input',()=>{ if(debounceTimer) clearTimeout(debounceTimer); debounceTimer=setTimeout(()=>searchTitle(input.value),350); });
-  resultsEl.addEventListener('click',e=>{ const div=e.target.closest('div.res'); if(!div) return; resultsEl.style.display='none'; const src=div.dataset.src; try{ const meta=JSON.parse(decodeURIComponent(div.dataset.json)); if(src==='ol') selectWork(meta); else if(src==='it') selectItunes(meta); }catch(err){} });
-  prevBtn.addEventListener('click',(e)=>{ e.stopPropagation(); if(editionIndex>0){ editionIndex--; applyEdition(); }});
-  nextBtn.addEventListener('click',(e)=>{ e.stopPropagation(); if(editionIndex<editions.length-1){ editionIndex++; applyEdition(); }});
+  // #114: in-modal search input + results were deleted. No input/result listeners.
+  // Edition arrows still operate on `editions` populated by browseCoversForEntry().
+  prevBtn.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(editionIndex>0){ editionIndex--; applyEdition(); _autoSaveCoverChange(); }
+  });
+  nextBtn.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(editionIndex<editions.length-1){ editionIndex++; applyEdition(); _autoSaveCoverChange(); }
+  });
+  function _autoSaveCoverChange(){
+    // In view mode, auto-save the new cover after a brief delay so the preview
+    // settles. The cover swap already markDirty()'d the form. (#114)
+    if(window.bookishApp?._autoSaveIfDirty){
+      setTimeout(()=>{ try{ window.bookishApp._autoSaveIfDirty(); }catch{} }, 50);
+    }
+  }
 
   // --- "Find covers" for edit mode ---
   /** Fetch OpenLibrary results with covers, returning normalized docs. Returns [] on failure. */
@@ -526,14 +550,9 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
   if(findCoversBtn){
     findCoversBtn.addEventListener('click',(e)=>{
       e.stopPropagation();
-      if(coverPreview.style.display==='block'){
-        coverPreview.dataset._savedSrc=coverPreview.src;
-        coverPreview.dataset._savedB64=coverPreview.dataset.b64||'';
-        coverPreview.dataset._savedMime=coverPreview.dataset.mime||'';
-      }
-      const title=form.title.value.trim();
-      const author=form.author.value.trim();
-      findCoversForEntry(title, author);
+      // #114: always go through the new decoupled entry point. Uses workKey
+      // when available, otherwise falls back to title/author search.
+      browseCoversForEntry(currentWorkKey);
     });
   }
   if(uploadCoverBtn && coverFileInput){
@@ -542,26 +561,80 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
   if(changeCoverLink){
     changeCoverLink.addEventListener('click',(e)=>{
       e.stopPropagation();
-      if(coverActionsEl) coverActionsEl.style.display=coverActionsEl.style.display==='flex'?'none':'flex';
+      const isOpen = coverActionsEl && coverActionsEl.style.display==='flex';
+      if(coverActionsEl) coverActionsEl.style.display=isOpen?'none':'flex';
+      changeCoverLink.setAttribute('aria-expanded', isOpen?'false':'true');
     });
   }
 
-  // Re-display cached results on focus (Fix 3: focus event re-displays search results)
-  input.addEventListener('focus',()=>{
-    if(!input.value.trim()) return;
-    if(olDocs.length || itunesItems.length){ resultsEl.style.display='block'; }
-    else { searchTitle(input.value); }
-  });
+  /**
+   * #114: Decoupled cover-edition browser entry point.
+   * Invoked by the "Browse covers" button. Operates on the OL `work_key`
+   * already attached to the entry (or captured from the omnibox at add time).
+   * If no workKey, falls back to title/author search via findCoversForEntry().
+   */
+  async function browseCoversForEntry(workKey){
+    if(coverPreview.style.display==='block'){
+      coverPreview.dataset._savedSrc=coverPreview.src;
+      coverPreview.dataset._savedB64=coverPreview.dataset.b64||'';
+      coverPreview.dataset._savedMime=coverPreview.dataset.mime||'';
+    }
+    const title=(form.title.value||'').trim();
+    const author=(form.author.value||'').trim();
+    if(workKey){
+      // Direct OL editions browsing path — no in-modal search needed.
+      currentWorkKey = workKey;
+      coverOnlyMode = true;
+      itunesCoverState = null;
+      editions = []; editionIndex = 0;
+      if(findCoversBtn){ findCoversBtn.textContent='Searching…'; findCoversBtn.classList.add('loading'); findCoversBtn.style.display='block'; }
+      try{
+        await loadEditionsFromSearch({ key: workKey, title });
+      } finally {
+        if(findCoversBtn){ findCoversBtn.classList.remove('loading'); }
+      }
+      // loadEditionsFromSearch shows nav when editions arrive; hide pill if so.
+      if(editions.length>1 && findCoversBtn) findCoversBtn.style.display='none';
+      return;
+    }
+    // Fallback: legacy/manual entries with no work_key — find covers by metadata.
+    findCoversForEntry(title, author);
+  }
 
   window.bookSearch={
-    handleModalOpen(isEdit){ showUI(isEdit); hideCoverNav(); if(findCoversBtn) findCoversBtn.style.display='none'; if(uploadCoverBtn) uploadCoverBtn.style.display='block'; if(changeCoverLink) changeCoverLink.style.display='block'; if(coverActionsEl) coverActionsEl.style.display='none'; },
-    showFindCoversBtn(hasCover){
+    /**
+     * Called by app.js openModal (#114). Configures cover-action affordances
+     * for the current entry. workKey is the OL work_key from the entry — used
+     * to gate the "Browse covers" button (hidden for manual/legacy entries
+     * with no work_key).
+     */
+    handleModalOpen(workKey){
+      clearSearchState();
+      currentWorkKey = workKey || '';
+      hideCoverNav();
+      if(uploadCoverBtn) uploadCoverBtn.style.display='block';
+      if(changeCoverLink){ changeCoverLink.style.display='block'; changeCoverLink.setAttribute('aria-expanded','false'); }
+      if(coverActionsEl) coverActionsEl.style.display='none';
       if(findCoversBtn){
-        findCoversBtn.textContent=hasCover?'Browse other covers':'Browse covers';
-        findCoversBtn.classList.remove('loading');
-        findCoversBtn.style.display='block';
+        if(workKey){
+          const hasCover = coverPreview.style.display==='block' && coverPreview.dataset.b64;
+          findCoversBtn.textContent = hasCover ? 'Browse other covers' : 'Browse covers';
+          findCoversBtn.classList.remove('loading');
+          findCoversBtn.style.display='block';
+        } else {
+          // No work_key on this entry — hide Browse covers entirely (#114).
+          findCoversBtn.style.display='none';
+        }
       }
     },
+    handleModalClose(){ clearSearchState(); },
+    /** New decoupled entry point (#114). */
+    browseCoversForEntry(workKey){ return browseCoversForEntry(workKey); },
+    /**
+     * Used by the omnibox add-flow to feed a selected work into the modal
+     * before openModal renders. Sets currentWorkKey + currentIsbn13 so the
+     * form submit handler picks them up via getSearchMeta().
+     */
     selectWork(meta){ selectWork(meta); },
     selectItunes(payload){ selectItunes(payload); },
     /**

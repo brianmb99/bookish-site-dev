@@ -148,7 +148,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.184</div>
+  <div class="footer-meta">Alpha &bull; v0.2.186</div>
 </footer>
 </div>
 
@@ -166,21 +166,10 @@
 </div>
 
 <div id="modal" class="modal">
-  <div class="modal-inner">
+  <div class="modal-inner book-detail-page">
     <button class="modal-close-btn" id="closeModal" aria-label="Close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></button>
-    <div id="statusSelector" class="status-selector" style="display:none">
-      <button type="button" class="status-option active" data-status="want_to_read">Want to Read</button>
-      <button type="button" class="status-option" data-status="reading">Reading</button>
-      <button type="button" class="status-option" data-status="read">Read</button>
-    </div>
-    <input type="hidden" name="readingStatus" id="readingStatusInput" value="want_to_read"/>
-    <div id="bookSearchUI">
-      <h3>Add Book</h3>
-      <input id="bookSearchInput" placeholder="Search by title, author, or ISBN…" autocomplete="off"/>
-      <div id="bookSearchResults" style="display:none"></div>
-    </div>
-    <form id="entryForm" class="inline" novalidate>
-      <div class="form-as-tile">
+    <form id="entryForm" class="inline book-detail-form" novalidate>
+      <div class="book-detail-hero">
         <div class="tile-cover-wrap">
           <div class="tile-cover" id="tileCoverClick">
             <img class="preview" id="coverPreview" style="display:none"/>
@@ -191,29 +180,40 @@
             <button type="button" class="cover-remove-btn" id="coverRemoveBtn" title="Remove cover" style="display:none">×</button>
             <input type="file" name="coverFile" accept="image/*" style="display:none" id="hiddenCoverInput"/>
           </div>
-          <button type="button" class="change-cover-link" id="changeCoverLink" style="display:none">Change cover</button>
+          <button type="button" class="cover-edit-link" id="changeCoverLink" aria-expanded="false">Change cover <span class="cover-edit-caret" aria-hidden="true">▾</span></button>
           <div class="cover-actions" id="coverActions" style="display:none">
             <button type="button" class="cover-action-btn" id="findCoversBtn" style="display:none">Browse covers</button>
             <button type="button" class="cover-action-btn" id="uploadCoverBtn" style="display:none">Upload my own</button>
           </div>
         </div>
-        <div class="fields-cluster">
-          <div class="field-block"><label>Title</label><input name="title" required placeholder="Title"></div>
-          <div class="field-block"><label>Author</label><input name="author" required placeholder="Author"></div>
-          <div class="field-block"><label>Format</label><select name="format"><option value="print">Print</option><option value="ebook">Ebook</option><option value="audio">Audio</option></select></div>
-          <div class="field-block"><label>Date Read</label><input name="dateRead" type="date"></div>
+        <div class="book-detail-placards">
+          <textarea class="placard placard-title" id="placardTitle" name="title" rows="1" required placeholder="Title" aria-label="Edit title" maxlength="500"></textarea>
+          <textarea class="placard placard-author" id="placardAuthor" name="author" rows="1" required placeholder="Author" aria-label="Edit author" maxlength="300"></textarea>
+        </div>
+      </div>
+      <div id="statusSelector" class="status-selector" role="radiogroup" aria-label="Reading status" style="display:none">
+        <button type="button" class="status-option active" data-status="want_to_read" role="radio" aria-checked="true">Want to Read</button>
+        <button type="button" class="status-option" data-status="reading" role="radio" aria-checked="false">Reading</button>
+        <button type="button" class="status-option" data-status="read" role="radio" aria-checked="false">Read</button>
+      </div>
+      <input type="hidden" name="readingStatus" id="readingStatusInput" value="want_to_read"/>
+      <div class="status-microcopy" id="statusMicrocopy" aria-live="polite"></div>
+      <div class="summary-row" id="summaryRow" style="display:none"></div>
+      <div class="detail-rows" id="detailRows">
+        <div class="detail-row" data-field="format">
+          <label>Format</label>
+          <select name="format" class="detail-value">
+            <option value="print">Print</option>
+            <option value="ebook">Ebook</option>
+            <option value="audio">Audio</option>
+          </select>
+        </div>
+        <div class="detail-row" data-field="dateRead">
+          <label id="dateReadLabel">Finished</label>
+          <input name="dateRead" type="date" class="detail-value">
         </div>
       </div>
       <div class="optional-fields-zone" id="optionalFieldsZone">
-        <div class="add-detail-wrap" id="addDetailWrap">
-          <button type="button" class="add-detail-btn" id="addDetailBtn">+ Add detail</button>
-          <div class="add-detail-menu" id="addDetailMenu" style="display:none">
-            <button type="button" class="add-detail-option" data-field="notes">Notes</button>
-            <button type="button" class="add-detail-option" data-field="rating">Rating</button>
-            <button type="button" class="add-detail-option" data-field="owned">Owned</button>
-            <button type="button" class="add-detail-option" data-field="tags">Tags</button>
-          </div>
-        </div>
         <div class="optional-field" data-field="rating" style="display:none">
           <div class="optional-field-header"><label>Rating</label><button type="button" class="field-deactivate" data-field="rating" title="Remove rating field" aria-label="Remove rating field">&times;</button></div>
           <div class="star-rating" id="starRating" role="radiogroup" aria-label="Book rating">
@@ -237,11 +237,17 @@
             <button type="button" class="notes-expand-btn" id="notesExpandBtn" title="Expand to full editor" aria-label="Expand notes">↗</button>
           </div>
         </div>
+        <div class="optional-chips" id="optionalChips" role="toolbar" aria-label="Add detail">
+          <button type="button" class="optional-chip" data-field="notes">+ Add notes</button>
+          <button type="button" class="optional-chip" data-field="rating">+ Rate</button>
+          <button type="button" class="optional-chip" data-field="owned">+ Owned</button>
+          <button type="button" class="optional-chip" data-field="tags">+ Add tags</button>
+        </div>
       </div>
       <input type="hidden" name="priorTxid"/>
-      <div class="row-actions primary-actions">
-        <button type="button" class="btn secondary" id="cancelBtn">Cancel</button>
-        <button type="submit" class="btn" id="saveBtn" disabled>Save</button>
+      <div class="autosave-microcopy" id="autosaveMicrocopy" aria-live="polite"></div>
+      <div class="row-actions primary-actions add-only">
+        <button type="submit" class="btn" id="saveBtn" disabled>Add to List</button>
       </div>
       <div class="delete-action edit-only">
         <button type="button" class="btn-delete-link" id="deleteBtn">Delete this book</button>

@@ -59,15 +59,21 @@ const nudgeDismissBtn = document.getElementById('nudgeDismissBtn');
 const nudgeCreateAccountBtn = document.getElementById('nudgeCreateAccountBtn');
 // --- Optional fields (Tap to Track) ---
 const optFieldsZone = document.getElementById('optionalFieldsZone');
-const addDetailWrap = document.getElementById('addDetailWrap');
-const addDetailBtn = document.getElementById('addDetailBtn');
-const addDetailMenu = document.getElementById('addDetailMenu');
+const optionalChipsEl = document.getElementById('optionalChips');
 const starRatingEl = document.getElementById('starRating');
 const ratingInput = document.getElementById('ratingInput');
 const ownedToggle = document.getElementById('ownedToggle');
 const ownedLabel = document.getElementById('ownedLabel');
 const tagsInputEl = document.getElementById('tagsInput');
 const tagsPillsEl = document.getElementById('tagsPills');
+const placardTitle = document.getElementById('placardTitle');
+const placardAuthor = document.getElementById('placardAuthor');
+const summaryRowEl = document.getElementById('summaryRow');
+const statusMicrocopyEl = document.getElementById('statusMicrocopy');
+const autosaveMicrocopyEl = document.getElementById('autosaveMicrocopy');
+const dateReadLabelEl = document.getElementById('dateReadLabel');
+const formatRow = document.querySelector('.detail-row[data-field="format"]');
+const dateRow = document.querySelector('.detail-row[data-field="dateRead"]');
 const OPTIONAL_FIELDS = ['notes','rating','owned','tags'];
 
 // --- Reading status (constants imported from book_repository.js) ---
@@ -181,11 +187,13 @@ function showMarkAsReadToastWithUndo(key, snapshot) {
 }
 
 function showOptionalField(name, show, animate){
-  const option=addDetailMenu?.querySelector(`.add-detail-option[data-field="${name}"]`);
+  // Hide chip when expanded; show chip when collapsed (#114 inline chips).
+  // Status-based hiding (e.g. rating on WTR) is layered on top via _applyStatusFieldVisibility.
+  const chip=optionalChipsEl?.querySelector(`.optional-chip[data-field="${name}"]`);
   const field=optFieldsZone?.querySelector(`.optional-field[data-field="${name}"]`);
-  // Chip visibility: remove inline style to let CSS flex handle layout;
-  // setting 'block' would break the chip row layout (#103).
-  if(option) option.style.display=show?'none':'';
+  if(chip){
+    if(show) chip.dataset.hidden='true'; else delete chip.dataset.hidden;
+  }
   if(field){
     field.style.display=show?'block':'none';
     if(show && animate){
@@ -195,7 +203,7 @@ function showOptionalField(name, show, animate){
       if(focusTarget) setTimeout(()=>focusTarget.focus(),200);
     }
   }
-  updateAddDetailButton();
+  _applyStatusFieldVisibility();
 }
 function activateField(name){
   const field=optFieldsZone?.querySelector(`.optional-field[data-field="${name}"]`);
@@ -223,15 +231,37 @@ function initOptionalFields(entry){
     const shouldShow = !!hasData || getFieldPref(name);
     showOptionalField(name, shouldShow);
   });
-  closeAddDetailMenu();
+  _applyStatusFieldVisibility();
 }
-function updateAddDetailButton(){
-  if(!addDetailMenu||!addDetailWrap) return;
-  const remaining=addDetailMenu.querySelectorAll('.add-detail-option:not([style*="display: none"])');
-  addDetailWrap.style.display=remaining.length?'':'none';
-}
-function closeAddDetailMenu(){
-  if(addDetailMenu) addDetailMenu.style.display='none';
+
+/**
+ * Hide rating field+chip entirely when status is WTR (#114).
+ * Data on disk is preserved; only render is suppressed.
+ * Also called when status changes mid-modal.
+ */
+function _applyStatusFieldVisibility(){
+  const status = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
+  const isWtr = status === READING_STATUS.WANT_TO_READ;
+  const ratingField = optFieldsZone?.querySelector('.optional-field[data-field="rating"]');
+  const ratingChip = optionalChipsEl?.querySelector('.optional-chip[data-field="rating"]');
+  if(ratingField){
+    if(isWtr){
+      ratingField.style.display='none';
+    }
+    // Otherwise leave display as-is (showOptionalField controls expanded state).
+  }
+  if(ratingChip){
+    if(isWtr){
+      ratingChip.dataset.hidden = 'true';
+    } else {
+      // Restore chip visibility based on whether the field is expanded.
+      if(ratingField && ratingField.style.display === 'block'){
+        ratingChip.dataset.hidden = 'true';
+      } else {
+        delete ratingChip.dataset.hidden;
+      }
+    }
+  }
 }
 function resetOptionalFields(){
   if(ratingInput){ ratingInput.value=''; updateStarDisplay(0); }
@@ -323,25 +353,14 @@ tagsInputEl?.addEventListener('blur',()=>{
   if(parts.length){ parts.forEach(t=>addTagPill(t)); tagsInputEl.value=''; activateField('tags'); updateDirty(); }
 });
 
-// Add detail chip menu toggle (#103)
-addDetailBtn?.addEventListener('click',()=>{
-  if(!addDetailMenu) return;
-  // Clear inline style to let CSS flex-row chips show; 'none' to hide.
-  addDetailMenu.style.display=addDetailMenu.style.display==='none'?'':'none';
-});
-// Add detail menu option click → activate field
-addDetailMenu?.addEventListener('click',e=>{
-  const opt=e.target.closest('.add-detail-option');
-  if(!opt) return;
-  activateField(opt.dataset.field);
-  closeAddDetailMenu();
+// Optional chips (inline, #114): tap a "+ Rate" chip to expand the field.
+optionalChipsEl?.addEventListener('click', e=>{
+  const chip=e.target.closest('.optional-chip');
+  if(!chip) return;
+  activateField(chip.dataset.field);
   updateDirty();
-});
-// Close popover on outside click
-document.addEventListener('click',e=>{
-  if(addDetailMenu?.style.display!=='none' && !addDetailWrap?.contains(e.target)){
-    closeAddDetailMenu();
-  }
+  // Auto-save activates field for view mode if entry exists.
+  if(form.priorTxid.value) _autoSaveIfDirty();
 });
 // Deactivate field
 optFieldsZone?.addEventListener('click',e=>{
@@ -352,7 +371,7 @@ optFieldsZone?.addEventListener('click',e=>{
 });
 
 if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn,.cover-nav-arrow')) return; coverFileInput.click(); }); }
-if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); updateDirty(); }); }
+if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.add('no-cover'); updateDirty(); if(form.priorTxid.value) _autoSaveIfDirty(); }); }
 
 // --- Helpers ---
 function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -451,9 +470,13 @@ function openModal(entry, forceIntent){
   const inputs=[...form.querySelectorAll('input,select,textarea')];
   inputs.forEach(i=>{ if(i.name==='priorTxid') return; i.disabled=false; });
   form.priorTxid.value=entry?(entry.txid||entry.id||''):'';
-  form.title.value=entry?entry.title:'';
-  form.author.value=entry?entry.author:'';
+  // Title and author are <textarea> placards (#114). They use the same form.title/form.author element refs.
+  form.title.value=entry?(entry.title||''):'';
+  form.author.value=entry?(entry.author||''):'';
   form.format.value=entry?mapFormat(entry.format):'print';
+  // Auto-grow placards once values are set
+  _autoGrowPlacard(placardTitle);
+  _autoGrowPlacard(placardAuthor);
   if(entry){
     const rs = normalizeReadingStatus(entry);
     const todayStr = new Date().toISOString().slice(0,10);
@@ -479,77 +502,166 @@ function openModal(entry, forceIntent){
     coverPreview.dataset.b64=entry.coverImage; if(entry.mimeType) coverPreview.dataset.mime=entry.mimeType; if(entry.coverFit) coverPreview.dataset.fit=entry.coverFit;
     tileCoverClick.style.setProperty('--cover-url',`url('${coverDataUrl}')`);
     showCoverLoaded();
-  } else { clearCoverPreview(); }
-  if(cancelBtn) cancelBtn.style.display='inline-flex';
+    if(inner) inner.classList.remove('no-cover');
+  } else { clearCoverPreview(); if(inner) inner.classList.add('no-cover'); }
 
   // Reading status: unified selector for both add and edit mode
   const status = entry ? normalizeReadingStatus(entry) : (forceIntent || READING_STATUS.WANT_TO_READ);
-  setReadingStatus(status);
+  setReadingStatus(status, { silent: true });
   if(statusSelector) statusSelector.style.display='flex';
+
+  // Reset transient UI surfaces
+  if(statusMicrocopyEl){ statusMicrocopyEl.textContent=''; statusMicrocopyEl.classList.remove('visible'); }
+  if(autosaveMicrocopyEl){ autosaveMicrocopyEl.textContent=''; autosaveMicrocopyEl.classList.remove('visible','error'); }
+  _renderSummaryRow();
 
   snapshotOriginal();
   updateDirty();
-  if(window.bookSearch) window.bookSearch.handleModalOpen(!!entry);
-  if(entry && window.bookSearch?.showFindCoversBtn){
-    const hasCover=!!(entry.coverImage);
-    window.bookSearch.showFindCoversBtn(hasCover);
-  }
+  // Decoupled cover-edition browser entry point (#114). Hide "Browse covers"
+  // when the entry has no work_key (legacy/manual entries).
+  const workKey = entry?.work_key || '';
+  if(window.bookSearch?.handleModalOpen) window.bookSearch.handleModalOpen(workKey);
   pushOverlayState('modal');
-  setTimeout(()=>{ if(notesInput){ notesInput.style.height='auto'; notesInput.style.height=Math.max(60,notesInput.scrollHeight)+'px'; }}, 0);
+  setTimeout(()=>{
+    if(notesInput){ notesInput.style.height='auto'; notesInput.style.height=Math.max(60,notesInput.scrollHeight)+'px'; }
+    // In add mode, focus title placard (#114)
+    if(!entry && placardTitle){
+      placardTitle.focus();
+      // Place caret at end if value pre-filled by omnibox prefill, otherwise no-op
+      const len = placardTitle.value.length;
+      try{ placardTitle.setSelectionRange(len,len); }catch{}
+    }
+  }, 0);
 }
 
-function setReadingStatus(status){
+/** Auto-grow a single-row textarea (#114 placards). */
+function _autoGrowPlacard(el){
+  if(!el) return;
+  el.style.height='auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+function setReadingStatus(status, opts){
+  const prev = readingStatusInput?.value;
   if(readingStatusInput) readingStatusInput.value = status;
   statusSelector?.querySelectorAll('.status-option').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.status === status);
+    const active = btn.dataset.status === status;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-checked', active ? 'true' : 'false');
   });
   applyIntentUI(status);
+  _applyStatusFieldVisibility();
+  _renderSummaryRow();
+  // Confirmation pulse + microcopy (#114) — skipped during initial silent open
+  if(!opts?.silent && prev !== status){
+    const activeBtn = statusSelector?.querySelector(`.status-option[data-status="${status}"]`);
+    if(activeBtn){
+      activeBtn.classList.add('pulse');
+      setTimeout(()=>activeBtn.classList.remove('pulse'), 500);
+    }
+    _showStatusMicrocopy(status);
+  }
 }
 
+/**
+ * Apply status-driven row visibility for the new detail-rows layout (#114).
+ * - WTR: hide Started, hide Finished
+ * - Reading: show Started, hide Finished
+ * - Read: show Started (if data) and Finished (label "Finished")
+ *
+ * The single dateRead input is repurposed: for Reading it represents the
+ * `readingStartedAt` date (label "Started"); for Read it represents `dateRead`
+ * (label "Finished"). For WTR, the row is hidden (the date is implicit createdAt).
+ */
 function applyIntentUI(intent){
-  const dateBlock = form.dateRead?.closest('.field-block');
-  const dateLabel = dateBlock?.querySelector('label');
-  const dateInput = form.dateRead;
   const isWtr = intent === READING_STATUS.WANT_TO_READ;
   const isReading = intent === READING_STATUS.READING;
+  const dateInput = form.dateRead;
 
-  if(dateBlock){
-    dateBlock.style.display = '';
+  if(dateRow){
     if(isWtr){
-      if(dateLabel) dateLabel.textContent = 'Added';
-      if(dateInput){
-        const entry = form.priorTxid.value ? entries.find(e=>(e.txid||e.id)===form.priorTxid.value) : null;
-        const ts = entry?.createdAt;
-        dateInput.value = ts ? new Date(ts).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
-        dateInput.readOnly = true;
-        dateBlock.classList.add('date-readonly');
-      }
-    } else if(isReading){
-      if(dateLabel) dateLabel.textContent = 'Started';
-      if(dateInput){
-        const entry = form.priorTxid.value ? entries.find(e=>(e.txid||e.id)===form.priorTxid.value) : null;
-        const ts = entry?.readingStartedAt;
-        if(!dateInput.value || dateInput.readOnly) dateInput.value = ts ? new Date(ts).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
-        dateInput.readOnly = false;
-        dateBlock.classList.remove('date-readonly');
-      }
+      dateRow.dataset.hidden = 'true';
     } else {
-      if(dateLabel) dateLabel.textContent = 'Completed';
-      if(dateInput){
-        const entry = form.priorTxid.value ? entries.find(e=>(e.txid||e.id)===form.priorTxid.value) : null;
-        if(dateInput.readOnly || !dateInput.value) dateInput.value = msToDateInputUtc(entry?.dateRead) || new Date().toISOString().slice(0,10);
-        dateInput.readOnly = false;
-        dateBlock.classList.remove('date-readonly');
-      }
+      delete dateRow.dataset.hidden;
+    }
+  }
+  if(dateReadLabelEl){
+    dateReadLabelEl.textContent = isReading ? 'Started' : 'Finished';
+  }
+  if(dateInput){
+    dateInput.readOnly = false;
+    const entry = form.priorTxid.value ? entries.find(e=>(e.txid||e.id)===form.priorTxid.value) : null;
+    if(isReading){
+      const ts = entry?.readingStartedAt;
+      if(!dateInput.value) dateInput.value = ts ? new Date(ts).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+    } else if(!isWtr){
+      if(!dateInput.value) dateInput.value = msToDateInputUtc(entry?.dateRead) || new Date().toISOString().slice(0,10);
     }
   }
 
   const isAddMode = modal.querySelector('.modal-inner')?.classList.contains('add-mode');
   if(isAddMode){
     if(saveBtn) saveBtn.textContent = (isWtr || isReading) ? 'Add to List' : 'Add to Shelf';
-  } else {
-    if(saveBtn) saveBtn.textContent = 'Save';
   }
+}
+
+const STATUS_MICROCOPY = {
+  [READING_STATUS.WANT_TO_READ]: 'Moved to Want to Read',
+  [READING_STATUS.READING]: 'Moved to Reading',
+  [READING_STATUS.READ]: 'Marked as Read'
+};
+function _showStatusMicrocopy(status){
+  if(!statusMicrocopyEl) return;
+  statusMicrocopyEl.textContent = STATUS_MICROCOPY[status] || '';
+  statusMicrocopyEl.classList.add('visible');
+  clearTimeout(statusMicrocopyEl._fadeTimer);
+  statusMicrocopyEl._fadeTimer = setTimeout(()=>{
+    statusMicrocopyEl.classList.remove('visible');
+  }, 1500);
+}
+
+/**
+ * Render the inline summary row under the status pills (#114).
+ * Day/month only (no year) — shelf is grouped by year.
+ * Shows: rating stars, Started date, Finished date — only segments that are set.
+ * Hidden entirely on WTR with no data.
+ */
+function _renderSummaryRow(){
+  if(!summaryRowEl) return;
+  const status = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
+  const isWtr = status === READING_STATUS.WANT_TO_READ;
+  const segs = [];
+  const rating = parseInt(ratingInput?.value)||0;
+  if(!isWtr && rating>=1 && rating<=5){
+    const stars = '★★★★★'.slice(0,rating) + '☆☆☆☆☆'.slice(0,5-rating);
+    segs.push(`<span class="summary-seg summary-stars" data-edit="rating" tabindex="0" role="button" aria-label="Edit rating">${stars}</span>`);
+  }
+  const entry = form.priorTxid.value ? entries.find(e=>(e.txid||e.id)===form.priorTxid.value) : null;
+  const startedMs = entry?.readingStartedAt;
+  const finishedMs = entry?.dateRead;
+  if(status === READING_STATUS.READING && startedMs){
+    segs.push(`<span class="summary-seg" data-edit="started" tabindex="0" role="button" aria-label="Edit start date">Started ${escapeHtml(_formatDayMonth(startedMs))}</span>`);
+  }
+  if(status === READING_STATUS.READ){
+    if(startedMs) segs.push(`<span class="summary-seg" data-edit="started" tabindex="0" role="button" aria-label="Edit start date">Started ${escapeHtml(_formatDayMonth(startedMs))}</span>`);
+    if(finishedMs) segs.push(`<span class="summary-seg" data-edit="finished" tabindex="0" role="button" aria-label="Edit finish date">Finished ${escapeHtml(_formatDayMonth(finishedMs))}</span>`);
+  }
+  if(!segs.length){
+    summaryRowEl.style.display='none';
+    summaryRowEl.innerHTML='';
+    return;
+  }
+  summaryRowEl.innerHTML = segs.join('<span class="summary-sep">·</span>');
+  summaryRowEl.style.display='flex';
+}
+
+function _formatDayMonth(ms){
+  if(ms == null || ms === '') return '';
+  const n = typeof ms === 'number' ? ms : Number(ms);
+  if(!Number.isFinite(n)) return '';
+  const d = new Date(n);
+  if(isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat(undefined, { month:'short', day:'numeric', timeZone:'UTC' }).format(d);
 }
 
 function _finalizeCloseModal(fromPopstate){
@@ -558,14 +670,32 @@ function _finalizeCloseModal(fromPopstate){
   modal.classList.remove('active');
   document.body.classList.remove('modal-open');
   const inner=modal.querySelector('.modal-inner');
-  if(inner){ inner.classList.remove('add-mode'); inner.classList.remove('sheet-dismissing'); }
-  form.reset(); resetOptionalFields(); coverPreview.style.display='none'; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; delete form.dataset.orig; saveBtn.disabled=true; saveBtn.textContent='Save'; if(statusSelector) statusSelector.style.display='none';
-  const dateBlock = form.dateRead?.closest('.field-block');
-  if(dateBlock){ dateBlock.style.display=''; dateBlock.classList.remove('date-readonly'); }
+  if(inner){ inner.classList.remove('add-mode'); inner.classList.remove('sheet-dismissing'); inner.classList.remove('no-cover'); }
+  form.reset();
+  resetOptionalFields();
+  coverPreview.style.display='none';
+  if(coverRemoveBtn) coverRemoveBtn.style.display='none';
+  delete form.dataset.orig;
+  if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent='Add to List'; }
+  if(statusSelector) statusSelector.style.display='none';
+  // Reset placard heights
+  if(placardTitle){ placardTitle.style.height=''; }
+  if(placardAuthor){ placardAuthor.style.height=''; }
+  // Reset row visibility for next open
+  if(dateRow) delete dateRow.dataset.hidden;
   if(form.dateRead) form.dateRead.readOnly=false;
-  const dateLabel = dateBlock?.querySelector('label');
-  if(dateLabel) dateLabel.textContent='Completed';
-  if(window.bookSearch) window.bookSearch.handleModalOpen(true);
+  if(dateReadLabelEl) dateReadLabelEl.textContent='Finished';
+  // Reset summary row + microcopy
+  if(summaryRowEl){ summaryRowEl.innerHTML=''; summaryRowEl.style.display='none'; }
+  if(statusMicrocopyEl){ statusMicrocopyEl.textContent=''; statusMicrocopyEl.classList.remove('visible'); }
+  if(autosaveMicrocopyEl){ autosaveMicrocopyEl.textContent=''; autosaveMicrocopyEl.classList.remove('visible','error'); }
+  // Reset cover edit panel state
+  const coverActionsEl = document.getElementById('coverActions');
+  if(coverActionsEl) coverActionsEl.style.display='none';
+  const changeCoverLink = document.getElementById('changeCoverLink');
+  if(changeCoverLink) changeCoverLink.setAttribute('aria-expanded','false');
+  // Decoupled cover-search reset (#114)
+  if(window.bookSearch?.handleModalClose) window.bookSearch.handleModalClose();
   if(omniboxInput && omniboxInput.value){ clearOmnibox(); }
   closeOmniboxDropdown();
   if(!fromPopstate) popOverlayState();
@@ -603,12 +733,12 @@ function closeModal(fromPopstate = false){
   }
 }
 function clearBooks(){ if(bookRepo) bookRepo.clear(); else { entries=[]; render(); } }
-window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus, showShelfSkeletons, clearShelfSkeletons, getActiveEntryCount: ()=>activeEntryCount(), showStatusToast };
+window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus, showShelfSkeletons, clearShelfSkeletons, getActiveEntryCount: ()=>activeEntryCount(), showStatusToast, _autoSaveIfDirty: ()=>_autoSaveIfDirty() };
 // Dirty tracking helpers
 function currentFormState(){ return JSON.stringify({
   prior: form.priorTxid.value||'',
-  title: form.title.value.trim(),
-  author: form.author.value.trim(),
+  title: (form.title.value||'').trim(),
+  author: (form.author.value||'').trim(),
   format: form.format.value,
   dateRead: form.dateRead.value,
   readingStatus: readingStatusInput?.value||READING_STATUS.WANT_TO_READ,
@@ -619,12 +749,162 @@ function currentFormState(){ return JSON.stringify({
   tags: collectTags()
 }); }
 function snapshotOriginal(){ form.dataset.orig = currentFormState(); }
-function updateDirty(){ const orig=form.dataset.orig||''; const cur=currentFormState(); saveBtn.disabled = (orig===cur); }
+function updateDirty(){
+  const orig=form.dataset.orig||'';
+  const cur=currentFormState();
+  if(saveBtn) saveBtn.disabled = (orig===cur);
+}
 if(!form._dirtyBound){
   form._dirtyBound=true;
-  form.addEventListener('input', updateDirty);
+  form.addEventListener('input', ()=>{
+    updateDirty();
+    // Auto-grow placards in response to any form input (covers programmatic
+    // prefills from omnibox/book_search that dispatch synthetic input events).
+    _autoGrowPlacard(placardTitle);
+    _autoGrowPlacard(placardAuthor);
+    _renderSummaryRow();
+  });
   form.addEventListener('change', updateDirty);
 }
+
+// --- Auto-save (#114) ---
+// Auto-save on blur for inline-edit fields. Skip when no change vs snapshot,
+// or when in add-mode (the explicit Add to List CTA handles that case).
+let _autosaveInFlight = false;
+function _isAddMode(){ return modal.querySelector('.modal-inner')?.classList.contains('add-mode'); }
+function _showAutosaveSaved(){
+  if(!autosaveMicrocopyEl) return;
+  autosaveMicrocopyEl.textContent='Saved ✓';
+  autosaveMicrocopyEl.classList.remove('error');
+  autosaveMicrocopyEl.classList.add('visible');
+  clearTimeout(autosaveMicrocopyEl._fadeTimer);
+  autosaveMicrocopyEl._fadeTimer = setTimeout(()=>{
+    autosaveMicrocopyEl.classList.remove('visible');
+  }, 1200);
+}
+function _showAutosaveError(){
+  if(!autosaveMicrocopyEl) return;
+  autosaveMicrocopyEl.textContent='Couldn’t save. Tap to retry.';
+  autosaveMicrocopyEl.classList.add('visible','error');
+  clearTimeout(autosaveMicrocopyEl._fadeTimer);
+}
+autosaveMicrocopyEl?.addEventListener('click', ()=>{
+  if(autosaveMicrocopyEl.classList.contains('error')){
+    autosaveMicrocopyEl.classList.remove('visible','error');
+    _autoSaveIfDirty();
+  }
+});
+
+/**
+ * Auto-save: if in edit mode and the form has changed from snapshot, persist
+ * via BookRepository.update and refresh snapshot. Returns true if a save was
+ * issued. Errors revert the field to the prior snapshot value and show a
+ * retry microcopy.
+ */
+async function _autoSaveIfDirty(){
+  if(_isAddMode()) return false;
+  if(_autosaveInFlight) return false;
+  const priorTxid = form.priorTxid.value;
+  if(!priorTxid) return false;
+  const orig = form.dataset.orig||'';
+  const cur = currentFormState();
+  if(orig === cur) return false;
+  _autosaveInFlight = true;
+  try{
+    const payload = _buildPayloadFromForm();
+    await editServerless(priorTxid, payload);
+    snapshotOriginal();
+    updateDirty();
+    _showAutosaveSaved();
+    _renderSummaryRow();
+    return true;
+  } catch(err){
+    console.warn('[Bookish] auto-save failed:', err?.message||err);
+    // Revert: restore form fields from snapshot JSON
+    try{
+      const snap = JSON.parse(orig);
+      form.title.value = snap.title || '';
+      form.author.value = snap.author || '';
+      form.format.value = snap.format || 'print';
+      form.dateRead.value = snap.dateRead || '';
+      if(notesInput) notesInput.value = snap.notes || '';
+      _autoGrowPlacard(placardTitle);
+      _autoGrowPlacard(placardAuthor);
+    }catch{}
+    _showAutosaveError();
+    return false;
+  } finally {
+    _autosaveInFlight = false;
+  }
+}
+
+/** Build the persistence payload from current form state (for auto-save). */
+function _buildPayloadFromForm(){
+  const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
+  const dateVal = form.dateRead.value;
+  const payload = {
+    title: (form.title.value||'').trim(),
+    author: (form.author.value||'').trim(),
+    format: form.format.value,
+    readingStatus: rsValue
+  };
+  if(rsValue === READING_STATUS.READ){
+    const ms = dateStringToMsNoonUtc(dateVal);
+    if(ms != null) payload.dateRead = ms;
+  } else if(rsValue === READING_STATUS.READING){
+    payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now();
+  }
+  if(coverPreview.dataset.b64){
+    payload.coverImage = coverPreview.dataset.b64;
+    if(coverPreview.dataset.mime) payload.mimeType = coverPreview.dataset.mime;
+    if(coverPreview.dataset.fit) payload.coverFit = coverPreview.dataset.fit;
+  } else if(form.priorTxid.value){
+    payload.coverImage = '';
+    payload.mimeType = '';
+  }
+  const notesVal=(notesInput?.value||'').trim();
+  payload.notes = notesVal;
+  const optVals = getOptionalFieldValues();
+  payload.rating = optVals.rating || 0;
+  payload.owned = !!optVals.owned;
+  payload.tags = optVals.tags || '';
+  return payload;
+}
+
+// Wire up blur-based auto-save for inline-edit fields. Triggered only in
+// edit (view) mode — add-mode commits via the Add to List CTA.
+function _bindAutoSaveBlur(el){
+  if(!el || el._autoSaveBound) return;
+  el._autoSaveBound = true;
+  el.addEventListener('blur', ()=>{
+    if(_isAddMode()) return;
+    _autoSaveIfDirty();
+  });
+  // Enter on placard textareas blurs to commit (auto-save). Shift+Enter inserts newline.
+  if(el.tagName === 'TEXTAREA' && (el === placardTitle || el === placardAuthor)){
+    el.addEventListener('keydown', (ev)=>{
+      if(ev.key === 'Enter' && !ev.shiftKey){
+        ev.preventDefault();
+        el.blur();
+      }
+    });
+  }
+}
+[placardTitle, placardAuthor, form.format, form.dateRead, notesInput, ratingInput, ownedToggle, tagsInputEl].forEach(_bindAutoSaveBlur);
+
+// Summary-row segment click → activate/scroll to the editor for that field
+summaryRowEl?.addEventListener('click', e=>{
+  const seg = e.target.closest('.summary-seg');
+  if(!seg) return;
+  const which = seg.dataset.edit;
+  if(which === 'rating'){
+    activateField('rating');
+    const firstStar = starRatingEl?.querySelector('.star');
+    firstStar?.focus?.();
+  } else if(which === 'started' || which === 'finished'){
+    form.dateRead?.focus?.();
+  }
+});
 
 // --- Cover file input ---
 coverFileInput.addEventListener('change', async ()=>{ const f=coverFileInput.files[0]; if(!f) return;
@@ -638,16 +918,18 @@ coverFileInput.addEventListener('change', async ()=>{ const f=coverFileInput.fil
     coverPreview.dataset.mime = mime;
     tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`);
     showCoverLoaded();
+    const inner = modal.querySelector('.modal-inner');
+    if(inner) inner.classList.remove('no-cover');
     updateDirty();
+    if(form.priorTxid.value) _autoSaveIfDirty();
   } catch(err) {
     // Fallback to original if resize fails
-    const r = new FileReader(); r.onload = e => { const b64full = e.target.result; const b64 = b64full.split(',')[1]; coverPreview.src = b64full; coverPreview.style.display = 'block'; coverPlaceholder.style.display = 'none'; coverPreview.dataset.b64 = b64; coverPreview.dataset.mime = f.type || 'image/jpeg'; tileCoverClick.style.setProperty('--cover-url',`url('${b64full}')`); showCoverLoaded(); updateDirty(); }; r.readAsDataURL(f);
+    const r = new FileReader(); r.onload = e => { const b64full = e.target.result; const b64 = b64full.split(',')[1]; coverPreview.src = b64full; coverPreview.style.display = 'block'; coverPlaceholder.style.display = 'none'; coverPreview.dataset.b64 = b64; coverPreview.dataset.mime = f.type || 'image/jpeg'; tileCoverClick.style.setProperty('--cover-url',`url('${b64full}')`); showCoverLoaded(); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('no-cover'); updateDirty(); if(form.priorTxid.value) _autoSaveIfDirty(); }; r.readAsDataURL(f);
   }
 });
 
 const closeModalBtn = document.getElementById('closeModal');
 closeModalBtn?.addEventListener('click', closeModal);
-cancelBtn?.addEventListener('click', closeModal);
 // Close modal on backdrop click (click on overlay outside modal-inner)
 modal?.addEventListener('click', (ev)=>{
   if(ev.target === modal) closeModal();
@@ -2175,13 +2457,29 @@ document.addEventListener('keydown', (e)=>{
   }
 });
 
-// Status selector event listener
+// Status selector event listener (#114: with side effects + auto-save in view mode)
 statusSelector?.addEventListener('click', (ev)=>{
   const btn = ev.target.closest('.status-option');
   if(!btn) return;
+  const newStatus = btn.dataset.status;
+  const prevStatus = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
+  if(newStatus === prevStatus) return;
   haptic();
-  setReadingStatus(btn.dataset.status);
+  // Stamp transition timestamps when crossing into Reading/Read for the first time.
+  // (BookRepository.changeStatus also stamps these on persist; we mirror here so
+  // the open modal reflects the new state immediately and auto-save sends
+  // the canonical values.)
+  const todayIso = new Date().toISOString().slice(0,10);
+  if(newStatus === READING_STATUS.READING && prevStatus === READING_STATUS.WANT_TO_READ){
+    if(form.dateRead) form.dateRead.value = todayIso;
+  }
+  if(newStatus === READING_STATUS.READ && prevStatus !== READING_STATUS.READ){
+    if(form.dateRead) form.dateRead.value = todayIso;
+  }
+  setReadingStatus(newStatus);
   updateDirty();
+  // Auto-save status change in view mode (#114)
+  if(form.priorTxid.value) _autoSaveIfDirty();
 });
 
 // --- Change reading status (delegates to BookRepository) ---
