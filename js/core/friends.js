@@ -356,6 +356,14 @@ export async function pollForConnectionUpdates() {
     console.warn('[Bookish:Friends] listIncomingRequests failed:', err.message);
   }
   try { await applyPendingLabels(); } catch { /* ignore */ }
+  // Notify listeners that the connection set may have changed. Cheap
+  // fire-and-forget — the trigger refresh + drawer re-render handle their
+  // own listConnections fetches on the back of this signal.
+  try {
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bookish:connections-changed'));
+    }
+  } catch { /* ignore */ }
 }
 
 // Storage key exports for tests + cleanup paths.

@@ -136,6 +136,13 @@ function renderPreview(content, preview, params) {
       // Fire-and-forget poll for snappier propagation when the inviter
       // happens to be online at the same moment.
       friends.pollForConnectionUpdates().catch(() => {});
+      // Notify listeners (Friends header glyph, drawer if open) that the
+      // connection set may have changed. The recipient's connection
+      // materializes async — listeners that re-fetch will see the new
+      // entry once the inviter session auto-accepts and we poll back.
+      try {
+        window.dispatchEvent(new CustomEvent('bookish:connections-changed'));
+      } catch { /* ignore */ }
     } catch (err) {
       console.error('[Bookish:AcceptInviteModal] redeem failed:', err);
       const code = err?.code;

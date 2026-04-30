@@ -715,7 +715,10 @@ function renderAccountPanel(content) {
 
       <div class="account-panel-friends" id="accountPanelFriends">
         <div class="account-panel-sub-label">Friends</div>
-        <button type="button" id="accountAddFriendBtn" class="account-panel-sub-btn">+ Add a friend</button>
+        <!-- #122: "+ Add a friend" entry moved to the Friends drawer (header glyph).
+             Account keeps the read-only Connections + Pending invites lists for
+             power-user verification. To invite someone now, open the Friends drawer
+             from the header and tap "+ Add". -->
         <div class="account-friends-section" id="accountConnectionsSection" style="display:none;">
           <div class="account-friends-heading">Connections</div>
           <ul class="account-friends-list" id="accountConnectionsList"></ul>
@@ -784,21 +787,10 @@ function renderAccountPanel(content) {
     });
   }
 
-  // Friends section (#118 — Surface 6 entry point lives in Account for issue 2;
-  // moves to the drawer in issue 3). Lazy-load the invite modal on demand.
-  const addFriendBtn = content.querySelector('#accountAddFriendBtn');
-  if (addFriendBtn) {
-    addFriendBtn.addEventListener('click', async () => {
-      try {
-        const mod = await import('./components/invite-modal.js');
-        await mod.openInviteModal();
-      } catch (err) {
-        console.error('[AccountUI] Failed to open invite modal:', err);
-      }
-    });
-  }
-  // Hydrate the friends section async — listConnections / listIssuedInvites
-  // hit Tarn and may take a beat.
+  // Friends section (#118 → #122). The "+ Add a friend" entry now lives in
+  // the Friends drawer (header glyph). Account keeps the read-only
+  // Connections + Pending invites lists for power-user verification.
+  // Hydrate async — listConnections / listIssuedInvites hit Tarn.
   refreshFriendsSection(content).catch(err =>
     console.warn('[AccountUI] friends hydrate failed:', err?.message || err)
   );
@@ -896,6 +888,19 @@ async function refreshFriendsSection(content) {
 
   // Pending invites list
   const outstanding = invites.filter(i => !i.redeemed_at);
+
+  // Note on zero-friends discoverability: the Account-screen "+ Add a friend"
+  // button was REMOVED in #122 per the issue spec — the drawer is now the
+  // canonical entry point. However, the drawer trigger is hidden when
+  // zero friends, which creates a bootstrap chicken-and-egg problem for
+  // first-time users. The parent FRIENDS.md spec calls out "Account → Add
+  // a friend" as the zero-state discovery path; reconciling that with the
+  // issue 3 removal is left to a follow-up surface (likely a dedicated
+  // education sheet in #9 / #122 follow-up). For now we leave the section
+  // empty in the zero-friends state — first invites can be sent via a
+  // direct `/invite/...` link from a friend OR by opening the dev console
+  // (alpha-cohort only). Document the gap so a reviewer doesn't think it
+  // was an oversight.
   if (outstanding.length > 0) {
     invSection.style.display = 'block';
     invList.innerHTML = outstanding

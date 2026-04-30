@@ -62,6 +62,20 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       <span class="wtr-badge" id="wtrBadge" style="display:none"></span>
     </button>
+    <!-- Friends drawer trigger (#122). Sized to match wtrHeaderBtn visual weight. Hidden when zero connections. -->
+    <button id="friendsHeaderBtn" class="friends-header-btn" type="button" title="Friends" aria-label="Open Friends" style="display:none">
+      <!-- "Person cluster" glyph: two overlapping head+shoulders silhouettes.
+           Drawn as a single SVG so the cluster reads as one glyph at small sizes. -->
+      <svg class="friends-header-glyph" width="20" height="14" viewBox="0 0 20 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <!-- Back person: head + shoulder arc -->
+        <circle cx="13" cy="4" r="2.4"/>
+        <path d="M8 13 C8 10.2 10.5 8.5 13 8.5 C15.5 8.5 18 10.2 18 13"/>
+        <!-- Front person, slightly forward and lower -->
+        <circle cx="6.5" cy="5" r="2.6" fill="var(--color-bg-base, #0b0f14)"/>
+        <path d="M1.5 13 C1.5 10.0 4 8.2 6.5 8.2 C9 8.2 11.5 10.0 11.5 13" fill="var(--color-bg-base, #0b0f14)"/>
+      </svg>
+      <span class="friends-header-arrow" aria-hidden="true">↗</span>
+    </button>
     <button id="installBtn" class="refresh-link" style="display:none" title="Install">Install</button>
     <button id="accountBtn" class="refresh-link account-link" title="Account">Account</button>
   </div>
@@ -149,7 +163,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.193</div>
+  <div class="footer-meta">Alpha &bull; v0.2.194</div>
 </footer>
 </div>
 

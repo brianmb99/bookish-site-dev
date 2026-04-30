@@ -17,6 +17,7 @@ import { initPullToRefresh } from './core/pull_to_refresh.js';
 import { getFieldPref, setFieldPref } from './core/field_prefs.js';
 import * as subscription from './core/subscription.js';
 import * as friendsRouter from './core/friends_router.js';
+import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend-glyph-trigger.js';
 
 // Friends invite-link routing (#118). Capture the invite parameters from
 // /invite/:token_id#:payload_key BEFORE anything else touches window.location
@@ -997,7 +998,7 @@ let closeAccountModalFn;
 window.addEventListener('popstate', () => {
   if (!isStandalone) return;
   if (consumeSuppressFlag()) return;
-  // Close topmost visible overlay (search takeover > notes > modal > account > wtr)
+  // Close topmost visible overlay (search takeover > notes > modal > account > friends > wtr)
   if (searchTakeoverActive) {
     closeSearchTakeover(true);
   } else if (notesOverlay && notesOverlay.style.display === 'flex') {
@@ -1006,8 +1007,13 @@ window.addEventListener('popstate', () => {
     closeModal(true);
   } else {
     const accountModal = document.getElementById('accountModal');
+    const friendsOverlay = document.getElementById('friendsOverlay');
     if (accountModal && accountModal.style.display === 'flex') {
       if (closeAccountModalFn) closeAccountModalFn(true);
+    } else if (friendsOverlay && friendsOverlay.style.display === 'block') {
+      // Friends drawer (#122) — stack peer of WTR. Closed via popstate so the
+      // PWA system back button dismisses it just like any other overlay.
+      import('./components/friends-drawer.js').then(m => m.closeFriendsDrawer(true)).catch(() => {});
     } else if (wtrOverlay && wtrOverlay.style.display === 'block') {
       closeWtrDrawer(true);
     }
@@ -2758,6 +2764,21 @@ uiStatusManager.init({
 loadStatus(); initCacheLayer(); // wallet init + sync started in initCacheLayer
 // Initialize account UI
 (async function initAccount(){ try { const { initAccountUI } = await import('./account_ui.js'); await initAccountUI(); } catch(e){ console.error('Failed to init account UI:', e); } })();
+
+// Friends drawer header trigger (#122). Wire the click listener immediately
+// so the glyph is functional the moment it's revealed; refresh visibility
+// async because listConnections() makes Tarn calls that need login.
+wireFriendGlyphTrigger();
+refreshFriendGlyphTrigger().catch(err =>
+  console.warn('[Bookish] Friends glyph initial refresh failed:', err?.message || err)
+);
+// Re-evaluate visibility when an invite redeem completes — the
+// recipient's connection materializes asynchronously after pollForConnectionUpdates.
+// This event is dispatched by the accept-invite-modal flow on success;
+// callers fall through harmlessly if no listener is attached.
+window.addEventListener('bookish:connections-changed', () => {
+  refreshFriendGlyphTrigger().catch(() => {});
+});
 window.addEventListener('online',()=>{ uiStatusManager.refresh(); if(bookRepo) bookRepo.replayPending(); });
 
 // Expose sync manager methods for account UI and release tests (triggerSyncNow)

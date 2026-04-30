@@ -3453,3 +3453,219 @@ body.modal-open{overscroll-behavior-y:contain}
 }
 .invite-field input:focus{border-color:var(--color-primary);outline:none}
 .invite-field-hint{font-size:.72rem;color:var(--color-text-muted);line-height:1.4}
+
+/* ============================================================================
+   Friends drawer + header glyph trigger + friend strip (#122)
+   Mirrors the WTR drawer chrome (`.wtr-drawer`) so the two surfaces share
+   the same mechanic and animations. Different class names so they can drift
+   independently if a future visual change applies to only one.
+   ============================================================================ */
+
+/* --- Header trigger glyph -------------------------------------------------
+   Sized to match `.wtr-header-btn` exactly: same padding, same border-radius,
+   same color tokens. Together they form the compact muted-text "header
+   action" weight class. The glyph is iconographic, not data — no badge,
+   no count. */
+.friends-header-btn{
+  position:relative;
+  background:transparent!important;
+  border:none!important;
+  color:var(--color-text-secondary)!important;
+  padding:6px 8px!important;
+  border-radius:8px!important;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  justify-content:center;
+  transition:color .2s,background .2s;
+  min-height:auto!important;
+  line-height:1;
+}
+.friends-header-btn:hover,
+.friends-header-btn:focus-visible{
+  color:var(--color-text-primary)!important;
+  background:var(--color-bg-surface)!important;
+}
+.friends-header-glyph{display:block;flex-shrink:0}
+.friends-header-arrow{
+  font-size:.85rem;
+  font-weight:500;
+  line-height:1;
+  display:inline-block;
+  transform:translateY(-1px);
+}
+@media(max-width:399px){
+  .friends-header-btn{padding:6px!important}
+}
+
+/* --- Drawer chrome -------------------------------------------------------
+   Same mechanic as `.wtr-drawer`: bottom-sheet on touch, right-side panel
+   on pointer:fine. Deliberately not extending `.wtr-drawer` directly because
+   the spec says the two drawers should be visually distinguishable when
+   open (different titles + different content shape are the primary signals;
+   matching mechanic is intentional). */
+#friendsOverlay{position:fixed;inset:0;z-index:5000}
+.friends-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:5000;animation:fadeIn .2s ease-out}
+.friends-drawer{
+  position:fixed;
+  background:var(--color-bg-elevated);
+  z-index:5001;
+  overflow-y:auto;
+  overflow-x:hidden;
+  display:flex;
+  flex-direction:column;
+}
+.friends-drawer-handle{display:none}
+@media (pointer: coarse){
+  .friends-drawer{
+    bottom:0;left:0;right:0;
+    max-height:75vh;
+    border-radius:16px 16px 0 0;
+    padding:20px 16px max(20px,env(safe-area-inset-bottom));
+    animation:slideUpDrawer .3s ease-out;
+    box-shadow:0 -4px 24px rgba(0,0,0,.3);
+  }
+  .friends-drawer-handle{
+    display:block;
+    width:32px;height:4px;
+    border-radius:2px;
+    background:var(--color-border-strong);
+    margin:0 auto 12px;
+    flex-shrink:0;
+    touch-action:none;
+    position:relative;
+    cursor:grab;
+  }
+  .friends-drawer-handle::before{content:'';position:absolute;inset:-20px -40px}
+}
+@media (pointer: fine){
+  .friends-drawer{
+    top:0;right:0;bottom:0;
+    width:400px;max-width:90vw;
+    border-left:1px solid var(--color-border-default);
+    padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) 24px;
+    animation:slideInRight .25s ease-out;
+    box-shadow:-4px 0 24px rgba(0,0,0,.2);
+  }
+}
+
+.friends-header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:12px;flex-shrink:0;
+}
+.friends-title{
+  font-family:var(--font-display);
+  font-size:1.1rem;font-weight:600;
+  margin:0;color:var(--color-text-primary);
+}
+
+/* The events region is a slot for issue 5. In this issue (#122) it stays
+   empty; we expose `.friends-events:empty` so future content can appear
+   without a layout shift. Padding-only when populated. */
+.friends-events{flex:1 1 auto;min-height:0;overflow-y:auto}
+.friends-events:empty{display:none}
+
+/* The strip lives at the bottom — it's the "launcher" surface. When the
+   events region is empty (this issue), the strip uses the full drawer.
+   When the events region appears (issue 5), the strip stays compact at
+   the bottom. */
+.friends-strip-host{flex-shrink:0;margin-top:16px}
+
+/* --- Friend strip (Region B) --------------------------------------------- */
+.friend-strip-section{display:flex;flex-direction:column;gap:8px}
+.friend-strip-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 2px;
+}
+.friend-strip-heading{
+  font-size:.72rem;
+  color:var(--color-text-muted);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.friend-strip-add{
+  background:transparent;border:none;
+  color:var(--color-primary);
+  font-size:.78rem;font-weight:600;
+  cursor:pointer;
+  padding:6px 10px;
+  border-radius:6px;
+  font-family:var(--font-body);
+  min-height:36px;
+  box-shadow:none;
+  transition:background .15s,color .15s;
+}
+.friend-strip-add:hover,
+.friend-strip-add:focus-visible{
+  background:var(--color-primary-muted, rgba(37,99,235,.12));
+}
+
+.friend-strip-scroll{
+  display:flex;
+  flex-direction:row;
+  gap:14px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:6px 2px 10px;
+  scrollbar-width:thin;
+  /* iOS: smoother momentum scroll */
+  -webkit-overflow-scrolling:touch;
+  /* Hide scrollbar visually on most browsers; the row is short enough that
+     the swipe-affordance is obvious from content overflow. */
+  scrollbar-color:var(--color-border-subtle) transparent;
+}
+.friend-strip-scroll::-webkit-scrollbar{height:6px}
+.friend-strip-scroll::-webkit-scrollbar-thumb{background:var(--color-border-subtle);border-radius:3px}
+
+.friend-strip-cell{
+  flex-shrink:0;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  background:transparent;
+  border:none;
+  padding:6px 4px;
+  cursor:pointer;
+  border-radius:8px;
+  width:64px;
+  min-height:auto!important;
+  font-family:var(--font-body);
+  color:var(--color-text-primary);
+  transition:background .15s;
+  box-shadow:none;
+}
+.friend-strip-cell:hover,
+.friend-strip-cell:focus-visible{
+  background:var(--color-bg-surface);
+}
+.friend-strip-name{
+  font-size:.72rem;
+  line-height:1.2;
+  color:var(--color-text-secondary);
+  text-align:center;
+  width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* --- Friend avatar (used by the strip; reusable elsewhere) --------------- */
+.friend-avatar{
+  width:44px;height:44px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;
+  font-weight:600;
+  font-size:1.05rem;
+  font-family:var(--font-display);
+  /* Subtle ring so the avatar reads against any background, including
+     light covers (anticipating reuse for friend pips). */
+  box-shadow:0 0 0 1px rgba(255,255,255,.06) inset;
+  user-select:none;
+  flex-shrink:0;
+  text-transform:uppercase;
+  line-height:1;
+}
+.friend-avatar.friend-avatar-sm{
+  width:28px;height:28px;
+  font-size:.8rem;
+}
