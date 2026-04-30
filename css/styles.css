@@ -3745,6 +3745,243 @@ body.modal-open{overscroll-behavior-y:contain}
   font-size:.8rem;
 }
 
+/* --- Recent finishes events region (#125 / Surface 1 Region A) ----------
+   Vertical list of friends' recent `finished` events. Lives in the drawer's
+   `.friends-events` slot, ABOVE the friend strip. The slot is empty when
+   there are no events; `.friends-events:empty { display:none }` (above)
+   handles hiding the region in that case so the drawer collapses
+   gracefully into just the strip. */
+
+.recent-finishes-section{display:flex;flex-direction:column;gap:6px}
+.recent-finishes-heading{
+  font-size:.72rem;
+  color:var(--color-text-muted);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  padding:0 2px;
+  margin-bottom:2px;
+}
+.recent-finishes-list{
+  display:flex;flex-direction:column;
+  gap:2px;
+}
+
+.recent-finish-row{
+  display:grid;
+  grid-template-columns:auto auto 1fr;
+  align-items:center;
+  gap:12px;
+  width:100%;
+  min-height:56px;
+  padding:8px 6px;
+  background:transparent;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  font-family:var(--font-body);
+  color:var(--color-text-primary);
+  text-align:left;
+  /* Reset the global .btn min-height so rows stay compact in the dense list. */
+  min-height:56px!important;
+  box-shadow:none;
+  transition:background .15s;
+}
+.recent-finish-row:hover,
+.recent-finish-row:focus-visible{
+  background:var(--color-bg-surface);
+}
+
+/* Avatar inside a row uses the small (28px) variant — overridden via the
+   shared .friend-avatar-sm class set by the renderer. The recent-finish-
+   avatar class is here as a future-proofing hook in case we want to tweak
+   the avatar specifically inside an event row. */
+.recent-finish-avatar{flex-shrink:0}
+
+/* Cover thumbnail: ~32px tall, ~22px wide (proportional to typical book
+   cover 2:3 ratio), rounded corners, fills its bounds. */
+.recent-finish-cover{
+  flex-shrink:0;
+  width:24px;
+  height:34px;
+  border-radius:3px;
+  overflow:hidden;
+  background:var(--color-bg-surface);
+  box-shadow:0 1px 2px rgba(0,0,0,.25);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.recent-finish-cover img{
+  width:100%;height:100%;
+  object-fit:cover;
+  display:block;
+}
+/* Generated-cover placeholder when no coverImage exists. Inline `background`
+   is set by the renderer (deterministic gradient from the title); we layer
+   the initial on top, white + small. */
+.recent-finish-cover-placeholder{
+  /* gradient set inline */
+}
+.recent-finish-cover-initial{
+  font-family:var(--font-display);
+  font-size:.78rem;
+  font-weight:700;
+  color:#fff;
+  line-height:1;
+  /* slight shadow so the initial reads on the lightest gradient stops */
+  text-shadow:0 1px 2px rgba(0,0,0,.4);
+}
+
+.recent-finish-text{
+  display:flex;flex-direction:column;gap:2px;
+  min-width:0;
+  /* min-width:0 lets the truncation rules below kick in */
+}
+.recent-finish-line-top{
+  font-size:.88rem;
+  color:var(--color-text-primary);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  line-height:1.25;
+}
+.recent-finish-line-bottom{
+  font-size:.78rem;
+  color:var(--color-text-secondary);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  line-height:1.25;
+}
+.recent-finish-title{
+  /* The title can be long; let it ellipsize while the time stays visible.
+     Achieved by making the time stable-width via flex shrink:0 in the
+     parent — but since the parent is set to text-overflow:ellipsis at the
+     container level, browsers handle this fine without further work. */
+}
+.recent-finish-sep{color:var(--color-text-muted)}
+.recent-finish-time{color:var(--color-text-muted)}
+
+/* --- Friend's book detail modal (#125 — reused by #6 + #7) --------------
+   Read-only modal showing a friend's copy of a book. Centered card on
+   desktop; bottom sheet on mobile. Stacks above the drawer (z-index higher
+   than .friends-drawer's 5000) so closing it returns to the open drawer. */
+
+.friend-book-detail-overlay{
+  position:fixed;inset:0;
+  z-index:5800;
+  display:none;
+  animation:fadeIn .15s ease-out;
+}
+.friend-book-detail-backdrop{
+  position:absolute;inset:0;
+  background:rgba(0,0,0,.55);
+}
+.friend-book-detail-card{
+  position:absolute;
+  left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  width:min(420px,92vw);
+  max-height:88vh;
+  overflow-y:auto;
+  background:var(--color-bg-elevated);
+  border-radius:14px;
+  padding:24px 22px 22px;
+  box-shadow:0 24px 60px rgba(0,0,0,.4);
+  display:flex;flex-direction:column;
+  gap:16px;
+}
+.friend-book-detail-close{
+  position:absolute;
+  top:10px;right:10px;
+}
+.friend-book-detail-cover{
+  width:140px;
+  height:210px;
+  margin:0 auto;
+  border-radius:6px;
+  overflow:hidden;
+  background:var(--color-bg-surface);
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+  display:flex;align-items:center;justify-content:center;
+}
+.friend-book-detail-cover img{
+  width:100%;height:100%;
+  object-fit:cover;
+  display:block;
+}
+.friend-book-detail-cover .generated-cover{
+  width:100%;height:100%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:14px;text-align:center;
+  color:#fff;
+}
+.friend-book-detail-cover .generated-title{
+  font-family:var(--font-display);
+  font-size:.95rem;
+  font-weight:600;
+  line-height:1.2;
+  text-shadow:0 1px 2px rgba(0,0,0,.3);
+}
+.friend-book-detail-cover .generated-author{
+  font-size:.7rem;
+  margin-top:6px;
+  opacity:.85;
+}
+.friend-book-detail-meta{
+  display:flex;flex-direction:column;
+  gap:8px;text-align:center;
+}
+.friend-book-detail-title{
+  margin:0;
+  font-family:var(--font-display);
+  font-size:1.15rem;font-weight:600;
+  color:var(--color-text-primary);
+  line-height:1.2;
+}
+.friend-book-detail-author{
+  margin:0;
+  font-size:.92rem;
+  color:var(--color-text-secondary);
+}
+.friend-book-detail-attribution{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  margin-top:6px;
+  font-size:.82rem;
+  color:var(--color-text-muted);
+}
+.friend-book-detail-attribution-text{line-height:1.2}
+.friend-book-detail-status{
+  margin-top:4px;
+  font-size:.85rem;
+  color:var(--color-text-secondary);
+  min-height:1.2em;
+}
+.friend-book-detail-finished,
+.friend-book-detail-reading{
+  display:inline-flex;align-items:center;gap:6px;
+}
+.friend-book-detail-reading .reading-glyph{
+  color:var(--color-primary);
+  font-size:1rem;
+}
+
+/* Mobile: present as a bottom sheet rather than a centered card to match
+   the rest of the app's modal vocabulary on small screens. */
+@media (max-width:600px){
+  .friend-book-detail-card{
+    left:0;right:0;bottom:0;top:auto;
+    transform:none;
+    width:100%;
+    max-width:100%;
+    max-height:88vh;
+    border-radius:14px 14px 0 0;
+    padding:32px 20px 28px;
+    /* Safe-area for the home indicator. */
+    padding-bottom:calc(28px + env(safe-area-inset-bottom));
+    animation:slideUpSheet .25s ease-out;
+  }
+}
+
 /* --- Friend's-shelf full-screen view (#123) ----------------------------- */
 
 /* Full-screen overlay — sits above Library and the friends drawer chrome.

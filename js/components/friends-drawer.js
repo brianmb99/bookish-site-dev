@@ -1,4 +1,4 @@
-// friends-drawer.js — Surface 1 of the Friends feature (issues #122, #124).
+// friends-drawer.js — Surface 1 of the Friends feature (issues #122, #124, #125).
 //
 // The drawer is a peer of the existing WTR drawer. It uses the same chrome
 // pattern (bottom sheet on touch / right panel on desktop), the same
@@ -7,9 +7,13 @@
 //
 // Two regions inside one drawer:
 //
-//   Region A — "Recent finishes" events. Empty in this issue; issue #5
-//     fills it. Implemented as a slot we leave unmounted so the drawer
-//     degrades cleanly into "Region B only" until then.
+//   Region A — "Recent finishes" events (#125). Vertical list of friends'
+//     recent `finished` events; renders only when there are events to show.
+//     Today (publish-on-save deferred to #8) every friend's share log is
+//     empty so the region stays empty for all users; the CSS rule
+//     `.friends-events:empty { display: none }` keeps the layout clean.
+//     The full rendering pipeline is wired and lights up automatically as
+//     soon as real share-log entries exist.
 //
 //   Region B — friend strip. See friend-strip.js. When 0 connections, the
 //     strip renders an empty state with a friendly message + prominent
@@ -29,6 +33,7 @@ import { attachSwipeDismiss } from '../core/swipe_dismiss.js';
 import { pushOverlayState, popOverlayState } from '../core/overlay_history.js';
 import { renderFriendStrip } from './friend-strip.js';
 import { setHideFriendsFromHeader } from './friend-glyph-trigger.js';
+import { hydrateRecentFinishes } from './recent-finishes.js';
 
 const OVERLAY_ID = 'friendsOverlay';
 const DRAWER_ID = 'friendsDrawer';
@@ -143,6 +148,20 @@ async function refreshStrip() {
 }
 
 /**
+ * Re-render the Recent finishes events region (#125). Called on drawer open.
+ * Independent of strip refresh so the two regions hydrate in parallel and
+ * one slow path doesn't gate the other.
+ *
+ * Errors are swallowed inside `hydrateRecentFinishes` (warning logged); the
+ * region just stays empty in that case, which the empty-CSS rule hides.
+ */
+async function refreshEvents() {
+  const host = document.getElementById(EVENTS_HOST_ID);
+  if (!host) return;
+  await hydrateRecentFinishes(host);
+}
+
+/**
  * Tap on a friend avatar → dismiss the drawer and open the friend's
  * full-screen shelf view (issue #123). Per FRIENDS.md Surface 2: closing
  * the shelf returns to the user's Library, NOT to the drawer.
@@ -252,6 +271,14 @@ export async function openFriendsDrawer(opts = {}) {
   refreshStrip().catch(err =>
     console.warn('[Bookish:FriendsDrawer] strip hydrate failed:', err.message),
   );
+  // Hydrate the Recent finishes region (#125) in parallel — Tarn read may
+  // be slower than the connections list, but we don't want it gating the
+  // strip paint. The region stays empty (and CSS-hidden) until the fetch
+  // completes; today's reality is that it stays empty (publish-on-save
+  // lands in #8).
+  refreshEvents().catch(err =>
+    console.warn('[Bookish:FriendsDrawer] events hydrate failed:', err.message),
+  );
 
   // Keyboard: ESC + focus trap.
   _keydownHandler = trapFocusKeydown;
@@ -310,3 +337,4 @@ export function isFriendsDrawerOpen() { return _isOpen; }
 // Test hook — let the unit tests force a re-render without going through
 // the open path (which has DOM/timing requirements).
 export const _refreshStripForTest = refreshStrip;
+export const _refreshEventsForTest = refreshEvents;
