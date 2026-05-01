@@ -444,37 +444,40 @@ button.secondary:hover, .btn.secondary:hover{
    row that used to sit above the meta — collapsed inline in #121). The
    ✓ mark-as-read button is rendered INSIDE this span when the caller
    passes showActions:true, so the pill+button move as one unit. */
-.details .card-reading-status{color:var(--color-primary);opacity:.85;flex-shrink:0;display:inline-flex;align-items:center;gap:2px}
-/* Mark-as-read affordance: subtle gray ✓ button to the right of "Reading".
-   Gray (not the brighter primary) so it reads as actionable / awaiting input
-   rather than as a current state. 44px touch target via padding+negative
-   margin (same pattern as the prior .card-done-check it replaces). */
+.details .card-reading-status{color:var(--color-primary);opacity:.85;flex-shrink:0;display:inline-flex;align-items:baseline;gap:8px}
+/* Mark-as-read affordance: an unstyled gray ✓ glyph that reads as a
+   tappable accent next to "Reading". No border, no background, no
+   button chrome — looks like text, behaves like a button. Gray
+   (var(--color-text-muted)) signals "awaiting input" rather than
+   "current state" (which the brighter primary would imply). 44px
+   touch target via padding+negative margin so the visual stays tight
+   to the glyph but the hit area is mobile-friendly. (#127 followup) */
 .details .card-mark-read{
-  font-size:.85rem;
+  font-size:.9rem;
   line-height:1;
   color:var(--color-text-muted);
   cursor:pointer;
-  padding:12px 10px;
-  margin:-12px -10px -12px 0;
-  border-radius:6px;
+  padding:14px;
+  margin:-14px;
   border:none;
   background:transparent;
   font-weight:600;
   font-family:var(--font-body);
-  min-width:44px;
-  min-height:44px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  transition:color .15s,background .15s;
+  min-width:0;
+  min-height:0;
+  -webkit-appearance:none;
+  appearance:none;
+  outline:none;
+  transition:color .15s;
 }
-.details .card-mark-read:hover{
-  color:var(--color-text-primary);
-  background:rgba(255,255,255,.06);
-}
+.details .card-mark-read:hover{color:var(--color-text-primary)}
+/* Keyboard focus is the one place the glyph needs a visible affordance
+   (mouse/touch users get hover/press feedback elsewhere). Tight 1px
+   outline, drawn close to the glyph — not a chunky 2px button ring. */
 .details .card-mark-read:focus-visible{
-  outline:2px solid var(--color-primary);
-  outline-offset:1px;
+  outline:1px solid var(--color-primary);
+  outline-offset:2px;
+  border-radius:3px;
 }
 /* Rating renders as filled stars (e.g. ★★★★). Variable width — placed last
    so it shrinks/clips first when the row overflows. */
@@ -1863,7 +1866,10 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   }
   .card-skeleton{flex-direction:column;gap:10px;padding:14px}
   .card-skeleton .skel-cover{width:100%;flex:0 0 auto;height:0;padding-top:150%;border-radius:12px;min-height:0}
-  .cover{width:100%;flex:0 0 auto;height:0;padding-top:150%;position:relative;border-radius:12px}
+  /* Mobile: the wrap takes over the full-width / flex sizing the cover used
+     to drive directly so the pip overlay can hang below the cover edge. */
+  .cover-wrap{width:100%;flex:0 0 auto}
+  .cover{width:100%;height:0;padding-top:150%;position:relative;border-radius:12px}
   /* Blur-fill background for grid covers */
   .cover::before{inset:-15px;filter:blur(15px) brightness(0.65)}
   .cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;z-index:1}
@@ -3787,6 +3793,76 @@ body.modal-open{overscroll-behavior-y:contain}
   width:28px;height:28px;
   font-size:.8rem;
 }
+
+/* --- Friend pips on Library cards (#126 / FRIENDS.md Surface 3) ---------
+   Edge-straddling pips: the overlay sits inside `.cover-wrap` (the
+   non-clipping wrapper around `.cover`). It anchors to the cover's bottom-
+   left corner with `bottom: -7px` (= half the 14px pip diameter) so each
+   pip rests half on the cover and half on the card padding below. The
+   `left: 6px` indents from the wrap's left edge so the first pip aligns
+   visually inside the cover's rounded corner. */
+.friend-pip-overlay{
+  position:absolute;
+  bottom:-7px;
+  left:6px;
+  display:flex;
+  gap:3px;
+  z-index:2;
+  pointer-events:auto;
+}
+.friend-pip{
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-family:var(--font-display);
+  font-size:.55rem;
+  font-weight:600;
+  line-height:1;
+  color:#fff;
+  /* 1px white/translucent border so the pip reads against any cover —
+     light, dark, or busy. The translucent ring catches enough of the
+     surrounding background to delineate the pip without painting a hard
+     line that fights the deterministic fill color. */
+  border:1px solid rgba(255,255,255,.85);
+  /* Subtle drop-shadow lifts the pip off the cover edge on busy artwork. */
+  box-shadow:0 1px 2px rgba(0,0,0,.35);
+  padding:0;
+  margin:0;
+  background:transparent;
+  cursor:pointer;
+  user-select:none;
+  text-transform:uppercase;
+  /* Reset button defaults so the pip isn't tinted by the system button bg. */
+  appearance:none;
+  -webkit-appearance:none;
+  transition:transform .12s ease-out;
+}
+.friend-pip:hover,
+.friend-pip:focus-visible{
+  transform:scale(1.12);
+  outline:none;
+}
+.friend-pip:focus-visible{
+  /* Visible focus ring without disturbing the layout — appears around the
+     existing border. */
+  box-shadow:0 0 0 2px var(--color-bg-surface),0 0 0 3px var(--color-text-primary),0 1px 2px rgba(0,0,0,.35);
+}
+.friend-pip-overflow{
+  /* Neutral background distinct from any palette color so the +N pip
+     never collides with a real friend's pip color. */
+  background:rgba(40,40,46,.92);
+  font-size:.5rem;
+  font-weight:700;
+  letter-spacing:0;
+  cursor:default;
+  /* No hover scale on the +N pip — it's not interactive in this issue. */
+  transition:none;
+}
+.friend-pip-overflow:hover,
+.friend-pip-overflow:focus-visible{transform:none}
 
 /* --- Recent finishes events region (#125 / Surface 1 Region A) ----------
    Vertical list of friends' recent `finished` events. Lives in the drawer's
