@@ -83,10 +83,16 @@ export function displayNameForConnection(connection) {
  *       <button class="friend-strip-cell" ...>
  *         <div class="friend-avatar" ...>M</div>
  *         <div class="friend-strip-name">Maya</div>
+ *         (when muted) <div class="friend-strip-muted">Muted</div>
  *       </button>
  *       …
  *     </div>
  *   </div>
+ *
+ * Muted friends render with a small "Muted" badge under the name and a
+ * `data-muted="true"` dataset attribute so CSS can desaturate the avatar.
+ * They remain in the strip and tappable per FRIENDS.md (visiting their
+ * shelf still works; only their *signal* is suppressed elsewhere).
  *
  * @param {HTMLElement} container
  * @param {Array} connections
@@ -94,6 +100,7 @@ export function displayNameForConnection(connection) {
  *   onAvatarTap?: (connection: object) => void,
  *   onAvatarLongPress?: (connection: object, anchor: HTMLElement) => void,
  *   onAddClick?: () => void,
+ *   mutedSharePubs?: Set<string>,
  * }} [opts]
  */
 export function renderFriendStrip(container, connections, opts = {}) {
@@ -144,6 +151,11 @@ export function renderFriendStrip(container, connections, opts = {}) {
   const scroll = container.querySelector('[data-friend-scroll]');
   const addBtn = container.querySelector('[data-friend-add]');
 
+  // Normalize muted set so callers can pass an array, Set, or omit entirely.
+  const mutedSet = opts.mutedSharePubs instanceof Set
+    ? opts.mutedSharePubs
+    : new Set(Array.isArray(opts.mutedSharePubs) ? opts.mutedSharePubs : []);
+
   for (const conn of sorted) {
     const cell = document.createElement('button');
     cell.type = 'button';
@@ -151,8 +163,14 @@ export function renderFriendStrip(container, connections, opts = {}) {
     cell.setAttribute('role', 'listitem');
     cell.dataset.sharePub = conn.share_pub || '';
 
+    const isMuted = !!(conn.share_pub && mutedSet.has(conn.share_pub));
+    if (isMuted) {
+      cell.dataset.muted = 'true';
+      cell.classList.add('friend-strip-cell-muted');
+    }
+
     const name = displayNameForConnection(conn);
-    cell.setAttribute('aria-label', name);
+    cell.setAttribute('aria-label', isMuted ? `${name}, muted` : name);
 
     const avatar = renderFriendAvatar(conn, { ariaLabel: name });
     cell.appendChild(avatar);
@@ -161,6 +179,13 @@ export function renderFriendStrip(container, connections, opts = {}) {
     nameEl.className = 'friend-strip-name';
     nameEl.textContent = name;
     cell.appendChild(nameEl);
+
+    if (isMuted) {
+      const badge = document.createElement('div');
+      badge.className = 'friend-strip-muted';
+      badge.textContent = 'Muted';
+      cell.appendChild(badge);
+    }
 
     // Tap → navigation handler stub. Issue 4 wires the friend's shelf.
     cell.addEventListener('click', () => {

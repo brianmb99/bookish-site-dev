@@ -31,15 +31,18 @@
 import * as friends from '../core/friends.js';
 import { attachSwipeDismiss } from '../core/swipe_dismiss.js';
 import { pushOverlayState, popOverlayState } from '../core/overlay_history.js';
-import { renderFriendStrip } from './friend-strip.js';
+import { renderFriendStrip, displayNameForConnection } from './friend-strip.js';
 import { setHideFriendsFromHeader } from './friend-glyph-trigger.js';
 import { hydrateRecentFinishes } from './recent-finishes.js';
+import { openFriendOverflowMenu } from './friend-overflow-menu.js';
+import { openConfirmDialog } from './confirm-dialog.js';
 
 const OVERLAY_ID = 'friendsOverlay';
 const DRAWER_ID = 'friendsDrawer';
 const BACKDROP_ID = 'friendsBackdrop';
 const STRIP_HOST_ID = 'friendsStripHost';
 const EVENTS_HOST_ID = 'friendsEventsHost';
+const BANNER_ID = 'friendsAllMutedBanner';
 const CLOSE_ID = 'friendsClose';
 const HIDE_LINK_ID = 'friendsHideFromHeader';
 
@@ -67,6 +70,9 @@ function ensureMarkup() {
             <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
           </svg>
         </button>
+      </div>
+      <div class="friends-all-muted-banner" id="${BANNER_ID}" hidden>
+        You've muted everyone. Activity is hidden.
       </div>
       <div class="friends-events" id="${EVENTS_HOST_ID}"></div>
       <div class="friends-strip-host" id="${STRIP_HOST_ID}"></div>
@@ -123,28 +129,61 @@ function showHideConfirmationToast() {
 }
 
 /**
- * Re-render the strip with the latest connections. Called both on open and
- * after an invite-modal dismiss (so newly-added friends materialize without
- * a full drawer reopen). Cheap if connections haven't changed.
+ * Re-render the strip with the latest connections + muted state. Called on
+ * open, after an invite-modal dismiss (so newly-added friends materialize
+ * without a full drawer reopen), and after mute/unmute/remove actions.
  *
  * Pulls connections directly from `friends.listConnections()` so the drawer
  * is the single source of truth for what it shows; callers don't have to
- * pass anything in.
+ * pass anything in. Mute state is fetched in parallel via
+ * `friends.getMutedSharePubs()` (fail-soft — empty set on any error).
+ *
+ * Also updates the all-friends-muted banner visibility based on the same
+ * data: shown when connections.length > 0 AND every connection is muted.
  */
 async function refreshStrip() {
   const host = document.getElementById(STRIP_HOST_ID);
   if (!host) return;
   let connections = [];
+  let mutedSharePubs = new Set();
   try {
-    connections = await friends.listConnections();
+    [connections, mutedSharePubs] = await Promise.all([
+      friends.listConnections().catch(err => {
+        console.warn('[Bookish:FriendsDrawer] listConnections failed:', err.message);
+        return [];
+      }),
+      friends.getMutedSharePubs().catch(() => new Set()),
+    ]);
   } catch (err) {
-    console.warn('[Bookish:FriendsDrawer] listConnections failed:', err.message);
+    console.warn('[Bookish:FriendsDrawer] refreshStrip parallel-fetch failed:', err.message);
   }
   renderFriendStrip(host, connections, {
     onAddClick: openInviteFlow,
     onAvatarTap: handleAvatarTap,
-    onAvatarLongPress: handleAvatarLongPress,
+    onAvatarLongPress: (conn, anchor) => handleAvatarLongPress(conn, anchor, mutedSharePubs),
+    mutedSharePubs,
   });
+  updateAllMutedBanner(connections, mutedSharePubs);
+}
+
+/**
+ * Show the "all friends muted" banner when (a) connections > 0 and (b) every
+ * connection is in the muted set. Hide it otherwise. The banner itself sits
+ * in the drawer markup as a hidden div; we just toggle the `hidden` attr.
+ *
+ * Per FRIENDS.md: do NOT show when connections.length === 0 — that's the
+ * empty state from #124, which the strip handles. The banner is exclusively
+ * for the "you've muted everyone you connected with" case.
+ */
+function updateAllMutedBanner(connections, mutedSharePubs) {
+  const banner = document.getElementById(BANNER_ID);
+  if (!banner) return;
+  if (!connections || connections.length === 0) {
+    banner.hidden = true;
+    return;
+  }
+  const allMuted = connections.every(c => c && c.share_pub && mutedSharePubs.has(c.share_pub));
+  banner.hidden = !allMuted;
 }
 
 /**
@@ -192,14 +231,21 @@ function handleAvatarTap(connection) {
 }
 
 /**
- * Stub for issue #10 — overflow menu (Mute / Remove). Same pattern as the
- * tap stub: log + window hook for tests.
+ * Long-press / right-click on a friend avatar in the strip → overflow menu
+ * with Mute (or Unmute) + Remove (#131). The menu is anchored to the cell
+ * that triggered the gesture; the action callbacks call into the friends.js
+ * SDK wrappers and then refresh the strip + events region so the UI reflects
+ * the new state.
+ *
+ * `mutedSharePubs` is the snapshot from the last refreshStrip — the menu
+ * uses it to decide whether to show "Mute" or "Unmute". After a successful
+ * action, refreshStrip re-fetches both the connection list and the muted
+ * set, so the snapshot only needs to be fresh enough for the menu's initial
+ * render.
  */
-function handleAvatarLongPress(connection /* , anchorEl */) {
-  console.log('[Bookish:Friends] long-press friend (issue 10 stub):', {
-    label: connection.label,
-    share_pub: (connection.share_pub || '').slice(0, 8),
-  });
+function handleAvatarLongPress(connection, anchorEl, mutedSharePubs) {
+  // Test hook + dev breadcrumb (preserved across stub→real wiring so any
+  // existing browser tests / debug taps continue to observe the call).
   if (typeof window !== 'undefined') {
     window.__bookishLastFriendLongPress = {
       label: connection.label || null,
@@ -207,6 +253,101 @@ function handleAvatarLongPress(connection /* , anchorEl */) {
       at: Date.now(),
     };
   }
+
+  const label = displayNameForConnection(connection);
+  const wasMuted = !!(connection.share_pub && mutedSharePubs && mutedSharePubs.has(connection.share_pub));
+
+  openFriendOverflowMenu({
+    anchor: anchorEl,
+    label,
+    isMuted: wasMuted,
+    onMute: () => handleMute(connection, label),
+    onUnmute: () => handleUnmute(connection, label),
+    onRemove: () => handleRemove(connection, label),
+  });
+}
+
+async function handleMute(connection, label) {
+  try {
+    await friends.muteConnection(connection);
+  } catch (err) {
+    console.warn('[Bookish:FriendsDrawer] muteConnection failed:', err.message);
+    showFriendsToast(`Couldn't mute ${label}.`);
+    return;
+  }
+  // Refresh both regions: strip needs the new "Muted" badge; events region
+  // needs to drop this friend's recent finishes.
+  await Promise.all([
+    refreshStrip().catch(() => {}),
+    refreshEvents().catch(() => {}),
+  ]);
+}
+
+async function handleUnmute(connection, label) {
+  try {
+    await friends.unmuteConnection(connection);
+  } catch (err) {
+    console.warn('[Bookish:FriendsDrawer] unmuteConnection failed:', err.message);
+    showFriendsToast(`Couldn't unmute ${label}.`);
+    return;
+  }
+  await Promise.all([
+    refreshStrip().catch(() => {}),
+    refreshEvents().catch(() => {}),
+  ]);
+}
+
+async function handleRemove(connection, label) {
+  let confirmed = false;
+  try {
+    confirmed = await openConfirmDialog({
+      title: `Remove ${label} as a friend?`,
+      body: `You won't see each other's shelves or activity.`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      destructive: true,
+    });
+  } catch {
+    confirmed = false;
+  }
+  if (!confirmed) return;
+
+  try {
+    await friends.removeConnection(connection);
+  } catch (err) {
+    console.warn('[Bookish:FriendsDrawer] removeConnection failed:', err.message);
+    showFriendsToast(`Couldn't remove ${label}.`);
+    return;
+  }
+  await Promise.all([
+    refreshStrip().catch(() => {}),
+    refreshEvents().catch(() => {}),
+  ]);
+}
+
+/**
+ * Lightweight inline toast for mute / unmute / remove failures. Same shape
+ * as the hide-confirmation toast above. Self-contained so the drawer
+ * doesn't need to import from app.js.
+ */
+function showFriendsToast(message) {
+  if (typeof document === 'undefined') return;
+  const existing = document.getElementById('bookishStatusToast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = 'bookishStatusToast';
+  toast.className = 'toast status-toast';
+  toast.setAttribute('role', 'status');
+  const span = document.createElement('span');
+  span.className = 'toast-message';
+  span.textContent = message;
+  toast.appendChild(span);
+  toast.style.cssText = 'position:fixed;top:calc(var(--header-height) + env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:9001;';
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('hiding');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
 /**

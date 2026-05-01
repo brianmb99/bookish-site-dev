@@ -339,6 +339,141 @@ export async function revokeInvite(token_id) {
   return await client.revokeIssuedInvite(token_id);
 }
 
+// ============ Mute / Remove (issue #131) ============
+//
+// Thin wrappers over the Tarn SDK's `muteConnection` / `unmuteConnection` /
+// `removeConnection` / `isMuted` / `listMutedConnections` primitives, with
+// Bookish-shaped fail-soft semantics on the read side and explicit propagation
+// on the write side. The mute surface keeps the same `connection` object the
+// rest of this module passes around — the SDK only needs `share_pub`.
+//
+// Cross-device sync: muting writes to Tarn's `tarn-muted-connections-v1`
+// record, which syncs across the user's devices via the SDK's existing
+// mechanism. No additional Bookish-side wiring needed.
+//
+// Cache invalidation: mute / unmute / remove all invalidate the friend-library
+// match cache so pips on Library cards + unisearch results repaint promptly.
+// They also fire `bookish:connections-changed` so the drawer + glyph trigger
+// re-evaluate state without a manual refresh.
+
+function emitConnectionsChanged() {
+  try {
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bookish:connections-changed'));
+    }
+  } catch { /* ignore */ }
+}
+
+/**
+ * Return the set of share_pubs currently muted, as a `Set<string>`. Reads
+ * Tarn's muted-connections record via `client.listMutedConnections()`. On
+ * any failure (not logged in, SDK throw, missing method) returns an empty
+ * set — fail-open for read so the strip / drawer / shelf still render.
+ *
+ * @returns {Promise<Set<string>>}
+ */
+export async function getMutedSharePubs() {
+  if (!tarnService.isLoggedIn()) return new Set();
+  let client;
+  try { client = await tarnService.getClient(); } catch { return new Set(); }
+  if (!client || typeof client.listMutedConnections !== 'function') return new Set();
+  try {
+    const muted = await client.listMutedConnections();
+    if (!Array.isArray(muted)) return new Set();
+    // The SDK returns connection objects (or share_pub strings — both shapes
+    // appear in the wild depending on Tarn version). Normalize to share_pub.
+    const out = new Set();
+    for (const m of muted) {
+      if (!m) continue;
+      if (typeof m === 'string') { out.add(m); continue; }
+      if (typeof m.share_pub === 'string') out.add(m.share_pub);
+    }
+    return out;
+  } catch (err) {
+    console.warn('[Bookish:Friends] listMutedConnections failed:', err.message);
+    return new Set();
+  }
+}
+
+/**
+ * Best-effort isMuted check for a single connection. Convenience over the
+ * SDK's `client.isMuted(connection)`. Fail-open: returns false on any error.
+ *
+ * @param {{ share_pub: string }} connection
+ * @returns {Promise<boolean>}
+ */
+export async function isMuted(connection) {
+  if (!connection || !connection.share_pub) return false;
+  if (!tarnService.isLoggedIn()) return false;
+  let client;
+  try { client = await tarnService.getClient(); } catch { return false; }
+  if (!client || typeof client.isMuted !== 'function') return false;
+  try {
+    return await client.isMuted(connection);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Mute a connection. Calls Tarn's `muteConnection`, invalidates the friend-
+ * library match cache so pips repaint, and fires `bookish:connections-changed`
+ * so the drawer + glyph trigger refresh state.
+ *
+ * Errors from the SDK propagate to the caller — the UI surfaces a toast on
+ * failure and leaves the friend in its previous state.
+ *
+ * @param {{ share_pub: string }} connection
+ * @returns {Promise<void>}
+ */
+export async function muteConnection(connection) {
+  if (!connection || !connection.share_pub) {
+    throw new Error('muteConnection: connection.share_pub is required');
+  }
+  const client = await tarnService.getClient();
+  await client.muteConnection(connection);
+  invalidateFriendLibraryCache();
+  emitConnectionsChanged();
+}
+
+/**
+ * Unmute a connection. Same propagation + cache-invalidation semantics as
+ * {@link muteConnection}.
+ *
+ * @param {{ share_pub: string }} connection
+ * @returns {Promise<void>}
+ */
+export async function unmuteConnection(connection) {
+  if (!connection || !connection.share_pub) {
+    throw new Error('unmuteConnection: connection.share_pub is required');
+  }
+  const client = await tarnService.getClient();
+  await client.unmuteConnection(connection);
+  invalidateFriendLibraryCache();
+  emitConnectionsChanged();
+}
+
+/**
+ * Remove a connection. Wraps Tarn's `removeConnection`, invalidates caches,
+ * and broadcasts `bookish:connections-changed` so the strip + glyph trigger
+ * re-evaluate. The SDK handles the connection-revoke protocol; we just
+ * surface the result.
+ *
+ * Errors propagate; caller is expected to surface a toast on failure.
+ *
+ * @param {{ share_pub: string }} connection
+ * @returns {Promise<void>}
+ */
+export async function removeConnection(connection) {
+  if (!connection || !connection.share_pub) {
+    throw new Error('removeConnection: connection.share_pub is required');
+  }
+  const client = await tarnService.getClient();
+  await client.removeConnection(connection);
+  invalidateFriendLibraryCache();
+  emitConnectionsChanged();
+}
+
 /**
  * Trigger a poll of incoming connection requests. Used by the recipient
  * after `acceptInvite` — the eventual auto-accept from the inviter lands in

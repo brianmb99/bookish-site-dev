@@ -38,6 +38,7 @@ import { pushOverlayState, popOverlayState } from '../core/overlay_history.js';
 const OVERLAY_ID = 'friendShelfOverlay';
 const HEADER_AVATAR_ID = 'friendShelfHeaderAvatar';
 const HEADER_NAME_ID = 'friendShelfHeaderName';
+const HEADER_MUTED_ID = 'friendShelfHeaderMuted';
 const CARDS_ID = 'friendShelfCards';
 const CLOSE_ID = 'friendShelfClose';
 const MUTE_BTN_ID = 'friendShelfMute';
@@ -68,7 +69,10 @@ function ensureMarkup() {
         <div class="friend-shelf-identity">
           <div class="friend-shelf-avatar-host" id="${HEADER_AVATAR_ID}"></div>
           <div class="friend-shelf-name-block">
-            <div class="friend-shelf-name" id="${HEADER_NAME_ID}" tabindex="-1"></div>
+            <div class="friend-shelf-name-row">
+              <div class="friend-shelf-name" id="${HEADER_NAME_ID}" tabindex="-1"></div>
+              <span class="friend-shelf-muted-indicator" id="${HEADER_MUTED_ID}" hidden>Muted</span>
+            </div>
             <div class="friend-shelf-name-sub">Their library</div>
           </div>
         </div>
@@ -94,35 +98,80 @@ function ensureMarkup() {
 
   document.getElementById(CLOSE_ID).addEventListener('click', () => closeFriendShelfView());
 
-  // Mute is stubbed — issue #10 wires up the actual mute behavior. We
-  // still surface a soft "coming soon" toast so the affordance signals
-  // it is intentional, not broken.
-  document.getElementById(MUTE_BTN_ID).addEventListener('click', () => {
-    showMuteStubToast();
-    // Test hook (parity with friends-drawer's stub hooks).
+  // Mute / Unmute (#131): toggle the friend's muted state via the SDK,
+  // refresh the header treatment in place. Disabled while in flight to
+  // suppress double-clicks.
+  document.getElementById(MUTE_BTN_ID).addEventListener('click', handleMuteButtonClick);
+}
+
+let _muteInFlight = false;
+
+async function handleMuteButtonClick() {
+  if (_muteInFlight || !_currentConnection) return;
+  const btn = document.getElementById(MUTE_BTN_ID);
+  if (!btn) return;
+  _muteInFlight = true;
+  const prevDisabled = btn.disabled;
+  btn.disabled = true;
+  try {
+    const wasMuted = await friends.isMuted(_currentConnection);
+    if (wasMuted) {
+      await friends.unmuteConnection(_currentConnection);
+    } else {
+      await friends.muteConnection(_currentConnection);
+    }
+    // Test hook for browser smoke tests.
     if (typeof window !== 'undefined') {
       window.__bookishLastFriendShelfMute = {
         share_pub: _currentConnection?.share_pub || null,
+        muted: !wasMuted,
         at: Date.now(),
       };
     }
-  });
+    await refreshMuteState();
+  } catch (err) {
+    console.warn('[Bookish:FriendShelfView] mute toggle failed:', err.message);
+    showMuteErrorToast();
+  } finally {
+    _muteInFlight = false;
+    if (btn) btn.disabled = prevDisabled;
+  }
 }
 
-function showMuteStubToast() {
-  // Lightweight inline toast — uses the same .toast styling as the rest
-  // of the app. Self-removes after 2.5s.
+function showMuteErrorToast() {
   const existing = document.querySelector('.friend-shelf-toast');
   if (existing) existing.remove();
   const toast = document.createElement('div');
   toast.className = 'friend-shelf-toast';
   toast.setAttribute('role', 'status');
-  toast.textContent = 'Mute is coming in a future update.';
+  toast.textContent = "Couldn't update mute. Try again.";
   document.body.appendChild(toast);
   setTimeout(() => {
     toast.classList.add('hiding');
     setTimeout(() => toast.remove(), 250);
-  }, 2500);
+  }, 3000);
+}
+
+/**
+ * Refresh the Mute/Unmute button label + the small "Muted" header indicator
+ * to reflect the friend's current muted state. Called on open and after
+ * each mute toggle.
+ */
+async function refreshMuteState() {
+  if (!_currentConnection) return;
+  const muted = await friends.isMuted(_currentConnection);
+  const btn = document.getElementById(MUTE_BTN_ID);
+  const indicator = document.getElementById(HEADER_MUTED_ID);
+  if (btn) {
+    btn.textContent = muted ? 'Unmute' : 'Mute';
+    const aria = muted
+      ? 'Unmute — start seeing their activity again'
+      : 'Mute — stop seeing their activity';
+    btn.setAttribute('aria-label', aria);
+    btn.setAttribute('title', aria);
+    btn.classList.toggle('friend-shelf-mute-active', muted);
+  }
+  if (indicator) indicator.hidden = !muted;
 }
 
 function setHeader(connection) {
@@ -336,6 +385,13 @@ export async function openFriendShelfView(connection, opts = {}) {
   }
 
   if (!sameConnection || !_isOpen) {
+    // Kick off both the library load and the mute-state probe in parallel.
+    // Mute state is a tiny SDK call; library may take a beat. We don't
+    // gate the library render on the mute fetch — they update independent
+    // header / cards regions.
+    refreshMuteState().catch(err =>
+      console.warn('[Bookish:FriendShelfView] refreshMuteState failed:', err.message),
+    );
     await loadAndRender(connection);
   }
 }
@@ -375,3 +431,5 @@ export function isFriendShelfViewOpen() { return _isOpen; }
 // Test hooks
 export const _renderFriendShelfCardsForTest = renderFriendShelfCards;
 export const _loadAndRenderForTest = loadAndRender;
+export const _refreshMuteStateForTest = refreshMuteState;
+export const _handleMuteButtonClickForTest = handleMuteButtonClick;
