@@ -18,7 +18,8 @@
     "readingStartedAt": { "type": "number", "description": "Timestamp when book was moved to reading status" },
     "wtrPosition": { "type": "integer", "minimum": 0, "description": "Sort position within the want-to-read list (0 = top)" },
     "work_key": { "type": "string", "description": "OpenLibrary work key (e.g., /works/OL5193815W). Used for friend-matching via strict equality. Captured at search time when the source is OL or iTunes-with-OL cross-reference." },
-    "isbn13": { "type": "string", "pattern": "^\\d{13}$", "description": "ISBN-13 of the chosen variant. Optional fallback identifier captured from search results when available." }
+    "isbn13": { "type": "string", "pattern": "^\\d{13}$", "description": "ISBN-13 of the chosen variant. Optional fallback identifier captured from search results when available." },
+    "is_private": { "type": "boolean", "description": "If true, the book is private — excluded from share-log publication and never shown to friends. Absent or false means public (default). Per-book privacy is the spine of the Friends feature; see FRIENDS.md Surface 7 (issue #129)." }
   },
   "allOf": [
     { "if": { "required": ["coverImage"] }, "then": { "required": ["mimeType"] } }

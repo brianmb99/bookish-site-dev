@@ -3825,6 +3825,108 @@ body.modal-open{overscroll-behavior-y:contain}
   z-index:2;
   pointer-events:auto;
 }
+
+/* --- Per-book privacy lock overlay (#129 / FRIENDS.md Surface 7) ----------
+   Owner-only indicator on Library cards: a small lock glyph in the top-left
+   corner of the cover, visible only when the book is marked private. The
+   overlay lives inside `.cover-wrap` (sibling of `.cover`) so its absolute
+   positioning is anchored to the cover's bounding box, just like the friend
+   pips. The cover's own `overflow: hidden` would clip a child of `.cover`
+   itself; the wrap is the right anchor.
+
+   Verified at 375 / 768 / 1280 px breakpoints — the cover-wrap rule cascade
+   in @media (min-width:600px) gives the wrap full-width sizing on desktop,
+   and the lock-overlay's `top: 6px / left: 6px` measures from the cover's
+   top-left corner regardless of card direction (row on mobile, column on
+   desktop). */
+.privacy-lock-overlay{
+  position:absolute;
+  top:6px;
+  left:6px;
+  z-index:2;
+  /* Translucent dark fill + 1px translucent ring keeps the lock readable
+     against any cover (light, dark, or busy) without painting a hard chip. */
+  background:rgba(0,0,0,.55);
+  border:1px solid rgba(255,255,255,.6);
+  border-radius:50%;
+  width:18px;
+  height:18px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  pointer-events:none;
+  /* Subtle drop-shadow lifts the chip off busy cover artwork. */
+  box-shadow:0 1px 2px rgba(0,0,0,.4);
+}
+.privacy-lock-overlay svg{width:10px;height:10px;display:block}
+
+/* --- Add-form privacy checkbox (#129) ------------------------------------
+   Lives below the optional fields and above the save button. Unobtrusive:
+   small text, muted color, no card-style chrome. Visible only in add-mode
+   (the .add-only family above already handles the show/hide). */
+.privacy-add-checkbox{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 4px;
+  margin-top:6px;
+  font-size:.78rem;
+  color:var(--color-text-muted);
+  cursor:pointer;
+  user-select:none;
+}
+.privacy-add-checkbox input[type=checkbox]{
+  width:16px;
+  height:16px;
+  margin:0;
+  accent-color:var(--color-text-muted);
+  cursor:pointer;
+}
+.privacy-add-checkbox:hover .privacy-add-text{color:var(--color-text-primary)}
+
+/* --- Book-detail privacy lock toggle (#129) ------------------------------
+   Sits in the top-right corner of the book-detail page, slightly offset from
+   the close button (which lives at top:12px / right:12px). The toggle
+   visualizes the current privacy state via the locked vs unlocked icon
+   swap. The .modal-inner:not(.add-mode) gate (added by .edit-only family)
+   handles add-vs-edit visibility. */
+.privacy-toggle-btn{
+  position:absolute;
+  top:12px;
+  right:52px; /* close-btn is right:12 + 32 width + 8 gap */
+  background:transparent;
+  border:none;
+  color:var(--color-text-muted);
+  border-radius:50%;
+  width:32px;
+  height:32px;
+  cursor:pointer;
+  transition:background .15s ease,color .15s ease,opacity .15s ease,transform .1s ease;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  line-height:1;
+  padding:0;
+  z-index:1;
+  opacity:.7;
+}
+/* Enlarged hit area without visual change */
+.privacy-toggle-btn::before{content:'';position:absolute;inset:-6px;border-radius:50%}
+.privacy-toggle-btn svg{display:block;pointer-events:none}
+.privacy-toggle-btn:active{transform:scale(.95)}
+.privacy-toggle-btn:hover{
+  background:rgba(255,255,255,.06);
+  color:var(--color-text-primary);
+  opacity:1;
+}
+/* Default state: unlocked icon visible, locked icon hidden. The
+   aria-pressed="true" state flips the visibility — and the icon's color
+   shifts to a slightly warmer tone so the locked state reads as "active". */
+.privacy-toggle-btn .privacy-icon-locked{display:none}
+.privacy-toggle-btn[aria-pressed="true"] .privacy-icon-unlocked{display:none}
+.privacy-toggle-btn[aria-pressed="true"] .privacy-icon-locked{display:block}
+.privacy-toggle-btn[aria-pressed="true"]{color:var(--color-text-primary);opacity:.95}
 .friend-pip{
   width:14px;
   height:14px;

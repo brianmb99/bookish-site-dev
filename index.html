@@ -163,7 +163,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.209</div>
+  <div class="footer-meta">Alpha &bull; v0.2.210</div>
 </footer>
 </div>
 
@@ -260,6 +260,14 @@
         </div>
       </div>
       <input type="hidden" name="priorTxid"/>
+      <input type="hidden" name="is_private" id="isPrivateInput" value=""/>
+      <!-- Add-form privacy checkbox (#129 / FRIENDS.md Surface 7).
+           Visible only in add-mode; the book-detail page uses the lock-toggle
+           in the top-right (#privacyToggleBtn) for the same state. -->
+      <label class="privacy-add-checkbox add-only" id="privacyAddRow">
+        <input type="checkbox" id="privacyAddCheckbox"/>
+        <span class="privacy-add-text">Keep this one private (hidden from friends)</span>
+      </label>
       <div class="autosave-microcopy" id="autosaveMicrocopy" aria-live="polite"></div>
       <div class="row-actions primary-actions add-only">
         <button type="submit" class="btn" id="saveBtn" disabled>Add to List</button>
@@ -268,6 +276,25 @@
         <button type="button" class="btn-delete-link" id="deleteBtn">Delete this book</button>
       </div>
     </form>
+    <!-- Book-detail privacy lock toggle (#129 / FRIENDS.md Surface 7).
+         Sits in the top-right corner of the book-detail page, parallel to
+         the close button. Visible only in edit mode (existing books). -->
+    <button type="button" class="privacy-toggle-btn edit-only" id="privacyToggleBtn"
+            aria-pressed="false" title="Toggle privacy">
+      <svg class="privacy-icon-unlocked" width="20" height="20" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+      </svg>
+      <svg class="privacy-icon-locked" width="20" height="20" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      <span class="sr-only" id="privacyToggleLabel">Make private</span>
+    </button>
   </div>
 </div>
 <script>

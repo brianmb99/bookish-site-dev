@@ -80,6 +80,14 @@ const tagsInputEl = document.getElementById('tagsInput');
 const tagsPillsEl = document.getElementById('tagsPills');
 const placardTitle = document.getElementById('placardTitle');
 const placardAuthor = document.getElementById('placardAuthor');
+// Per-book privacy (#129 / FRIENDS.md Surface 7) — three surfaces share one
+// `is_private` boolean: an add-form checkbox, an edit-mode lock toggle, and a
+// hidden input that carries the current value into the form-submit payload.
+const privacyAddCheckbox = document.getElementById('privacyAddCheckbox');
+const privacyAddRow = document.getElementById('privacyAddRow');
+const privacyToggleBtn = document.getElementById('privacyToggleBtn');
+const privacyToggleLabel = document.getElementById('privacyToggleLabel');
+const isPrivateInput = document.getElementById('isPrivateInput');
 const summaryRowEl = document.getElementById('summaryRow');
 const statusMicrocopyEl = document.getElementById('statusMicrocopy');
 const autosaveMicrocopyEl = document.getElementById('autosaveMicrocopy');
@@ -500,6 +508,12 @@ function openModal(entry, forceIntent){
   if(notesInput) notesInput.value = entry?.notes || '';
   initOptionalFields(entry);
   populateOptionalFields(entry);
+  // Per-book privacy (#129). Mirror the entry's `is_private` into all three
+  // form-side surfaces. New books default to public (false).
+  const initialPrivate = entry?.is_private === true;
+  if(isPrivateInput) isPrivateInput.value = initialPrivate ? 'true' : '';
+  if(privacyAddCheckbox) privacyAddCheckbox.checked = initialPrivate;
+  syncPrivacyToggleVisualState(initialPrivate);
   if(entry&&entry.coverImage){
     const coverDataUrl='data:'+(entry.mimeType||'image/*')+';base64,'+entry.coverImage;
     coverPreview.src=coverDataUrl;
@@ -537,6 +551,109 @@ function openModal(entry, forceIntent){
       try{ placardTitle.setSelectionRange(len,len); }catch{}
     }
   }, 0);
+}
+
+// --- Per-book privacy (#129 / FRIENDS.md Surface 7) ---------------------
+//
+// Three UI surfaces feed and reflect the same `is_private` boolean:
+//   1. Add-form checkbox (#privacyAddCheckbox) — visible only in add-mode.
+//      Updates the hidden #isPrivateInput on toggle; submit reads the input.
+//   2. Edit-mode lock toggle (#privacyToggleBtn) — visible only in edit mode.
+//      Click flips state and immediately persists via the auto-save pipeline,
+//      then shows a subtle toast. The icon swap (locked vs unlocked) is
+//      handled by the .privacy-toggle-btn[aria-pressed] CSS rules.
+//   3. Hidden #isPrivateInput — single source of truth for form submission.
+//
+// The book-card lock overlay on the Library is a separate render concern;
+// see attachPrivacyLockOverlay() below.
+
+/** Apply the locked/unlocked visual state to the book-detail toggle button. */
+function syncPrivacyToggleVisualState(isPrivate){
+  if(!privacyToggleBtn) return;
+  privacyToggleBtn.setAttribute('aria-pressed', isPrivate ? 'true' : 'false');
+  if(privacyToggleLabel){
+    privacyToggleLabel.textContent = isPrivate ? 'Make public' : 'Make private';
+  }
+  privacyToggleBtn.title = isPrivate ? 'Visible only to you — click to make public' : 'Visible to friends — click to make private';
+}
+
+// Add-form checkbox: mirror to the hidden input. No save happens here — the
+// regular form-submit picks up `is_private` from the hidden input. Editing
+// the checkbox flips dirty state for the standard auto-save behavior.
+privacyAddCheckbox?.addEventListener('change', () => {
+  if(isPrivateInput){
+    isPrivateInput.value = privacyAddCheckbox.checked ? 'true' : '';
+  }
+  updateDirty();
+});
+
+// Book-detail lock toggle: flip + immediate persist + toast. The toggle is
+// only enabled in edit mode (saved book), so we always have a priorTxid.
+privacyToggleBtn?.addEventListener('click', async () => {
+  const priorTxid = form.priorTxid?.value;
+  if(!priorTxid) return; // defensive — toggle is hidden in add mode
+  haptic();
+  const wasPrivate = isPrivateInput?.value === 'true';
+  const next = !wasPrivate;
+  if(isPrivateInput) isPrivateInput.value = next ? 'true' : '';
+  if(privacyAddCheckbox) privacyAddCheckbox.checked = next;
+  syncPrivacyToggleVisualState(next);
+  updateDirty();
+  // Use the existing auto-save pipeline so the change rides through the
+  // BookRepository.update path (which, in turn, calls the friends.publishBook
+  // / unpublishBook fan-out based on the public/private transition).
+  // _autoSaveIfDirty resolves to true on success / false on failure (it
+  // shows its own error microcopy on failure). Only emit the privacy toast
+  // when the save actually committed.
+  let saved = false;
+  try {
+    saved = await _autoSaveIfDirty();
+  } catch (err) {
+    console.warn('[Bookish] privacy toggle save failed:', err.message);
+  }
+  if(saved){
+    showStatusToast(next ? 'Hidden from friends' : 'Visible to friends');
+  } else {
+    // Roll back the visual state — the autosave-microcopy already surfaces
+    // the failure, so we just revert the toggle so the user knows it didn't
+    // stick.
+    if(isPrivateInput) isPrivateInput.value = wasPrivate ? 'true' : '';
+    if(privacyAddCheckbox) privacyAddCheckbox.checked = wasPrivate;
+    syncPrivacyToggleVisualState(wasPrivate);
+  }
+});
+
+// --- Library-card lock overlay (#129 / FRIENDS.md Surface 7) -------------
+//
+// Owner-only chip on the user's own Library cards: a small lock glyph in
+// the top-left corner of the cover for books marked private. Hidden on
+// public books and on friend's-shelf views (private books never reach
+// those surfaces in the first place — defense in depth lives in
+// friends.fetchFriendLibrary).
+//
+// Idempotent: drops any existing `.privacy-lock-overlay` first, then
+// inserts a fresh one if the entry is private. Same wrapper-as-anchor
+// pattern as friend pips: lives inside `.cover-wrap` so the cover's own
+// `overflow: hidden` doesn't clip it.
+
+const PRIVACY_LOCK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+</svg>`;
+
+function attachPrivacyLockOverlay(cardEl, entry){
+  if(!cardEl) return;
+  const wrap = cardEl.querySelector('.cover-wrap');
+  if(!wrap) return;
+  const existing = wrap.querySelector('.privacy-lock-overlay');
+  if(existing) existing.remove();
+  if(!entry || entry.is_private !== true) return;
+  const lock = document.createElement('div');
+  lock.className = 'privacy-lock-overlay';
+  lock.setAttribute('aria-label', 'Private — only you see this');
+  lock.title = 'Private — only you see this';
+  lock.innerHTML = PRIVACY_LOCK_SVG;
+  wrap.appendChild(lock);
 }
 
 /** Auto-grow a single-row textarea (#114 placards). */
@@ -757,7 +874,11 @@ function currentFormState(){ return JSON.stringify({
   notes: (notesInput?.value||'').trim(),
   rating: ratingInput?.value||'',
   owned: ownedToggle?.checked?'1':'',
-  tags: collectTags()
+  tags: collectTags(),
+  // Per-book privacy (#129) — included so flipping the lock toggle or the
+  // add-form checkbox marks the form dirty and triggers the standard save
+  // path. Without this, the auto-save would treat a privacy flip as a no-op.
+  isPrivate: isPrivateInput?.value === 'true' ? '1' : ''
 }); }
 function snapshotOriginal(){ form.dataset.orig = currentFormState(); }
 function updateDirty(){
@@ -879,6 +1000,12 @@ function _buildPayloadFromForm(){
   payload.rating = optVals.rating || 0;
   payload.owned = !!optVals.owned;
   payload.tags = optVals.tags || '';
+  // Per-book privacy (#129). Always forward an explicit boolean so the
+  // BookRepository edit path can detect public→private and private→public
+  // transitions to fan out the correct share-log call (publish / unpublish).
+  // Without an explicit `false`, an entry that flips off would keep its
+  // stale `is_private: true`.
+  payload.is_private = isPrivateInput?.value === 'true';
   return payload;
 }
 
@@ -1159,7 +1286,7 @@ function attachFriendPips(cardEl, entry){
 
 /** Quick fingerprint for change detection — avoids unnecessary innerHTML rewrites */
 function entryFingerprint(e){
-  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.readingStartedAt||'')+'\t'+(e.createdAt||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'');
+  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.readingStartedAt||'')+'\t'+(e.createdAt||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'')+'\t'+(e.is_private===true?'p':'_');
 }
 
 /**
@@ -1378,6 +1505,7 @@ function render(){
         card.setAttribute('aria-label', ariaLabel);
         card.innerHTML=buildCardHTML(e, e._wtrResult, { showActions: true });
         attachFriendPips(card, e);
+        attachPrivacyLockOverlay(card, e);
         card.dataset._fp=fp;
         if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
         else { card.style.pointerEvents=''; card.style.opacity=''; }
@@ -1387,6 +1515,7 @@ function render(){
         // matching set could have grown / shrunk without the entry itself
         // changing. Cheap: getMatchingFriendBookEntries is a Map.get.
         attachFriendPips(card, e);
+        attachPrivacyLockOverlay(card, e);
       }
     } else {
       card=document.createElement('div');
@@ -1402,6 +1531,7 @@ function render(){
       card.setAttribute('aria-label', ariaLabel);
       card.innerHTML=buildCardHTML(e, e._wtrResult, { showActions: true });
       attachFriendPips(card, e);
+      attachPrivacyLockOverlay(card, e);
       card.dataset._fp=fp;
       if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
     }
@@ -2689,6 +2819,17 @@ form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) re
       if(meta.isbn13) payload.isbn13=meta.isbn13;
     }catch(err){ /* non-fatal: friend-matching is optional */ }
   }
+  // Per-book privacy (#129). The hidden #isPrivateInput is the single source
+  // of truth for both the add-form checkbox and the edit-mode lock toggle.
+  // We always forward the current value so an edit that flips public→private
+  // sets `is_private: true` (publish-gate kicks in), and a flip private→public
+  // explicitly sets `is_private: false` so the BookRepository edit path can
+  // detect the transition (the snapshot captures pre-edit state). Without
+  // explicitly forwarding `false`, buildPayloadFromEntry would omit the field
+  // and the entry would still carry the stale `is_private: true` from the
+  // pre-edit shape.
+  if(isPrivateInput?.value === 'true') payload.is_private = true;
+  else if(priorTxid) payload.is_private = false;
   uiStatusManager.refresh();
   const toastMsg = rsValue === READING_STATUS.WANT_TO_READ ? 'Added to Want to Read' : rsValue === READING_STATUS.READING ? 'Added to Currently Reading' : (!priorTxid ? 'Added to Shelf' : null);
   haptic();

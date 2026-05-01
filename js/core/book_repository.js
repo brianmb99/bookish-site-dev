@@ -11,6 +11,7 @@
 
 import { pickWinner } from './cache_core.js';
 import { dateStringToMsNoonUtc } from './id_core.js';
+import * as friends from './friends.js';
 
 /**
  * Coerce a remote payload from any pre-v0.3.0 shape into the v0.3.0 in-memory
@@ -87,6 +88,12 @@ function buildPayloadFromEntry(entry) {
   // and manual entries simply don't carry these.
   if (entry.work_key) payload.work_key = entry.work_key;
   if (entry.isbn13) payload.isbn13 = entry.isbn13;
+  // Per-book privacy (issue #129 / FRIENDS.md Surface 7). Only forward when
+  // truthy so absent/false stay equivalent on Arweave (smaller blobs, schema-
+  // backward-compatible). The publish-on-save path (createWithPublish /
+  // updateWithPublish in BookRepository) gates share-log publication on this
+  // exact field.
+  if (entry.is_private === true) payload.is_private = true;
   return payload;
 }
 
@@ -186,13 +193,28 @@ export class BookRepository {
     if (this._tarnService.isLoggedIn()) {
       try {
         const client = await this._tarnService.getClient();
-        const { txid } = await client.createEntry('entry', buildPayloadFromEntry(rec));
+        // Capture the per-content CEK during createEntry so we can fan out
+        // a share-log publish to friends afterwards (issue #129). The
+        // capture is a no-op for legacy v2 blob format and for users with
+        // no friends.
+        const builtPayload = buildPayloadFromEntry(rec);
+        const { result, cek } = await friends._captureCekDuringCall(
+          () => client.createEntry('entry', builtPayload),
+        );
+        const { txid } = result;
         const oldId = rec.id;
         rec.txid = txid; rec.id = txid;
         rec.pending = false; rec.status = 'confirmed'; rec.seenRemote = true;
         if (this._cache) await this._cache.replaceProvisional(oldId, rec);
         this._emitError(null, null);
         this._emitChange();
+        // Fire-and-forget the share-log publish. publishBook is a no-op
+        // when the book is private, when the user has no friends, or when
+        // the SDK call fails for one connection. We don't surface share
+        // errors as save errors — the local save already succeeded.
+        friends.publishBook(rec, cek).catch(err => {
+          console.warn('[BookRepository] publishBook failed:', err.message);
+        });
       } catch (e) {
         console.warn('[BookRepository] createEntry failed, queued for retry:', e.message);
         if (this._cache) await this._cache.queueOp({ type: 'create', localId: rec.id, payload });
@@ -262,6 +284,15 @@ export class BookRepository {
       this._emitError(null, null);
       this._onDirty();
       this._emitChange();
+      // Retroactively unshare from every connection (#129). Idempotent on
+      // the SDK side; non-blocking. Private books were never shared, but
+      // unshareContent on a never-shared content_id is a benign no-op for
+      // our purposes (warning is logged, nothing user-visible breaks).
+      if (entry.bookId) {
+        friends.unpublishBook(entry.bookId).catch(err => {
+          console.warn('[BookRepository] unpublishBook (delete) failed:', err.message);
+        });
+      }
     } catch (e) {
       console.warn('[BookRepository] deleteEntry failed:', e.message);
       entry._deleting = false;
@@ -484,13 +515,20 @@ export class BookRepository {
           if (local.txid) { await this._cache.removeOp(op.id); continue; }
           try {
             const payload = buildPayloadFromEntry(local);
-            const { txid } = await client.createEntry('entry', payload);
+            const { result, cek } = await friends._captureCekDuringCall(
+              () => client.createEntry('entry', payload),
+            );
+            const { txid } = result;
             const oldId = local.id;
             local.txid = txid; local.id = txid;
             local.pending = false; local.status = 'confirmed'; local.seenRemote = true;
             await this._cache.replaceProvisional(oldId, local);
             await this._cache.removeOp(op.id);
             this._emitChange();
+            // Replay-side publish (#129) — same fan-out as the live path.
+            friends.publishBook(local, cek).catch(err => {
+              console.warn('[BookRepository] Replay publishBook failed:', err.message);
+            });
           } catch (e) {
             console.warn('[BookRepository] Replay create failed:', e.message);
             break; // Stop replaying on first failure
@@ -500,12 +538,31 @@ export class BookRepository {
           if (!local) { await this._cache.removeOp(op.id); continue; }
           try {
             const payload = buildPayloadFromEntry(local);
-            const { txid } = await client.updateEntry(op.priorTxid, 'entry', payload);
+            const { result } = await friends._captureCekDuringCall(
+              () => client.updateEntry(op.priorTxid, 'entry', payload),
+            );
+            const { txid } = result;
             local.txid = txid; local.id = txid;
             local.pending = false; local.status = 'confirmed'; local.seenRemote = true;
             await this._cache.replaceProvisional(op.priorTxid, local);
             await this._cache.removeOp(op.id);
             this._emitChange();
+            // Replay-side fan-out: we don't have a snapshot of the previous
+            // is_private state here (the queued op stores only priorTxid),
+            // so we treat replay edits as "stay-public" and call republish.
+            // Private books skip the call inside republishBook; transitions
+            // would have been handled in the live edit path that originally
+            // queued, with the queued retry only covering the network-failure
+            // case for the *last* edit's payload.
+            if (local.is_private !== true) {
+              friends.republishBook(local).catch(err => {
+                console.warn('[BookRepository] Replay republishBook failed:', err.message);
+              });
+            } else {
+              friends.unpublishBook(local.bookId).catch(err => {
+                console.warn('[BookRepository] Replay unpublishBook failed:', err.message);
+              });
+            }
           } catch (e) {
             console.warn('[BookRepository] Replay edit failed:', e.message);
             break;
@@ -528,7 +585,16 @@ export class BookRepository {
     try {
       const client = await this._tarnService.getClient();
       const payload = buildPayloadFromEntry(entry);
-      const { txid } = await client.updateEntry(prevTxid, 'entry', payload);
+      // Capture CEK on edit too — needed if this edit transitions the book
+      // from private → public (we'd then call publishBook, not republishBook,
+      // because the friend-side share log has no entry yet for this content).
+      // Captured CEK is unused on a stable-public edit (we use updateShareContent
+      // which preserves the existing CEK), but capturing it cheaply keeps the
+      // public-toggle path uniform.
+      const { result, cek } = await friends._captureCekDuringCall(
+        () => client.updateEntry(prevTxid, 'entry', payload),
+      );
+      const { txid } = result;
 
       entry.txid = txid; entry.id = txid;
       entry.pending = false; entry.status = 'confirmed'; entry.seenRemote = true;
@@ -536,6 +602,30 @@ export class BookRepository {
       if (this._cache) await this._cache.replaceProvisional(prevTxid, entry);
       this._emitError(null, null);
       this._emitChange();
+
+      // Share-log fan-out (#129). Three transitions to handle:
+      //   - public → public: updateShareContent (swap tx_id, keep CEK)
+      //   - public → private: unshareContent (retroactive revoke)
+      //   - private → public: shareContent (fresh publish with new CEK)
+      //   - private → private: no-op
+      // The snapshot captured before _doEditUpload was called holds the
+      // pre-edit `is_private` so we can detect transitions.
+      const wasPrivate = snapshot && snapshot.is_private === true;
+      const isPrivate = entry.is_private === true;
+      // Fire-and-forget — share errors don't fail the edit.
+      if (!wasPrivate && !isPrivate) {
+        friends.republishBook(entry).catch(err => {
+          console.warn('[BookRepository] republishBook failed:', err.message);
+        });
+      } else if (!wasPrivate && isPrivate) {
+        friends.unpublishBook(entry.bookId).catch(err => {
+          console.warn('[BookRepository] unpublishBook failed:', err.message);
+        });
+      } else if (wasPrivate && !isPrivate) {
+        friends.publishBook(entry, cek).catch(err => {
+          console.warn('[BookRepository] publishBook (toggle to public) failed:', err.message);
+        });
+      }
 
       const queueEntry = this._editQueue.get(entryKey);
       if (queueEntry?.hasPendingEdit) {

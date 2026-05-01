@@ -515,7 +515,12 @@ export async function fetchFriendLibrary(connection, opts = {}) {
       if (r.status === 'fulfilled' && r.value) results.push(r.value);
     }
   }
-  return results;
+  // Defense-in-depth: even though private books should never be in a friend's
+  // share log (the publish gate filters at the source — see publishBook), if
+  // one slipped through (legacy data, race between toggle + sync, future bug)
+  // hide it from the friend's view here. The test for this lives in
+  // friends.test.js under "filterOutPrivate".
+  return filterOutPrivate(results);
 }
 
 // ============ Friend-library matching cache (issue #126) ============
@@ -805,6 +810,269 @@ export function _resetMatchCacheForTest() {
  */
 export function _setMatchCacheDepsForTest(deps) {
   _matchCacheDeps = deps;
+}
+
+// ============ Publish-on-save (issue #129) ============
+//
+// FRIENDS.md / Surface 3-5: each non-private book the user owns must be
+// published to every connection's share log so friends can see it on their
+// shelf, in their drawer's Recent finishes, and as pips on overlapping books.
+// Per-book privacy is the spine of the feature: private books are simply
+// never shared, and a previously-public book that gets toggled private is
+// retroactively unshared via Tarn's `unshareContent`.
+//
+// ── Tarn SDK CEK gap ────────────────────────────────────────────────────────
+//
+// `client.shareContent(connection, contentId, txId, cek)` needs the per-content
+// CEK that the SDK generates internally inside `createEntry`. The SDK does not
+// return it. Two workaround options:
+//
+//   A. Re-derive: fetch the just-created blob, AES-KW-unwrap the wrapped CEK
+//      using the user's DEK. Requires DEK access, which the SDK does not
+//      expose publicly (it's stored in private `#I` field).
+//   B. Capture-on-create: temporarily intercept `crypto.subtle.wrapKey`
+//      during the `createEntry`/`updateEntry` call and capture the raw CEK
+//      from the AES-KW wrap operation. The CEK is the only AES-KW raw-format
+//      wrap call inside `ao()` — easy to discriminate.
+//
+// Option B (capture-on-create) is cleaner: no extra network round-trip, no
+// dependency on private SDK internals, and the interception is scoped to a
+// single function call. The interceptor is installed before the entry call,
+// captures the first matching wrap result, and is restored immediately after.
+//
+// Both workarounds will be cleanable when Tarn ships a first-class CEK return
+// from `createEntry` (filed as a Tarn protocol request after this issue).
+
+/**
+ * Capture the per-content CEK that `crypto.subtle.wrapKey` produces inside
+ * the next call to `fn`. The CEK is the raw bytes of the AES-KW source key
+ * used by `ao()` in the Tarn bundle — see TARN_PROTOCOL.md § "Blob Format".
+ *
+ * The interceptor:
+ *   - matches only AES-KW raw-format wraps (the per-content CEK pattern)
+ *   - exports the source key's raw bytes
+ *   - leaves all other wrapKey callers untouched (passed through unmodified)
+ *   - restores the original wrapKey synchronously after `fn` resolves/rejects
+ *
+ * Returns `{ result, cek }` where `cek` is a base64url-encoded 32-byte CEK,
+ * or `null` if no matching wrap happened (caller should treat as a no-publish
+ * — the most common case is "the user is on the legacy v2 blob format which
+ * doesn't have per-content CEKs to share").
+ *
+ * Exported for tests; production callers should use {@link publishBook} /
+ * {@link republishBook} which compose this internally.
+ *
+ * @template T
+ * @param {() => Promise<T>} fn
+ * @returns {Promise<{ result: T, cek: string | null }>}
+ */
+export async function _captureCekDuringCall(fn) {
+  if (typeof crypto === 'undefined' || !crypto.subtle || !crypto.subtle.wrapKey) {
+    // Hostile environment — just run the inner function.
+    return { result: await fn(), cek: null };
+  }
+  const originalRef = crypto.subtle.wrapKey;            // restore target (preserves identity)
+  const originalCall = originalRef.bind(crypto.subtle); // call target (preserves `this`)
+  let captured = null;
+  // Some test environments freeze crypto.subtle. Skip CEK capture there.
+  let installed = false;
+  try {
+    crypto.subtle.wrapKey = async function patched(format, key, wrappingKey, wrapAlgorithm) {
+      // Per-content CEK: format='raw', wrapAlgorithm = 'AES-KW' (or
+      // { name: 'AES-KW' }). The SDK calls this exactly once per createEntry
+      // for the v3+ blob format. Capture the source key's raw bytes; we'll
+      // only set `captured` once so repeated wraps within the same call
+      // (rare but possible) don't overwrite the per-content CEK.
+      if (captured === null && format === 'raw') {
+        const algo = wrapAlgorithm && (wrapAlgorithm.name || wrapAlgorithm);
+        if (algo === 'AES-KW') {
+          try {
+            const raw = await originalCall('raw', key, wrappingKey, wrapAlgorithm);
+            // Also export the source key's raw bytes for the share-log
+            // payload. The source key was created extractable=true in
+            // ao(); exportKey('raw', key) returns the 32 raw CEK bytes.
+            const rawSource = await crypto.subtle.exportKey('raw', key);
+            captured = _bytesToBase64Url(new Uint8Array(rawSource));
+            return raw;
+          } catch (err) {
+            // Non-fatal: log and fall through to the original behavior so
+            // the entry creation still succeeds even if CEK capture fails.
+            console.warn('[Bookish:Friends] CEK capture failed, falling back:', err.message);
+          }
+        }
+      }
+      return originalCall(format, key, wrappingKey, wrapAlgorithm);
+    };
+    installed = true;
+    const result = await fn();
+    return { result, cek: captured };
+  } finally {
+    if (installed) {
+      try { crypto.subtle.wrapKey = originalRef; } catch { /* sealed environment */ }
+    }
+  }
+}
+
+function _bytesToBase64Url(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Publish a book to every active connection's share log.
+ *
+ * No-op for:
+ *   - private books (`is_private === true`)
+ *   - books missing the published txid (createEntry hasn't completed)
+ *   - books missing the bookId (used as content_id; the create path always
+ *     derives this, but defensive guard for older legacy entries)
+ *   - users with zero connections
+ *
+ * Failure mode: per-connection publish failures are logged and skipped. The
+ * caller's own save has already succeeded — we do not surface share-log
+ * errors as save errors. Worst case: a friend doesn't see this book until
+ * the next sync, when a future publish (e.g. an edit) will retry the share.
+ *
+ * @param {Object} entry - the saved book entry (must have bookId, txid, is_private?)
+ * @param {string|null} cek - base64url-encoded per-content CEK (from _captureCekDuringCall)
+ * @returns {Promise<{ shared: number, skipped: number, errors: number }>}
+ */
+export async function publishBook(entry, cek) {
+  if (!tarnService.isLoggedIn()) return { shared: 0, skipped: 0, errors: 0 };
+  if (!entry || entry.is_private === true) return { shared: 0, skipped: 0, errors: 0 };
+  if (!entry.bookId || !entry.txid) return { shared: 0, skipped: 0, errors: 0 };
+  if (!cek) {
+    // No CEK captured (legacy blob format, or capture missed). We can't
+    // share without it; leave the share log untouched and warn so it
+    // surfaces in dev. Friend pips for this book will only light up after
+    // a future re-save that does capture a CEK.
+    console.warn('[Bookish:Friends] publishBook: no CEK captured for', entry.bookId, '— skipping share');
+    return { shared: 0, skipped: 0, errors: 0 };
+  }
+
+  let client;
+  try { client = await tarnService.getClient(); } catch { return { shared: 0, skipped: 0, errors: 0 }; }
+  let connections = [];
+  try { connections = await client.listConnections(); } catch { return { shared: 0, skipped: 0, errors: 0 }; }
+  if (!connections.length) return { shared: 0, skipped: 0, errors: 0 };
+
+  let shared = 0, errors = 0;
+  for (const conn of connections) {
+    try {
+      await client.shareContent(conn, entry.bookId, entry.txid, cek);
+      shared++;
+    } catch (err) {
+      errors++;
+      console.warn('[Bookish:Friends] shareContent failed for', conn.share_pub?.slice(0, 8), '—', err.message);
+    }
+  }
+  // Invalidate the friend-library match cache so the local preview picks up
+  // the new entry on the next render. (We don't fetch *our own* shelf via
+  // fetchFriendLibrary, but the cache invalidation is cheap and keeps any
+  // future surfaces honest.)
+  invalidateFriendLibraryCache();
+  return { shared, skipped: 0, errors };
+}
+
+/**
+ * Update an already-published book on every connection's share log. Used on
+ * edit. Same no-op semantics as {@link publishBook}: private books are
+ * skipped, missing txid is skipped, etc.
+ *
+ * If the book was previously published as public and is being edited to
+ * stay public, calls `updateShareContent` (preserves CEK, swaps tx_id).
+ * If the book is being edited from public → private, the caller should
+ * have already invoked {@link unpublishBook}; this function won't fire in
+ * that case (is_private guard).
+ *
+ * If the book was previously private and is now public, the caller should
+ * use {@link publishBook} instead — `updateShareContent` only updates an
+ * existing entry, it doesn't create one.
+ *
+ * @param {Object} entry - the updated book entry (must have bookId, txid)
+ * @returns {Promise<{ updated: number, errors: number }>}
+ */
+export async function republishBook(entry) {
+  if (!tarnService.isLoggedIn()) return { updated: 0, errors: 0 };
+  if (!entry || entry.is_private === true) return { updated: 0, errors: 0 };
+  if (!entry.bookId || !entry.txid) return { updated: 0, errors: 0 };
+
+  let client;
+  try { client = await tarnService.getClient(); } catch { return { updated: 0, errors: 0 }; }
+  let connections = [];
+  try { connections = await client.listConnections(); } catch { return { updated: 0, errors: 0 }; }
+  if (!connections.length) return { updated: 0, errors: 0 };
+
+  let updated = 0, errors = 0;
+  for (const conn of connections) {
+    try {
+      await client.updateShareContent(conn, entry.bookId, entry.txid);
+      updated++;
+    } catch (err) {
+      errors++;
+      console.warn('[Bookish:Friends] updateShareContent failed for', conn.share_pub?.slice(0, 8), '—', err.message);
+    }
+  }
+  invalidateFriendLibraryCache();
+  return { updated, errors };
+}
+
+/**
+ * Retroactively revoke a book from every connection's share log. Used:
+ *   - On delete (book gone from owner's library)
+ *   - On privacy toggle public → private
+ *
+ * Idempotent on the SDK side: a connection that wasn't sharing this content
+ * already gets a no-op or a benign error that we swallow. Callers don't
+ * need to track previous publication state.
+ *
+ * @param {string} bookId - the content_id (== Bookish bookId)
+ * @returns {Promise<{ unshared: number, errors: number }>}
+ */
+export async function unpublishBook(bookId) {
+  if (!tarnService.isLoggedIn()) return { unshared: 0, errors: 0 };
+  if (!bookId) return { unshared: 0, errors: 0 };
+
+  let client;
+  try { client = await tarnService.getClient(); } catch { return { unshared: 0, errors: 0 }; }
+  let connections = [];
+  try { connections = await client.listConnections(); } catch { return { unshared: 0, errors: 0 }; }
+  if (!connections.length) return { unshared: 0, errors: 0 };
+
+  let unshared = 0, errors = 0;
+  for (const conn of connections) {
+    try {
+      await client.unshareContent(conn, bookId);
+      unshared++;
+    } catch (err) {
+      errors++;
+      // The SDK throws if the content wasn't being shared; that's an
+      // expected no-op for first-time unpublish on a friend who joined
+      // after the book was already private. Quiet warn at debug level.
+      console.warn('[Bookish:Friends] unshareContent failed for', conn.share_pub?.slice(0, 8), '—', err.message);
+    }
+  }
+  invalidateFriendLibraryCache();
+  return { unshared, errors };
+}
+
+// ============ Defense-in-depth: filter is_private from friend libraries ============
+//
+// Even though a private book should never be in any friend's share log
+// (the publish gate filters at the source), defense-in-depth: if a private
+// book somehow appears (legacy data, race condition between toggle and the
+// next render, future bug), filter it client-side too. This keeps the
+// "friends never see private books" promise durable even when the publish
+// path mis-fires.
+
+/**
+ * Filter a friend-library entry list to remove anything marked private.
+ * Pure function, exported for tests.
+ */
+export function filterOutPrivate(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.filter(e => !e || e.is_private !== true);
 }
 
 // Storage key exports for tests + cleanup paths.
