@@ -1943,6 +1943,11 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   .card{flex-direction:column;gap:10px;padding:14px}
   .card-skeleton{flex-direction:column;gap:10px;padding:14px}
   .card-skeleton .skel-cover{width:100%;flex:0 0 auto;height:0;padding-top:150%;border-radius:12px;min-height:0}
+  /* Desktop: the wrap takes over the full-width / flex sizing the cover used
+     to drive directly, so card layout (column on desktop ≥600px) matches
+     mobile. Without this the wrap stays at its default 72px and the cover is
+     constrained — symptom: small cover with empty space to the right. */
+  .cover-wrap{width:100%;flex:0 0 auto}
   .cover{width:100%;flex:0 0 auto;height:0;padding-top:150%;position:relative;border-radius:12px}
   .cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;z-index:1}
   .cover img[data-fit="cover"]{object-fit:cover}
