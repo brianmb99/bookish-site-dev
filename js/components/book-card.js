@@ -62,14 +62,21 @@ export function escapeHtml(s) {
 
 /**
  * Build the slim details row for a card. Single horizontal line:
- *   `date · [status if reading] · [rating if set]`
+ *   `date · [status if reading + optional mark-as-read button] · [rating if set]`
  *
  * Date label by shelf:
  *   - reading: plain "<Mon YYYY>" from readingStartedAt (fallback createdAt).
  *   - read:    plain "<Mon YYYY>" from dateRead
  *   - wtr:     "Added <Mon YYYY>" from createdAt
+ *
+ * @param {Object} opts
+ * @param {boolean} [opts.showActions] - if true and the card is on the
+ *   currently-reading shelf, render a small ✓ button after the "Reading"
+ *   label that the caller can wire to a mark-as-read action. Default false
+ *   (read-only callers like friend-shelf-view get no button).
  */
-export function buildCardDetails(e, shelfContext) {
+export function buildCardDetails(e, shelfContext, opts = {}) {
+  const { showActions = false } = opts;
   const parts = [];
   let dateText = '';
   if (shelfContext === 'reading') {
@@ -83,7 +90,11 @@ export function buildCardDetails(e, shelfContext) {
   }
   if (dateText) parts.push(`<span class="card-date">${escapeHtml(dateText)}</span>`);
   if (shelfContext === 'reading') {
-    parts.push(`<span class="card-reading-status" aria-label="Currently reading">✓ Reading</span>`);
+    const cardKey = e.txid || e.id || '';
+    const markBtn = (showActions && cardKey)
+      ? `<button type="button" class="card-mark-read" data-mark-read-key="${escapeHtml(cardKey)}" title="Mark as read" aria-label="Mark as read">✓</button>`
+      : '';
+    parts.push(`<span class="card-reading-status" aria-label="Currently reading">Reading${markBtn}</span>`);
   }
   if (e.rating && e.rating >= 1 && e.rating <= 5) {
     const stars = '★'.repeat(e.rating);
@@ -103,7 +114,7 @@ export function buildCardDetails(e, shelfContext) {
  * @param {boolean} [isWtrResult] - true if this card is rendering a
  *   want-to-read result (omnibox; affects shelfContext)
  */
-export function buildCardHTML(e, isWtrResult) {
+export function buildCardHTML(e, isWtrResult, opts = {}) {
   const coverDataUrl = e.coverImage ? `data:${e.mimeType || 'image/jpeg'};base64,${e.coverImage}` : '';
   const rs = normalizeReadingStatus(e);
   const isReading = rs === READING_STATUS.READING;
@@ -113,13 +124,23 @@ export function buildCardHTML(e, isWtrResult) {
   } else if (isReading) {
     shelfContext = 'reading';
   }
-  const detailsRow = buildCardDetails(e, shelfContext);
+  const detailsRow = buildCardDetails(e, shelfContext, opts);
   const titleSafe = escapeHtml(e.title || 'Untitled');
   const authorSafe = escapeHtml(e.author || '');
   const overlay = `<div class="cover-hover" aria-hidden="true"><div class="cover-hover-title">${titleSafe}</div>${authorSafe ? `<div class="cover-hover-author">${authorSafe}</div>` : ''}</div>`;
   const srLabel = `<span class="sr-only">${titleSafe}${authorSafe ? ` by ${authorSafe}` : ''}</span>`;
+  // The cover lives inside a `.cover-wrap` so absolutely-positioned siblings
+  // can straddle the cover's edge without being clipped by the cover's own
+  // `overflow: hidden` (used to clip the rounded image + the blur-fill bg).
+  // Today the only such sibling is the friend-pip overlay (#126), attached
+  // post-render by the Library render loop. Keeping the wrapper here means
+  // the pip overlay has a stable, layout-aware anchor — the wrap sits in
+  // the same flex slot the cover used to occupy on its own, so card layouts
+  // (row on desktop, column on mobile) don't need to know about pips.
   return `
-      <div class="cover"${coverDataUrl ? ` style="--cover-url:url('${coverDataUrl}')"` : ''}>${e.coverImage ? `<img src="${coverDataUrl}" data-fit="${e.coverFit || 'contain'}">` : `<div class="generated-cover" style="background:${generatedCoverColor(e.title || '')}"><span class="generated-title">${escapeHtml(e.title || 'Untitled')}</span>${e.author ? `<span class="generated-author">${escapeHtml(e.author)}</span>` : ''}</div>`}${overlay}</div>
+      <div class="cover-wrap">
+        <div class="cover"${coverDataUrl ? ` style="--cover-url:url('${coverDataUrl}')"` : ''}>${e.coverImage ? `<img src="${coverDataUrl}" data-fit="${e.coverFit || 'contain'}">` : `<div class="generated-cover" style="background:${generatedCoverColor(e.title || '')}"><span class="generated-title">${escapeHtml(e.title || 'Untitled')}</span>${e.author ? `<span class="generated-author">${escapeHtml(e.author)}</span>` : ''}</div>`}${overlay}</div>
+      </div>
       <div class="meta">
         ${srLabel}
         ${detailsRow}

@@ -518,6 +518,295 @@ export async function fetchFriendLibrary(connection, opts = {}) {
   return results;
 }
 
+// ============ Friend-library matching cache (issue #126) ============
+//
+// Friend pips on Library cards (FRIENDS.md Surface 3) need a fast lookup:
+// "for this work_key, which of my friends have it on Reading or Read?"
+// A Library grid with 100 books would otherwise trigger 100 share-log scans
+// per render — unacceptable. We cache the inverted index keyed by work_key.
+//
+// Cache shape: Map<workKey, Array<{ connection, book }>>
+//   connection: the friend's connection object (label, share_pub, …)
+//   book:       the friend's per-book record from their share-log snapshot
+//               (title, author, dateRead, readingStatus, work_key, …). The
+//               book is captured so pip-tap → friend-book-detail can show
+//               the friend's dateRead and other per-friend metadata, not
+//               just the friend's identity.
+//
+// - Built once per refresh from each friend's library snapshot.
+// - Friends with the work in `Want to Read` status are excluded (per spec —
+//   WTR is too soft a signal for ambient pips).
+// - Muted connections are excluded (per FRIENDS.md mute semantics).
+// - Books without a `work_key` contribute nothing — strict equality only,
+//   no fuzzy matching ever.
+//
+// Refresh model: opportunistic on first call, then re-primed on
+// `bookish:connections-changed` and `bookish:friend-libraries-refreshed`.
+// The latter is a new event we dispatch from primeFriendLibraryCache itself
+// (so other surfaces — e.g. activity.js, future drawer surfaces — can also
+// listen if they ever need to). The render loop in app.js subscribes and
+// re-renders the grid when the cache repaints.
+//
+// Today, every friend's `fetchFriendLibrary` returns [] (publish-on-save
+// lands in #8). The cache stays empty and `getMatchingFriends` returns []
+// for every work_key — no pips render. The moment publish-on-save ships,
+// the same code lights up automatically.
+
+// Test seam: callers of primeFriendLibraryCache reach into the module's own
+// listConnections + fetchFriendLibrary by default, but tests can override
+// via _setMatchCacheDepsForTest so they don't need to fake the underlying
+// Tarn client / Arweave fetch.
+let _matchCacheDeps = null;
+
+let _matchCache = null;          // Map<workKey, Array<{connection, book}>> | null when not primed
+let _primingPromise = null;      // in-flight prime, dedupes concurrent callers
+let _cacheGeneration = 0;        // bumped on each successful prime; lets tests + UI confirm refresh
+
+/**
+ * Best-effort isMuted check that fails open. Mirrors activity.js semantics:
+ * if the SDK can't tell us, treat the friend as unmuted — the failure mode
+ * of "we showed pips for a friend you muted on a transient client error" is
+ * gentler than "we hid all your pips."
+ */
+async function isConnectionMuted(client, conn) {
+  if (!client || typeof client.isMuted !== 'function') return false;
+  try {
+    return await client.isMuted(conn);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Filter a friend's book record list down to entries that should contribute
+ * a pip. Status filter is per spec: only Reading or Read counts; WTR does
+ * not. Books without a `work_key` are dropped (no pip without strict id).
+ *
+ * Exported for tests so the filter rules can be asserted directly.
+ *
+ * @param {Array<object>} books
+ * @returns {Array<object>}
+ */
+export function filterPippableBooks(books) {
+  if (!Array.isArray(books)) return [];
+  const out = [];
+  for (const b of books) {
+    if (!b || typeof b !== 'object') continue;
+    if (typeof b.work_key !== 'string' || !b.work_key) continue;
+    const rs = b.readingStatus;
+    // Default (absent / null) treats the book as Read — same convention
+    // applied throughout the codebase via normalizeReadingStatus. Only WTR
+    // is excluded from pip contribution.
+    if (rs === 'want_to_read') continue;
+    out.push(b);
+  }
+  return out;
+}
+
+/**
+ * Prime the friend-library match cache by fetching each non-muted friend's
+ * library and folding it into a `work_key → connections` map.
+ *
+ * Idempotent: concurrent callers share a single in-flight prime. Subsequent
+ * calls re-fetch only when explicitly told to via `force: true` or when the
+ * cache has been invalidated via `invalidateFriendLibraryCache`.
+ *
+ * Dispatches `bookish:friend-libraries-refreshed` on the window after a
+ * successful prime so subscribers (Library render loop) can repaint.
+ *
+ * @param {{ force?: boolean, fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<{ generation: number, friendCount: number, workKeyCount: number }>}
+ */
+export async function primeFriendLibraryCache(opts = {}) {
+  if (_primingPromise) return _primingPromise;
+  if (!opts.force && _matchCache !== null) {
+    return { generation: _cacheGeneration, friendCount: 0, workKeyCount: _matchCache.size };
+  }
+
+  const promise = (async () => {
+    if (!tarnService.isLoggedIn()) {
+      _matchCache = new Map();
+      return { generation: _cacheGeneration, friendCount: 0, workKeyCount: 0 };
+    }
+
+    const listFn = (_matchCacheDeps && _matchCacheDeps.listConnections) || listConnections;
+    const fetchFn = (_matchCacheDeps && _matchCacheDeps.fetchFriendLibrary) || fetchFriendLibrary;
+
+    let connections = [];
+    try {
+      connections = await listFn();
+    } catch {
+      _matchCache = new Map();
+      return { generation: _cacheGeneration, friendCount: 0, workKeyCount: 0 };
+    }
+    if (!connections.length) {
+      _matchCache = new Map();
+      _cacheGeneration++;
+      _emitLibrariesRefreshed();
+      return { generation: _cacheGeneration, friendCount: 0, workKeyCount: 0 };
+    }
+
+    let client = null;
+    try { client = await tarnService.getClient(); } catch { /* fail-open below */ }
+
+    // Filter muted connections up front so we don't burn fetches on them.
+    const visible = [];
+    for (const conn of connections) {
+      if (!conn || !conn.share_pub) continue;
+      const muted = await isConnectionMuted(client, conn);
+      if (!muted) visible.push(conn);
+    }
+
+    const fetchOpts = opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : undefined;
+    const results = await Promise.allSettled(
+      visible.map(conn => fetchFn(conn, fetchOpts)),
+    );
+
+    const next = new Map();
+    results.forEach((r, idx) => {
+      if (r.status !== 'fulfilled') {
+        console.warn(
+          '[Bookish:Friends] primeFriendLibraryCache: fetchFriendLibrary failed for',
+          visible[idx].share_pub?.slice(0, 8),
+          r.reason?.message,
+        );
+        return;
+      }
+      const conn = visible[idx];
+      const books = filterPippableBooks(r.value || []);
+      for (const book of books) {
+        const list = next.get(book.work_key);
+        if (list) {
+          // Defensively dedupe by share_pub so a friend who has the same work
+          // in two records (shouldn't happen, but cheap to guard) doesn't get
+          // double-pipped. First-write wins.
+          if (!list.some(entry => entry.connection.share_pub === conn.share_pub)) {
+            list.push({ connection: conn, book });
+          }
+        } else {
+          next.set(book.work_key, [{ connection: conn, book }]);
+        }
+      }
+    });
+
+    _matchCache = next;
+    _cacheGeneration++;
+    _emitLibrariesRefreshed();
+    return {
+      generation: _cacheGeneration,
+      friendCount: visible.length,
+      workKeyCount: next.size,
+    };
+  })();
+
+  _primingPromise = promise;
+  try {
+    return await promise;
+  } finally {
+    _primingPromise = null;
+  }
+}
+
+function _emitLibrariesRefreshed() {
+  try {
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bookish:friend-libraries-refreshed', {
+        detail: { generation: _cacheGeneration },
+      }));
+    }
+  } catch { /* ignore */ }
+}
+
+/**
+ * Drop the cached match index so the next call to getMatchingFriends or
+ * primeFriendLibraryCache re-fetches. Used by the connection-change wiring
+ * in app.js so add/remove/mute changes promptly invalidate stale pips.
+ */
+export function invalidateFriendLibraryCache() {
+  _matchCache = null;
+}
+
+/**
+ * Synchronously look up the friends who have a given book on their shelf
+ * (Reading or Read), excluding muted ones, in a stable order.
+ *
+ * Returns the connection objects only — the legacy / FRIENDS.md-spec shape.
+ * Use {@link getMatchingFriendBookEntries} when you need the friend's per-book
+ * record alongside the connection (e.g. for pip-tap → friend-book-detail
+ * with the friend's dateRead).
+ *
+ * If the cache hasn't been primed yet, returns [] and kicks off a background
+ * prime — the resulting `bookish:friend-libraries-refreshed` event tells the
+ * caller to re-render.
+ *
+ * Strict work_key equality only — books without a work_key match nothing.
+ *
+ * @param {string|null|undefined} workKey
+ * @returns {Array<{ share_pub: string, label?: string|null, signing_pub?: string }>}
+ */
+export function getMatchingFriends(workKey) {
+  return getMatchingFriendBookEntries(workKey).map(entry => entry.connection);
+}
+
+/**
+ * Like {@link getMatchingFriends}, but returns the full `{ connection, book }`
+ * tuples so callers can hand the friend's specific book record to surfaces
+ * that show per-friend metadata (e.g. friend-book-detail's "Finished {Mon
+ * YYYY}" line, which reads from the friend's dateRead).
+ *
+ * @param {string|null|undefined} workKey
+ * @returns {Array<{ connection: object, book: object }>}
+ */
+export function getMatchingFriendBookEntries(workKey) {
+  if (!workKey || typeof workKey !== 'string') return [];
+  if (_matchCache === null) {
+    // Lazy prime — caller will see [] this turn but receive the refresh event.
+    primeFriendLibraryCache().catch(() => { /* swallow; a console.warn already ran */ });
+    return [];
+  }
+  const list = _matchCache.get(workKey);
+  if (!list || list.length === 0) return [];
+  // Stable order: most recently established friend first (consistent with
+  // friend-strip ordering). Tie-break on share_pub for determinism.
+  return [...list].sort((a, b) => {
+    const ea = a.connection.established_at || 0;
+    const eb = b.connection.established_at || 0;
+    if (ea !== eb) return eb - ea;
+    return (a.connection.share_pub || '').localeCompare(b.connection.share_pub || '');
+  });
+}
+
+/**
+ * Test-only accessor for the current cache generation. The render loop also
+ * uses this to detect freshness without holding a reference to the Map.
+ */
+export function _getMatchCacheGenerationForTest() { return _cacheGeneration; }
+
+/**
+ * Test-only reset — flushes the cache and cancels any in-flight prime
+ * promise. Modules under test should call this in beforeEach so tests don't
+ * see leakage from each other.
+ */
+export function _resetMatchCacheForTest() {
+  _matchCache = null;
+  _primingPromise = null;
+  _cacheGeneration = 0;
+  _matchCacheDeps = null;
+}
+
+/**
+ * Test-only seam: replace the listConnections / fetchFriendLibrary functions
+ * primeFriendLibraryCache uses, so unit tests can supply pure fixtures
+ * without faking the Tarn client + Arweave fetch underneath.
+ *
+ * Pass `null` (or call _resetMatchCacheForTest) to restore real wiring.
+ *
+ * @param {{ listConnections?: Function, fetchFriendLibrary?: Function } | null} deps
+ */
+export function _setMatchCacheDepsForTest(deps) {
+  _matchCacheDeps = deps;
+}
+
 // Storage key exports for tests + cleanup paths.
 export const STORAGE_KEYS = {
   PENDING_LABELS: PENDING_LABELS_KEY,

@@ -19,6 +19,9 @@ import * as subscription from './core/subscription.js';
 import * as friendsRouter from './core/friends_router.js';
 import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend-glyph-trigger.js';
 import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCardDetails, generatedCoverColor as sharedGeneratedCoverColor, escapeHtml as sharedEscapeHtml } from './components/book-card.js';
+import { renderPipOverlay } from './components/friend-pip.js';
+import { getMatchingFriendBookEntries as friendsGetMatchingFriendBookEntries, primeFriendLibraryCache as friendsPrimeFriendLibraryCache, invalidateFriendLibraryCache as friendsInvalidateLibraryCache } from './core/friends.js';
+import { openFriendBookDetail } from './components/friend-book-detail.js';
 
 // Friends invite-link routing (#118). Capture the invite parameters from
 // /invite/:token_id#:payload_key BEFORE anything else touches window.location
@@ -735,7 +738,13 @@ function closeModal(fromPopstate = false){
   }
 }
 function clearBooks(){ if(bookRepo) bookRepo.clear(); else { entries=[]; render(); } }
-window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus, showShelfSkeletons, clearShelfSkeletons, getActiveEntryCount: ()=>activeEntryCount(), showStatusToast, _autoSaveIfDirty: ()=>_autoSaveIfDirty() };
+window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus, showShelfSkeletons, clearShelfSkeletons, getActiveEntryCount: ()=>activeEntryCount(), showStatusToast, _autoSaveIfDirty: ()=>_autoSaveIfDirty(),
+  // Test-only: synchronously inject an entry into the in-memory list and
+  // re-render. Used by browser tests that need a deterministic card without
+  // reaching through the network-bound search-and-save flow. NEVER called
+  // from production code paths.
+  _testInjectEntry: (entry)=>{ if(entry) entries.push(entry); render(); },
+};
 // Dirty tracking helpers
 function currentFormState(){ return JSON.stringify({
   prior: form.priorTxid.value||'',
@@ -1086,6 +1095,68 @@ function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false
 const buildCardDetails = sharedBuildCardDetails;
 const buildCardHTML = sharedBuildCardHTML;
 
+/**
+ * Attach (or refresh) the friend-pip overlay on a Library card.
+ *
+ * Friend pips (#126 / FRIENDS.md Surface 3) are an additive overlay on top of
+ * the cover. They live as a child of `.cover-wrap` (the non-clipping wrapper
+ * around `.cover`) so the CSS `bottom: -7px` rule positions them straddling
+ * the cover's bottom edge — half on the cover, half on the card padding
+ * below — per the spec.
+ *
+ * Why a separate post-render attach instead of baking pips into
+ * `buildCardHTML`: the pure builder is consumed by both Library (where pips
+ * are wanted) and the friend's-shelf view (where they are NOT — viewing
+ * Maya's shelf shouldn't pip Maya's books with… Maya). Keeping pips in the
+ * Library render loop makes that separation enforced by file boundaries
+ * rather than by passing flags through the shared builder.
+ *
+ * Idempotent: drops any existing `.friend-pip-overlay` first, then appends a
+ * fresh one if there are matches. Safe to call on every render; the
+ * underlying match cache is keyed by work_key so repeated calls cost a
+ * single Map lookup per card.
+ */
+function attachFriendPips(cardEl, entry){
+  if(!cardEl) return;
+  // Pip overlay lives in `.cover-wrap` (a sibling of `.cover`) so its
+  // bottom-half can straddle the cover's bottom edge without being clipped
+  // by `.cover { overflow: hidden }`. See book-card.js for the wrapper.
+  const wrap = cardEl.querySelector('.cover-wrap');
+  if(!wrap) return;
+  // Always clear stale overlays first so a friend who removed the book or
+  // muted the connection sees their pip vanish on the next render.
+  const existing = wrap.querySelector('.friend-pip-overlay');
+  if(existing) existing.remove();
+
+  const wk = entry && typeof entry.work_key === 'string' ? entry.work_key : '';
+  if(!wk) return;
+  const matchEntries = friendsGetMatchingFriendBookEntries(wk);
+  if(!matchEntries.length) return;
+
+  // The pip component takes a flat connection list; we keep the per-friend
+  // book records in a side map keyed by share_pub so the tap handler can
+  // surface the friend's record (their dateRead, their reading status) to
+  // the friend-book-detail modal — matching the spec line "their copy —
+  // their dates, future ratings/notes."
+  const bookByShare = new Map();
+  for(const me of matchEntries){
+    bookByShare.set(me.connection.share_pub, me.book);
+  }
+  const connections = matchEntries.map(me => me.connection);
+
+  const overlay = renderPipOverlay(connections, {
+    onTapPip: (connection) => {
+      const friendBook = bookByShare.get(connection.share_pub) || entry;
+      try {
+        openFriendBookDetail({ book: friendBook, connection });
+      } catch (err) {
+        console.warn('[Bookish] friend-pip tap failed to open modal:', err.message);
+      }
+    },
+  });
+  if(overlay) wrap.appendChild(overlay);
+}
+
 /** Quick fingerprint for change detection — avoids unnecessary innerHTML rewrites */
 function entryFingerprint(e){
   return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.readingStartedAt||'')+'\t'+(e.createdAt||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'');
@@ -1305,10 +1376,17 @@ function render(){
         card.setAttribute('role', 'button');
         card.setAttribute('tabindex', '0');
         card.setAttribute('aria-label', ariaLabel);
-        card.innerHTML=buildCardHTML(e, e._wtrResult);
+        card.innerHTML=buildCardHTML(e, e._wtrResult, { showActions: true });
+        attachFriendPips(card, e);
         card.dataset._fp=fp;
         if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
         else { card.style.pointerEvents=''; card.style.opacity=''; }
+      } else {
+        // Re-attach pips on every render even when fp is unchanged; the
+        // friend-library cache may have repainted since last render and the
+        // matching set could have grown / shrunk without the entry itself
+        // changing. Cheap: getMatchingFriendBookEntries is a Map.get.
+        attachFriendPips(card, e);
       }
     } else {
       card=document.createElement('div');
@@ -1322,18 +1400,30 @@ function render(){
       card.setAttribute('role', 'button');
       card.setAttribute('tabindex', '0');
       card.setAttribute('aria-label', ariaLabel);
-      card.innerHTML=buildCardHTML(e, e._wtrResult);
+      card.innerHTML=buildCardHTML(e, e._wtrResult, { showActions: true });
+      attachFriendPips(card, e);
       card.dataset._fp=fp;
       if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
     }
     card.onclick=(ev)=>{
       if(e._deleting) return;
+      // Inline mark-as-read button shortcut — bypasses the detail-view open.
+      const markBtn = ev.target.closest?.('.card-mark-read');
+      if(markBtn){
+        ev.stopPropagation();
+        ev.preventDefault();
+        handleInlineMarkRead(e, markBtn.dataset.markReadKey || (e.txid||e.id||''));
+        return;
+      }
       openModalWithHero(e, card);
     };
     // Keyboard activation: Enter/Space opens detail (matches role="button" affordance).
     card.onkeydown=(ev)=>{
       if(e._deleting) return;
       if(ev.key !== 'Enter' && ev.key !== ' ') return;
+      // If focus is on the mark-read button, let its native click handler run
+      // (browser fires click on Enter/Space for buttons) — don't open detail.
+      if(ev.target?.closest?.('.card-mark-read')) return;
       ev.preventDefault();
       openModalWithHero(e, card);
     };
@@ -2442,6 +2532,20 @@ async function changeReadingStatus(key, newStatus){
   if (result?.toastMessage) showStatusToast(result.toastMessage);
 }
 
+// --- Inline mark-as-read (✓ button on currently-reading cards) ---
+// Snapshots prior fields, flips status to READ, surfaces toast with Undo.
+async function handleInlineMarkRead(entry, key){
+  if(!bookRepo || !key || !entry) return;
+  haptic();
+  const snapshot = {
+    readingStatus: entry.readingStatus,
+    dateRead: entry.dateRead,
+    readingStartedAt: entry.readingStartedAt,
+  };
+  await bookRepo.changeStatus(key, READING_STATUS.READ);
+  showMarkAsReadToastWithUndo(key, snapshot);
+}
+
 // --- Auth check ---
 function isAuthenticated() {
   return tarnService.isLoggedIn();
@@ -2695,7 +2799,29 @@ refreshFriendGlyphTrigger();
 // branches on connection presence again.
 window.addEventListener('bookish:connections-changed', () => {
   refreshFriendGlyphTrigger();
+  // Friend pips on Library cards (#126) — the friend-library match cache
+  // is keyed by work_key and built from each friend's published shelf. When
+  // the connection set changes (add / remove / mute), the cache is stale.
+  // Drop it and re-prime; the prime emits `bookish:friend-libraries-refreshed`
+  // which the render loop listens to below.
+  friendsInvalidateLibraryCache();
+  friendsPrimeFriendLibraryCache({ force: true }).catch(() => { /* logged inside */ });
 });
+
+// Friend pips: when the per-friend library cache repaints, re-render the
+// Library grid so the new match results land on cards. Cheap — render() is
+// keyed-reconciled and only innerHTML-rewrites cards whose fingerprint
+// changed; the pip-attach side-effect runs on every card and reads from the
+// already-warm Map.
+window.addEventListener('bookish:friend-libraries-refreshed', () => {
+  try { render(); } catch (err) { console.warn('[Bookish] re-render after friend-libraries-refreshed failed:', err.message); }
+});
+
+// Kick off an opportunistic prime so pips appear without waiting for the
+// first card click. Best-effort; failures are logged inside primeFriendLibraryCache.
+// Today this returns immediately with friendCount=0 because publish-on-save
+// (#8) hasn't shipped, but the wiring is correct for the moment it does.
+friendsPrimeFriendLibraryCache().catch(() => { /* logged inside */ });
 window.addEventListener('online',()=>{ uiStatusManager.refresh(); if(bookRepo) bookRepo.replayPending(); });
 
 // Expose sync manager methods for account UI and release tests (triggerSyncNow)

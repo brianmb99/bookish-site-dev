@@ -321,9 +321,19 @@ button.secondary:hover, .btn.secondary:hover{
 .card:hover[data-fmt]:before{
   opacity:1;
 }
-.cover{
+/* Wrapper around the cover so absolutely-positioned siblings (today: the
+   friend-pip overlay) can straddle the cover's bottom edge without being
+   clipped by `.cover { overflow: hidden }`. The wrap takes over the flex
+   sizing the cover used to drive directly so card layout (row on desktop,
+   column on mobile) doesn't change. */
+.cover-wrap{
   width:72px;
   flex:0 0 72px;
+  position:relative;
+  /* Defensive: do NOT clip overflow — that would defeat the whole point. */
+}
+.cover{
+  width:100%;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -430,9 +440,42 @@ button.secondary:hover, .btn.secondary:hover{
 }
 /* Date — fixed leading edge across cards in a shelf. */
 .details .card-date{flex-shrink:0}
-/* Inline "✓ Reading" status pill (replaces the standalone .card-reading-label
-   row that used to sit above the meta — collapsed inline in #121). */
-.details .card-reading-status{color:var(--color-primary);opacity:.85;flex-shrink:0}
+/* Inline "Reading" status pill (replaces the standalone .card-reading-label
+   row that used to sit above the meta — collapsed inline in #121). The
+   ✓ mark-as-read button is rendered INSIDE this span when the caller
+   passes showActions:true, so the pill+button move as one unit. */
+.details .card-reading-status{color:var(--color-primary);opacity:.85;flex-shrink:0;display:inline-flex;align-items:center;gap:2px}
+/* Mark-as-read affordance: subtle gray ✓ button to the right of "Reading".
+   Gray (not the brighter primary) so it reads as actionable / awaiting input
+   rather than as a current state. 44px touch target via padding+negative
+   margin (same pattern as the prior .card-done-check it replaces). */
+.details .card-mark-read{
+  font-size:.85rem;
+  line-height:1;
+  color:var(--color-text-muted);
+  cursor:pointer;
+  padding:12px 10px;
+  margin:-12px -10px -12px 0;
+  border-radius:6px;
+  border:none;
+  background:transparent;
+  font-weight:600;
+  font-family:var(--font-body);
+  min-width:44px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  transition:color .15s,background .15s;
+}
+.details .card-mark-read:hover{
+  color:var(--color-text-primary);
+  background:rgba(255,255,255,.06);
+}
+.details .card-mark-read:focus-visible{
+  outline:2px solid var(--color-primary);
+  outline-offset:1px;
+}
 /* Rating renders as filled stars (e.g. ★★★★). Variable width — placed last
    so it shrinks/clips first when the row overflows. */
 .details .card-rating{color:var(--color-warning);letter-spacing:.5px;min-width:0;overflow:hidden;text-overflow:ellipsis}
