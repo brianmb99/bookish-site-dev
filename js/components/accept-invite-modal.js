@@ -16,6 +16,7 @@
 import * as friends from '../core/friends.js';
 import * as tarnService from '../core/tarn_service.js';
 import { pushOverlayState, popOverlayState } from '../core/overlay_history.js';
+import { maybeShowFirstConnectSheet } from './first-connect-sheet.js';
 
 const MODAL_ID = 'acceptInviteModal';
 const CONTENT_ID = 'acceptInviteModalContent';
@@ -233,6 +234,18 @@ export function closeAcceptInviteModal(reason = 'dismiss', fromPopstate = false)
   if (_isOpen && !fromPopstate) popOverlayState();
   _isOpen = false;
   _currentInvite = null;
+
+  // First-connect privacy education (#130): on a successful accept-and-close,
+  // fire the one-time bottom sheet if this was the user's first ever
+  // connection. The sheet itself short-circuits if its per-device flag is
+  // already set, and silently bails if the connection hasn't materialized
+  // yet (it polls briefly). We don't await — the modal-close path stays
+  // snappy and the sheet pops in once the inviter's auto-accept lands.
+  if (reason === 'done') {
+    maybeShowFirstConnectSheet().catch(err => {
+      console.warn('[Bookish:AcceptInviteModal] maybeShowFirstConnectSheet failed:', err.message);
+    });
+  }
 }
 
 export function isAcceptInviteModalOpen() { return _isOpen; }
