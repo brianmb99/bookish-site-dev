@@ -91,8 +91,12 @@ export function buildCardDetails(e, shelfContext, opts = {}) {
   if (dateText) parts.push(`<span class="card-date">${escapeHtml(dateText)}</span>`);
   if (shelfContext === 'reading') {
     const cardKey = e.txid || e.id || '';
+    // Use a span with role="button" instead of <button> — native button
+    // rendering on Samsung Internet / Chrome was leaving a visible 1px
+    // edge on the right of the invisible click box even after aggressive
+    // CSS resets. A span has zero native chrome to fight.
     const markBtn = (showActions && cardKey)
-      ? `<button type="button" class="card-mark-read" data-mark-read-key="${escapeHtml(cardKey)}" title="Mark as read" aria-label="Mark as read">✓</button>`
+      ? `<span role="button" tabindex="0" class="card-mark-read" data-mark-read-key="${escapeHtml(cardKey)}" title="Mark as read" aria-label="Mark as read">✓</span>`
       : '';
     parts.push(`<span class="card-reading-status" aria-label="Currently reading">Reading${markBtn}</span>`);
   }

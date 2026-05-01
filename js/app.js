@@ -1421,9 +1421,16 @@ function render(){
     card.onkeydown=(ev)=>{
       if(e._deleting) return;
       if(ev.key !== 'Enter' && ev.key !== ' ') return;
-      // If focus is on the mark-read button, let its native click handler run
-      // (browser fires click on Enter/Space for buttons) — don't open detail.
-      if(ev.target?.closest?.('.card-mark-read')) return;
+      // If focus is on the mark-read affordance (span with role="button"), fire
+      // mark-as-read directly. Spans don't get native Enter/Space → click, so
+      // we have to dispatch the action ourselves.
+      const markEl = ev.target?.closest?.('.card-mark-read');
+      if(markEl){
+        ev.preventDefault();
+        ev.stopPropagation();
+        handleInlineMarkRead(e, markEl.dataset.markReadKey || (e.txid||e.id||''));
+        return;
+      }
       ev.preventDefault();
       openModalWithHero(e, card);
     };
