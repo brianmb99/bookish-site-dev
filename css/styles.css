@@ -447,27 +447,37 @@ button.secondary:hover, .btn.secondary:hover{
 .details .card-reading-status{color:var(--color-primary);opacity:.85;flex-shrink:0;display:inline-flex;align-items:baseline;gap:8px}
 /* Mark-as-read affordance: an unstyled gray ✓ glyph that reads as a
    tappable accent next to "Reading". No border, no background, no
-   button chrome — looks like text, behaves like a button. Gray
-   (var(--color-text-muted)) signals "awaiting input" rather than
-   "current state" (which the brighter primary would imply). 44px
-   touch target via padding+negative margin so the visual stays tight
-   to the glyph but the hit area is mobile-friendly. (#127 followup) */
+   button chrome — looks like text, behaves like a button. Aggressive
+   reset on the element + its pseudo-elements kills any default browser
+   button artifacts that survived the simpler reset. The right side of
+   the hit area is collapsed (zero padding-right + zero negative margin
+   right) so nothing visually extends past the ✓ glyph itself. (#127 fix2) */
+.details .card-mark-read,
+.details .card-mark-read::before,
+.details .card-mark-read::after{
+  border:0;
+  outline:0;
+  background:transparent;
+  box-shadow:none;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-appearance:none;
+  appearance:none;
+}
 .details .card-mark-read{
   font-size:.9rem;
   line-height:1;
   color:var(--color-text-muted);
   cursor:pointer;
-  padding:14px;
-  margin:-14px;
-  border:none;
-  background:transparent;
+  /* Hit area extends LEFT and vertically only; right side is flush with
+     the visible glyph so nothing renders past it. */
+  padding:12px 0 12px 12px;
+  margin:-12px 0 -12px -12px;
   font-weight:600;
   font-family:var(--font-body);
   min-width:0;
   min-height:0;
-  -webkit-appearance:none;
-  appearance:none;
-  outline:none;
+  display:inline-block;
+  vertical-align:baseline;
   transition:color .15s;
 }
 .details .card-mark-read:hover{color:var(--color-text-primary)}
@@ -3863,6 +3873,25 @@ body.modal-open{overscroll-behavior-y:contain}
 }
 .friend-pip-overflow:hover,
 .friend-pip-overflow:focus-visible{transform:none}
+
+/* --- Friend pips on unisearch results (#7 / FRIENDS.md Surface 4) -------
+   When a pip overlay is rendered inside an omnibox result row (a flex row
+   with cover + info + Add button), it sits inline rather than straddling a
+   cover edge. The `friend-pip-overlay--inline` modifier overrides the
+   absolute positioning the Library card layout uses, and inserts a
+   margin-left:auto so the pips group to the right of the row, just before
+   the "+ Add" button. The pip element itself is unchanged: same 14px
+   circle, same color derivation, same tap-to-open-modal behavior. */
+.friend-pip-overlay--inline{
+  position:static;
+  bottom:auto;left:auto;
+  margin-left:auto;
+  /* Tight gap between the pips and the Add button to keep the row visually
+     coherent. No flex-shrink: the pip strip is always a small, fixed-ish
+     width given the 3-pip cap. */
+  margin-right:6px;
+  flex-shrink:0;
+}
 
 /* --- Recent finishes events region (#125 / Surface 1 Region A) ----------
    Vertical list of friends' recent `finished` events. Lives in the drawer's

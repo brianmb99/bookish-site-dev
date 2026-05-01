@@ -1910,7 +1910,16 @@ function renderOmniboxApiResults(results){
       ? `<img src="${r.coverUrl}">`
       : `<div class="omnibox-result-mini" style="background:${generatedCoverColor(r.title||'')}">${escapeHtml((r.title||'').slice(0,20))}</div>`;
     const meta = [r.year, r.publisher, r.duration].filter(Boolean).join(' \u00B7 ');
-    return `<div class="omnibox-result" data-add-json='${encodeURIComponent(JSON.stringify(r))}'>
+    // Friend-pip work_key attribution (#7 / FRIENDS.md Surface 4): both
+    // OL-source and iTunes-source results carry `work_key` directly on the
+    // merged result object - for OL it's the original `key`, for iTunes it's
+    // the cross-lookup transfer the merger applies when an OL row dedupes
+    // into the iTunes row. Stash it on the row so the post-render attach
+    // pass below can resolve matches via the friend-library cache. Empty /
+    // missing -> no attribute -> no pips (the spec's "quiet absence").
+    const workKey = (r.work_key && typeof r.work_key === 'string') ? r.work_key : '';
+    const wkAttr = workKey ? ` data-work-key='${escapeHtml(workKey)}'` : '';
+    return `<div class="omnibox-result" data-add-json='${encodeURIComponent(JSON.stringify(r))}'${wkAttr}>
       <div class="omnibox-result-cover">${coverHtml}</div>
       <div class="omnibox-result-info">
         <div class="omnibox-result-title">${escapeHtml(r.title||'')}</div>
@@ -1920,6 +1929,83 @@ function renderOmniboxApiResults(results){
       <button type="button" class="omnibox-result-add">+ Add</button>
     </div>`;
   }).join('');
+  // Attach friend pips per row (#7). Done as a post-render pass so the row
+  // markup stays a pure template string and the pip wiring (handler closure
+  // over the friend-book-detail modal) lives in JS, not in HTML attributes.
+  attachOmniboxResultPips();
+}
+
+/**
+ * Attach (or refresh) the friend-pip overlay on each omnibox API result row
+ * (#7 / FRIENDS.md Surface 4). Mirrors the Library-card `attachFriendPips`
+ * pattern: idempotent, reads from the already-warm match cache, drops any
+ * stale overlay before painting the next one.
+ *
+ * Why a separate post-render step rather than baking pip markup into the
+ * template: the pip click handler needs a real function reference (to open
+ * the friend-book-detail modal with the captured connection + book), not a
+ * serialized JSON payload. Keeping pip wiring in JS also means the omnibox
+ * template stays a pure string operation that the existing dedup / cross-
+ * lookup / routing tests can reason about untouched.
+ *
+ * Modal-over-dropdown contract: tapping a pip opens the friend-book-detail
+ * modal at z-index 5800. The omnibox dropdown sits at z-index 1001 and stays
+ * mounted underneath - we deliberately do NOT call `closeOmniboxDropdown()`
+ * on pip tap. When the user closes the modal, the dropdown is still open in
+ * its prior state (input value + scroll position both preserved by virtue
+ * of never having been touched). The pip's `stopPropagation` (in
+ * friend-pip.js) prevents the row-level click from triggering the row's
+ * "+ Add" navigation behind the modal.
+ */
+function attachOmniboxResultPips(){
+  if(!omniboxAddResults) return;
+  const rows = omniboxAddResults.querySelectorAll('.omnibox-result[data-work-key]');
+  for(const row of rows){
+    // Drop stale overlay so a friend who removed the book / muted the
+    // connection between repaints sees their pip vanish on the next pass.
+    const existing = row.querySelector('.friend-pip-overlay');
+    if(existing) existing.remove();
+
+    const wk = row.dataset.workKey;
+    if(!wk) continue;
+    const matchEntries = friendsGetMatchingFriendBookEntries(wk);
+    if(!matchEntries.length) continue;
+
+    // Side map keyed by share_pub so the tap handler hands the friend's own
+    // book record (not the search result) to the friend-book-detail modal -
+    // matching the Library-card pip behavior in attachFriendPips. The friend's
+    // record carries their dateRead / readingStatus, which is the whole point
+    // of the modal.
+    const bookByShare = new Map();
+    for(const me of matchEntries){
+      bookByShare.set(me.connection.share_pub, me.book);
+    }
+    const connections = matchEntries.map(me => me.connection);
+
+    const overlay = renderPipOverlay(connections, {
+      onTapPip: (connection) => {
+        const friendBook = bookByShare.get(connection.share_pub);
+        if(!friendBook) return;
+        try {
+          openFriendBookDetail({ book: friendBook, connection });
+        } catch (err) {
+          console.warn('[Bookish] omnibox friend-pip tap failed to open modal:', err.message);
+        }
+      },
+    });
+    if(overlay){
+      // Mark the overlay so per-row CSS can switch from the Library card's
+      // edge-straddle position to a right-aligned inline layout (the omnibox
+      // row is a flex row with cover + info + Add button, not a card with a
+      // cover). The pip component itself is unchanged.
+      overlay.classList.add('friend-pip-overlay--inline');
+      // Insert BEFORE the "+ Add" button so the pips read as part of the
+      // row content, not after the call-to-action.
+      const addBtn = row.querySelector('.omnibox-result-add');
+      if(addBtn) row.insertBefore(overlay, addBtn);
+      else row.appendChild(overlay);
+    }
+  }
 }
 
 function searchOmniboxApis(query){
@@ -2815,6 +2901,11 @@ window.addEventListener('bookish:connections-changed', () => {
 // already-warm Map.
 window.addEventListener('bookish:friend-libraries-refreshed', () => {
   try { render(); } catch (err) { console.warn('[Bookish] re-render after friend-libraries-refreshed failed:', err.message); }
+  // Friend pips on unisearch results (#7): when the cache repaints while the
+  // omnibox dropdown is open (e.g. user adds a friend mid-search, or the
+  // first prime resolves after a search has already returned), re-attach
+  // pips on visible rows so they light up without the user re-typing.
+  try { attachOmniboxResultPips(); } catch (err) { console.warn('[Bookish] re-attach omnibox pips after refresh failed:', err.message); }
 });
 
 // Kick off an opportunistic prime so pips appear without waiting for the
