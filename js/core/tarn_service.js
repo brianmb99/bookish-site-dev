@@ -1,18 +1,32 @@
 // tarn_service.js — Singleton TarnClient wrapper for Bookish.
 //
-// Owns session persistence (Tarn SDK Section 7) and exposes a single access
-// point for all Tarn operations. The SDK handles at-rest encryption of the
-// session via a non-extractable AES-256-GCM key in IndexedDB; this wrapper
-// just hands the opaque blob to localStorage and back.
+// Owns the singleton TarnClient instance, the schema declaration handed to
+// it, and the small amount of UI-side metadata that doesn't belong in the
+// SDK (display name, active-fields preference, the email — for display
+// only, never re-used as auth material).
+//
+// The new schema-first SDK does session resume internally — pass it a
+// storage adapter and `TarnClient.create()` rehydrates any persisted blob
+// before returning. We use TarnStorage.localStorage() so the at-rest blob
+// continues to live in localStorage exactly where it did before, just now
+// behind the SDK's own key (TarnStorage default key 'tarn:session:v1').
+//
+// Threat model unchanged: the persisted blob is opaque base64url ciphertext
+// encrypted under an origin-scoped, non-extractable AES-256-GCM key in
+// IndexedDB. An XSS attacker on this origin can drive the SDK to act as
+// the user up to the blob's hard expiry, but cannot exfiltrate the
+// wrapping key for off-origin replay. Credential change / recovery /
+// account delete clear the wrapping key and invalidate every previously-
+// emitted blob.
 
-import { TarnClient } from '../lib/tarn/tarn-client.bundle.js';
+import { TarnClient, TarnStorage } from '../lib/tarn/tarn-client.bundle.js';
+import { bookishSchema } from './bookish-schema.js';
 
 const TARN_API = window.BOOKISH_API_BASE || 'https://api.tarn.dev';
 const APP_ID = 'bookish';
 const APP_NAME = 'Bookish';
 
 const STORAGE_KEYS = {
-  SESSION: 'bookish.tarn.session',
   EMAIL: 'bookish.email',
   DISPLAY_NAME: 'bookish.displayName',
   ACTIVE_FIELDS: 'bookish_active_fields',
@@ -20,61 +34,55 @@ const STORAGE_KEYS = {
 
 /** @type {TarnClient|null} */
 let _client = null;
+/** @type {Promise<TarnClient>|null} */
+let _initPromise = null;
+/** Cached after register/login. Used by the bookish-api subscription routes. */
+let _dataLookupKey = null;
+const DLK_STORAGE_KEY = 'bookish.tarn.dlk';
 
-// ============ SESSION PERSISTENCE ============
-//
-// Threat model: the persisted blob is opaque base64url ciphertext encrypted
-// under an origin-scoped, non-extractable AES-256-GCM key in IndexedDB. An
-// XSS attacker on this origin can call resumeSession() to act as the user
-// up to the blob's 7-day hard expiry, but cannot exfiltrate the wrapping
-// key for off-origin replay. Credential change / recovery / delete clear
-// the wrapping key and invalidate every previously-emitted blob.
-//
-// See TARN_PROTOCOL.md § Session persistence (Section 7) for the full
-// threat-model discussion.
-
-async function saveSession(client, email) {
-  try {
-    const blob = await client.serializeSession();
-    localStorage.setItem(STORAGE_KEYS.SESSION, blob);
-    if (email) localStorage.setItem(STORAGE_KEYS.EMAIL, email);
-  } catch (err) {
-    console.warn('[TarnService] Failed to save session:', err.message);
-  }
+function buildClient() {
+  return TarnClient.create({
+    apiBase: TARN_API,
+    appId: APP_ID,
+    schema: bookishSchema,
+    storage: TarnStorage.localStorage(),
+  });
 }
 
-async function restoreSession() {
-  const blob = localStorage.getItem(STORAGE_KEYS.SESSION);
-  if (!blob) return null;
-  // resumeSession returns null (never throws) on any recoverable failure:
-  // expired, tampered, schema-mismatched, wrong origin, IndexedDB error.
-  const client = await TarnClient.resumeSession(TARN_API, APP_ID, blob);
-  if (!client) {
-    // Stale blob — the wrapping key has been rotated (changeCredentials,
-    // recoverAccount, deleteAccount) or the blob itself expired. Drop the
-    // localStorage entry so future restoreSession() calls short-circuit.
-    localStorage.removeItem(STORAGE_KEYS.SESSION);
-  }
-  return client;
-}
-
-function clearLocalStorage() {
-  localStorage.removeItem(STORAGE_KEYS.SESSION);
+function clearLocalMetadata() {
   localStorage.removeItem(STORAGE_KEYS.EMAIL);
   localStorage.removeItem(STORAGE_KEYS.DISPLAY_NAME);
+  localStorage.removeItem(DLK_STORAGE_KEY);
 }
 
 // ============ PUBLIC API ============
 
 /**
- * Initialize the service — restores session from localStorage if available.
- * Call once on app startup.
- * @returns {Promise<boolean>} true if a session was restored
+ * Initialize the service — constructs the singleton client. The new SDK
+ * resumes any persisted session inside `TarnClient.create()`; if a blob
+ * is present and decryptable, the returned client is already logged in.
+ *
+ * Idempotent: subsequent calls return the existing client.
+ *
+ * @returns {Promise<boolean>} true if a session was restored (logged in)
  */
 export async function init() {
-  if (_client) return true;
-  _client = await restoreSession();
-  return !!_client;
+  if (_client) return _client.isLoggedIn();
+  if (!_initPromise) _initPromise = buildClient();
+  _client = await _initPromise;
+  _initPromise = null;
+  // Restore dlk cache from localStorage if a session was resumed (the SDK
+  // doesn't expose dlk directly, and resume bypasses register/login).
+  if (_client.isLoggedIn() && !_dataLookupKey) {
+    _dataLookupKey = localStorage.getItem(DLK_STORAGE_KEY) || null;
+  }
+  return _client.isLoggedIn();
+}
+
+async function ensureClient() {
+  if (_client) return _client;
+  await init();
+  return _client;
 }
 
 /**
@@ -86,28 +94,30 @@ export async function init() {
  * so the caller can also display the words + offer a local download.
  *
  * The caller MUST surface the phrase to the user. The SDK does not cache
- * either the phrase or the PDF bytes — Bookish never persists them either;
- * the user is the only durable store.
+ * either the phrase or the PDF bytes; Bookish never persists them either.
  *
  * @param {string} email
  * @param {string} password
  * @returns {Promise<{
- *   dataLookupKey: string,
+ *   dataLookupKey?: string,
  *   recoveryPhrase: string,
  *   pdfBytes: Uint8Array,
- *   emailDelivered: boolean,
+ *   emailDelivered?: boolean,
  * }>}
  */
 export async function register(email, password) {
-  const client = new TarnClient(TARN_API, APP_ID);
+  const client = await ensureClient();
   const result = await client.register(email, password, {
     recoveryAcknowledged: true,
     emailRecoveryKit: true,
     recipientEmail: email,
     appName: APP_NAME,
   });
-  _client = client;
-  await saveSession(client, email);
+  if (email) localStorage.setItem(STORAGE_KEYS.EMAIL, email);
+  if (result?.dataLookupKey) {
+    _dataLookupKey = result.dataLookupKey;
+    localStorage.setItem(DLK_STORAGE_KEY, result.dataLookupKey);
+  }
   return result;
 }
 
@@ -115,43 +125,46 @@ export async function register(email, password) {
  * Log in to an existing account.
  * @param {string} email
  * @param {string} password
- * @returns {Promise<{dataLookupKey: string}>}
+ * @returns {Promise<{dataLookupKey?: string}>}
  */
 export async function login(email, password) {
-  const client = new TarnClient(TARN_API, APP_ID);
+  const client = await ensureClient();
   const result = await client.login(email, password);
-  _client = client;
-  await saveSession(client, email);
+  if (email) localStorage.setItem(STORAGE_KEYS.EMAIL, email);
+  if (result?.dataLookupKey) {
+    _dataLookupKey = result.dataLookupKey;
+    localStorage.setItem(DLK_STORAGE_KEY, result.dataLookupKey);
+  }
   return result;
 }
 
 /**
- * Log out — clears in-memory state and the persisted session blob
- * synchronously, then schedules the IndexedDB wrapping-key wipe. After
- * the IndexedDB wipe completes, any previously-emitted session blob on
- * this origin is unreadable. Awaiting the returned promise ensures both
- * have completed; a fire-and-forget call still gets immediate
- * isLoggedIn() === false and the persisted blob removed.
+ * Log out — clears the local session via the SDK (which forgets the
+ * persisted blob and invalidates the IndexedDB wrapping key) and clears
+ * Bookish's UI-side metadata.
  *
  * @returns {Promise<void>}
  */
 export async function logout() {
   const client = _client;
-  _client = null;
-  clearLocalStorage();
+  clearLocalMetadata();
+  _dataLookupKey = null;
   if (client) {
-    try { await client.clearSession(); } catch (err) {
-      console.warn('[TarnService] clearSession failed:', err.message);
+    try { await client.session.clear(); } catch (err) {
+      console.warn('[TarnService] session.clear failed:', err.message);
     }
   }
+  // Drop the singleton so subsequent operations re-init from a clean slate.
+  _client = null;
+  _initPromise = null;
 }
 
 /**
- * Check if user is logged in (has a restored or active session).
+ * Check if user is logged in.
  * @returns {boolean}
  */
 export function isLoggedIn() {
-  return !!_client;
+  return !!_client && _client.isLoggedIn();
 }
 
 /**
@@ -162,15 +175,22 @@ export function isLoggedIn() {
  */
 export async function getClient() {
   if (!_client) throw new Error('Not logged in');
+  if (!_client.isLoggedIn()) throw new Error('Not logged in');
   return _client;
 }
 
 /**
- * Get the data lookup key (available after login/register).
+ * Get the cached `dataLookupKey` from the most recent register/login (or
+ * the persisted-on-resume copy from localStorage). Used by the bookish-api
+ * subscription routes which key per-user state on the dlk.
+ *
+ * Returns null if not logged in or never captured.
  * @returns {string|null}
  */
 export function getDataLookupKey() {
-  return _client?.dataLookupKey || null;
+  if (_dataLookupKey) return _dataLookupKey;
+  if (isLoggedIn()) return localStorage.getItem(DLK_STORAGE_KEY);
+  return null;
 }
 
 /**
@@ -192,18 +212,6 @@ export function displayName(name) {
     return name;
   }
   return localStorage.getItem(STORAGE_KEYS.DISPLAY_NAME);
-}
-
-/**
- * Re-emit the persisted session blob. Call after operations that mutate
- * the in-memory client state in a way the persisted blob should reflect
- * (e.g., a fresh JWT after silent reauth). The SDK does not auto-refresh
- * `expiresAt` on use — every call here resets the 7-day window.
- */
-export async function persistSession() {
-  if (_client) {
-    await saveSession(_client, localStorage.getItem(STORAGE_KEYS.EMAIL));
-  }
 }
 
 // ============ UI PREFERENCES ============

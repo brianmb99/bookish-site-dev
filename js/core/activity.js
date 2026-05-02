@@ -53,6 +53,9 @@ import { READING_STATUS, normalizeReadingStatus } from './book_repository.js';
 
 const DEFAULT_LIMIT = 10;
 
+// activity.js consumes the friends.* facade for the data path. Mute
+// resolution goes through `friends.isMuted()` which fail-opens on errors.
+
 /**
  * Get the user's friends' recent `finished` events, ready to render.
  *
@@ -81,32 +84,32 @@ export async function getRecentFinishes(opts = {}) {
   }
   if (!connections || connections.length === 0) return [];
 
-  // Resolve the Tarn client once for the mute-filter check. If we can't
-  // get a client, treat no-one as muted (the failure mode of "we showed
-  // events from a muted friend on a transient client error" is much
-  // gentler than "we hid every event").
-  let client = null;
-  try { client = await tarnService.getClient(); } catch { /* ignore */ }
-
   // Filter out muted connections up front so we don't waste fetches on them.
-  // `client.isMuted` is the canonical SDK call (FRIENDS.md). If it throws or
-  // is unavailable, the connection is treated as unmuted (fail-open for read).
+  // friends.isMuted() fail-opens on transient errors — the failure mode of
+  // "we showed events from a muted friend on a transient client error" is
+  // much gentler than "we hid every event."
   const visible = [];
   for (const conn of connections) {
     if (!conn || !conn.share_pub) continue;
-    let muted = false;
-    if (client && typeof client.isMuted === 'function') {
-      try { muted = await client.isMuted(conn); } catch { muted = false; }
+    // tarn.connections.list() returns conn.muted directly now; trust it
+    // when present, fall back to the per-conn check otherwise.
+    if (conn.muted === true) continue;
+    if (conn.muted === undefined) {
+      let muted = false;
+      try { muted = await friends.isMuted(conn); } catch { muted = false; }
+      if (muted) continue;
     }
-    if (!muted) visible.push(conn);
+    visible.push(conn);
   }
   if (visible.length === 0) return [];
 
   // Fetch each friend's library in parallel. allSettled so one failing
   // fetch doesn't kill the whole surface — the other friends still
-  // contribute events.
+  // contribute events. fetchImpl injection is no longer needed: the new
+  // SDK owns the gateway fetch + decrypt path, so tests stub the SDK
+  // directly via vi.doMock(...).
   const results = await Promise.allSettled(
-    visible.map(conn => friends.fetchFriendLibrary(conn, opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : undefined)),
+    visible.map(conn => friends.fetchFriendLibrary(conn)),
   );
 
   const events = [];

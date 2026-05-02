@@ -1,54 +1,24 @@
 // book_repository.js — Single-responsibility module for all book data operations
 //
-// Owns the entries array, ops queue, and remote sync via TarnClient.
-// Local-first: writes go to IndexedDB immediately, then sync to Tarn.
+// Owns the entries array, ops queue, and remote sync via the schema-first
+// Tarn SDK. Local-first: writes go to IndexedDB immediately, then sync to
+// Tarn's `tarn.books.*` typed namespace.
 //
-// Usage:
-//   const repo = new BookRepository({ cache, tarnService, ... });
-//   repo.on('change', (entries) => render());
-//   repo.on('error', ({ code, message }) => showError(message));
-//   await repo.loadFromCache();
+// Addressing model: every record is identified end-to-end by its `bookId`
+// (the schema's primary key). Arweave txids are an implementation detail
+// of the SDK's Eid-chain machinery and never surface in this layer or
+// above. The previous version used txid as the primary in-memory id; the
+// migration to the new SDK consolidates on bookId.
+//
+// Publish-on-save: after a successful save where `is_private` is false/
+// absent, we call `tarn.books.shareWithAll(bookId)` to fan out to every
+// non-muted connection. After delete, we iterate connections and call
+// `tarn.books.unshare(connection, bookId)`. Privacy toggles fire the
+// matching share/unshare-with-all. The SDK manages the shareKey internally
+// — no monkey-patching needed.
 
 import { pickWinner } from './cache_core.js';
-import { dateStringToMsNoonUtc } from './id_core.js';
 import * as friends from './friends.js';
-
-/**
- * Coerce a remote payload from any pre-v0.3.0 shape into the v0.3.0 in-memory
- * shape. We do not rewrite Arweave — the canonical bytes stay as the user
- * originally wrote them. The only goal here is to keep render + sort + dedup
- * code on a single shape, so legacy entries don't break newer code paths.
- *
- * Pre-v0.3.0 differences handled (issue #112):
- *   - dateRead used to be a YYYY-MM-DD string; v0.3.0 made it a noon-UTC
- *     ms-epoch number. Coerce strings via dateStringToMsNoonUtc; drop the
- *     field if the string is unparseable (better than crashing the sort).
- *   - edition was a required string; v0.3.0 dropped the field entirely.
- *     Strip it so it doesn't pollute renders or the cache_core content-hash
- *     (which now intentionally hashes without it).
- *
- * Schema/version strings are left as-is — those describe the on-Arweave
- * bytes, which we are not rewriting. This shim is a read-time view only.
- *
- * @param {Object|undefined} data
- * @returns {Object|undefined}
- */
-export function normalizeLegacyEntry(data) {
-  if (!data || typeof data !== 'object') return data;
-  let touched = false;
-  const out = { ...data };
-  if (typeof out.dateRead === 'string') {
-    const ms = dateStringToMsNoonUtc(out.dateRead);
-    if (ms != null) out.dateRead = ms;
-    else delete out.dateRead;
-    touched = true;
-  }
-  if ('edition' in out) {
-    delete out.edition;
-    touched = true;
-  }
-  return touched ? out : data;
-}
 
 export const READING_STATUS = {
   WANT_TO_READ: 'want_to_read',
@@ -62,39 +32,77 @@ export function normalizeReadingStatus(entry) {
   return READING_STATUS.READ;
 }
 
+/**
+ * Build the wire-shape payload for `tarn.books.create()` / `update()`.
+ * Filters out local-only fields and undefined values; includes only what's
+ * declared in bookish-schema.js (the SDK rejects unknown fields).
+ */
 function buildPayloadFromEntry(entry) {
   const payload = {
+    bookId: entry.bookId,
     title: entry.title,
-    author: entry.author,
     format: entry.format,
     readingStatus: entry.readingStatus || READING_STATUS.READ,
-    bookId: entry.bookId
   };
-  // dateRead is now an optional ms-epoch number (schema v0.3.0). Only forward
-  // it when present so we don't write empty strings (which would fail the
-  // schema's `type: number`) for entries that aren't on the read shelf.
+  if (entry.author) payload.author = entry.author;
   if (entry.dateRead != null && entry.dateRead !== '') payload.dateRead = entry.dateRead;
-  if (entry.coverImage) { payload.coverImage = entry.coverImage; if (entry.mimeType) payload.mimeType = entry.mimeType; }
+  if (entry.coverImage) {
+    payload.coverImage = entry.coverImage;
+    if (entry.mimeType) payload.mimeType = entry.mimeType;
+    if (entry.coverFit) payload.coverFit = entry.coverFit;
+  }
   if (entry.notes) payload.notes = entry.notes;
-  if (entry.rating) payload.rating = entry.rating;
-  if (entry.owned) payload.owned = entry.owned;
+  if (entry.rating != null) payload.rating = entry.rating;
   if (entry.tags) payload.tags = entry.tags;
+  if (entry.owned === true) payload.owned = true;
   if (entry.readingStartedAt) payload.readingStartedAt = entry.readingStartedAt;
   if (entry.createdAt) payload.createdAt = entry.createdAt;
   if (entry.modifiedAt) payload.modifiedAt = entry.modifiedAt;
   if (entry.wtrPosition != null) payload.wtrPosition = entry.wtrPosition;
-  // Friend-matching identifiers (issue #111). Optional — only present when the
-  // book was added via search and the source supplied them. Pre-existing books
-  // and manual entries simply don't carry these.
   if (entry.work_key) payload.work_key = entry.work_key;
   if (entry.isbn13) payload.isbn13 = entry.isbn13;
-  // Per-book privacy (issue #129 / FRIENDS.md Surface 7). Only forward when
-  // truthy so absent/false stay equivalent on Arweave (smaller blobs, schema-
-  // backward-compatible). The publish-on-save path (createWithPublish /
-  // updateWithPublish in BookRepository) gates share-log publication on this
-  // exact field.
   if (entry.is_private === true) payload.is_private = true;
   return payload;
+}
+
+/**
+ * Best-effort share-on-save: publish to every non-muted connection.
+ * Fire-and-forget; the SDK returns per-connection failures but we don't
+ * surface share errors as save errors.
+ */
+async function shareToFriends(client, bookId) {
+  try {
+    const result = await client.books.shareWithAll(bookId);
+    if (result && result.failed && result.failed.length) {
+      for (const f of result.failed) {
+        console.warn('[BookRepository] share failed for', f.connection?.share_pub?.slice(0, 8), '—', f.error);
+      }
+    }
+  } catch (err) {
+    console.warn('[BookRepository] shareWithAll failed:', err.message);
+  }
+}
+
+/**
+ * Best-effort unshare from every connection. Used on delete and on
+ * public→private toggle. Idempotent on the SDK side.
+ */
+async function unshareFromAllFriends(client, bookId) {
+  try {
+    const conns = await client.connections.list();
+    for (const conn of conns) {
+      try {
+        await client.books.unshare(conn, bookId);
+      } catch (err) {
+        // unshare on a never-shared content_id is a benign no-op for our
+        // purposes (e.g., a friend who joined after the book was already
+        // private). Quiet warn.
+        console.warn('[BookRepository] unshare failed for', conn.share_pub?.slice(0, 8), '—', err.message);
+      }
+    }
+  } catch (err) {
+    console.warn('[BookRepository] unshareFromAllFriends failed:', err.message);
+  }
 }
 
 export class BookRepository {
@@ -145,7 +153,10 @@ export class BookRepository {
   getAll() { return this._entries; }
 
   getById(key) {
-    return this._entries.find(e => (e.txid || e.id) === key);
+    // Address by bookId end-to-end now. Fall back to the legacy `id` field
+    // for entries that haven't been re-keyed yet (in-memory only — once
+    // persisted via the new SDK they always carry bookId).
+    return this._entries.find(e => e.bookId === key) || this._entries.find(e => e.id === key);
   }
 
   // --- Lifecycle ---
@@ -181,7 +192,7 @@ export class BookRepository {
 
     const modifiedAt = createdAt;
     const rec = {
-      id: localId, txid: null, ...payload, createdAt, modifiedAt,
+      id: localId, ...payload, createdAt, modifiedAt,
       status: 'pending', pending: true, seenRemote: false, onArweave: false, _committed: false
     };
     this._entries.push(rec);
@@ -193,30 +204,23 @@ export class BookRepository {
     if (this._tarnService.isLoggedIn()) {
       try {
         const client = await this._tarnService.getClient();
-        // Capture the per-content CEK during createEntry so we can fan out
-        // a share-log publish to friends afterwards (issue #129). The
-        // capture is a no-op for legacy v2 blob format and for users with
-        // no friends.
         const builtPayload = buildPayloadFromEntry(rec);
-        const { result, cek } = await friends._captureCekDuringCall(
-          () => client.createEntry('entry', builtPayload),
-        );
-        const { txid } = result;
+        // Fresh create — no Eid mapping yet, the SDK derives one.
+        await client.books.create(builtPayload);
         const oldId = rec.id;
-        rec.txid = txid; rec.id = txid;
+        // bookId is now the canonical id; drop the local-id sentinel.
+        rec.id = rec.bookId;
         rec.pending = false; rec.status = 'confirmed'; rec.seenRemote = true;
         if (this._cache) await this._cache.replaceProvisional(oldId, rec);
         this._emitError(null, null);
         this._emitChange();
-        // Fire-and-forget the share-log publish. publishBook is a no-op
-        // when the book is private, when the user has no friends, or when
-        // the SDK call fails for one connection. We don't surface share
-        // errors as save errors — the local save already succeeded.
-        friends.publishBook(rec, cek).catch(err => {
-          console.warn('[BookRepository] publishBook failed:', err.message);
-        });
+        // Share to friends if public. Fire-and-forget — share failures
+        // don't fail the local save.
+        if (rec.is_private !== true) {
+          shareToFriends(client, rec.bookId).then(() => friends.invalidateFriendLibraryCache());
+        }
       } catch (e) {
-        console.warn('[BookRepository] createEntry failed, queued for retry:', e.message);
+        console.warn('[BookRepository] books.create failed, queued for retry:', e.message);
         if (this._cache) await this._cache.queueOp({ type: 'create', localId: rec.id, payload });
         this._emitProgress(['Queued for sync']);
       }
@@ -229,7 +233,7 @@ export class BookRepository {
   }
 
   async update(id, payload) {
-    const old = this._entries.find(e => e.txid === id) || this._entries.find(e => e.id === id);
+    const old = this.getById(id);
     if (!old) throw new Error('Entry not found');
 
     const entryKey = old.bookId || old.id;
@@ -253,29 +257,38 @@ export class BookRepository {
     }
 
     this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
-    await this._doEditUpload(entryKey, old, id, snapshot);
+    await this._doEditUpload(entryKey, old, snapshot);
   }
 
   async delete(id) {
-    const entry = this._entries.find(e => e.txid === id) || this._entries.find(e => e.id === id);
+    const entry = this.getById(id);
     if (!entry) return;
 
     entry._deleting = true;
     entry._committed = false;
     this._emitChange();
 
-    // Local-only entry — just remove from cache
-    if (!entry.txid) {
+    // Local-only entry — just remove from cache. No bookId means it never
+    // made it to Tarn; nothing to tombstone or unshare.
+    if (!entry.bookId || entry.status === 'pending' && !entry.seenRemote) {
       if (this._cache) await this._cache.deleteById(entry.id);
       this._entries = this._entries.filter(e => e !== entry);
       this._emitChange();
+      // Even local-only entries may have had a confirmed sync race; try
+      // unshare best-effort if we have a bookId.
+      if (entry.bookId && this._tarnService.isLoggedIn()) {
+        try {
+          const client = await this._tarnService.getClient();
+          unshareFromAllFriends(client, entry.bookId).then(() => friends.invalidateFriendLibraryCache());
+        } catch { /* ignore */ }
+      }
       return;
     }
 
-    // Entry on Tarn — send tombstone
+    // Entry on Tarn — send tombstone via the typed namespace.
     try {
       const client = await this._tarnService.getClient();
-      await client.deleteEntry(entry.txid, 'entry');
+      await client.books.delete(entry.bookId);
 
       entry.status = 'tombstoned';
       entry.tombstonedAt = Date.now();
@@ -284,17 +297,12 @@ export class BookRepository {
       this._emitError(null, null);
       this._onDirty();
       this._emitChange();
-      // Retroactively unshare from every connection (#129). Idempotent on
-      // the SDK side; non-blocking. Private books were never shared, but
-      // unshareContent on a never-shared content_id is a benign no-op for
-      // our purposes (warning is logged, nothing user-visible breaks).
-      if (entry.bookId) {
-        friends.unpublishBook(entry.bookId).catch(err => {
-          console.warn('[BookRepository] unpublishBook (delete) failed:', err.message);
-        });
-      }
+      // Retroactively unshare from every connection. Idempotent on the SDK
+      // side; non-blocking. Private books were never shared, but unshare
+      // on a never-shared content_id is a benign no-op for our purposes.
+      unshareFromAllFriends(client, entry.bookId).then(() => friends.invalidateFriendLibraryCache());
     } catch (e) {
-      console.warn('[BookRepository] deleteEntry failed:', e.message);
+      console.warn('[BookRepository] books.delete failed:', e.message);
       entry._deleting = false;
       this._emitChange();
       this._emitError('delete-failed', 'Delete failed — will retry on next sync');
@@ -312,7 +320,6 @@ export class BookRepository {
       entry.readingStartedAt = Date.now();
     }
     if (newStatus === READING_STATUS.READ && !entry.dateRead) {
-      // Schema v0.3.0: dateRead is a ms-epoch number at noon UTC.
       const now = new Date();
       entry.dateRead = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0);
     }
@@ -325,7 +332,7 @@ export class BookRepository {
       : newStatus === READING_STATUS.READ ? 'Finished! Added to your shelf'
       : 'Moved to Want to Read';
 
-    if (entry.txid) {
+    if (entry.bookId && entry.seenRemote) {
       const entryKey = entry.bookId || entry.id;
       const queueEntry = this._editQueue.get(entryKey);
 
@@ -334,7 +341,7 @@ export class BookRepository {
       } else {
         this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
         const snapshot = { ...entry };
-        this._doEditUpload(entryKey, entry, entry.txid, snapshot).catch(() => {
+        this._doEditUpload(entryKey, entry, snapshot).catch(() => {
           this._emitError('status-update-failed', 'Status update failed');
         });
       }
@@ -357,7 +364,7 @@ export class BookRepository {
     this._onDirty();
     this._emitChange();
 
-    if (entry.txid) {
+    if (entry.bookId && entry.seenRemote) {
       const entryKey = entry.bookId || entry.id;
       const queueEntry = this._editQueue.get(entryKey);
 
@@ -366,7 +373,7 @@ export class BookRepository {
       } else {
         this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
         const snapshotEntry = { ...entry };
-        this._doEditUpload(entryKey, entry, entry.txid, snapshotEntry).catch(() => {
+        this._doEditUpload(entryKey, entry, snapshotEntry).catch(() => {
           this._emitError('status-update-failed', 'Status update failed');
         });
       }
@@ -392,7 +399,7 @@ export class BookRepository {
     this._emitChange();
 
     for (const entry of changed) {
-      if (!entry.txid) continue;
+      if (!entry.bookId || !entry.seenRemote) continue;
       const entryKey = entry.bookId || entry.id;
       const queueEntry = this._editQueue.get(entryKey);
       if (queueEntry?.uploading) {
@@ -400,7 +407,7 @@ export class BookRepository {
       } else {
         this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
         const snapshot = { ...entry };
-        this._doEditUpload(entryKey, entry, entry.txid, snapshot).catch(() => {});
+        this._doEditUpload(entryKey, entry, snapshot).catch(() => {});
       }
     }
   }
@@ -421,30 +428,26 @@ export class BookRepository {
     console.log('[BookRepository] Syncing from Tarn...');
     try {
       const client = await this._tarnService.getClient();
-      const remoteEntries = await client.getEntries('entry');
-      console.log('[BookRepository] Fetched', remoteEntries.length, 'entries from Tarn');
+      const remoteRecords = await client.books.list();
+      console.log('[BookRepository] Fetched', remoteRecords.length, 'records from Tarn');
 
-      // Build remote entries in cache format. normalizeLegacyEntry coerces
-      // any pre-v0.3.0 shape (string dateRead, edition field) into the
-      // current shape so the rest of the pipeline can assume one schema.
-      const remote = remoteEntries.map(e => ({
-        ...normalizeLegacyEntry(e.data),
-        txid: e.txid,
-        id: e.txid,
+      // The SDK returns fully-decoded records validated against the schema.
+      // No normalization needed — every record carries the canonical shape.
+      const remote = remoteRecords.map(data => ({
+        ...data,
+        id: data.bookId,
         status: 'confirmed',
         seenRemote: true,
         _committed: true,
       }));
 
-      // Merge with local cache (preserving local-only pending entries)
       const local = await this._cache.getAllActive();
-      const localPending = local.filter(e => !e.txid || e.status === 'pending');
-      const remoteTxids = new Set(remote.map(e => e.txid));
+      const localPending = local.filter(e => !e.seenRemote || e.status === 'pending');
 
-      // Deduplicate by bookId
+      // Deduplicate by bookId; remote wins.
       const byBookId = new Map();
       for (const entry of remote) {
-        if (!entry.bookId) { byBookId.set(entry.txid, entry); continue; }
+        if (!entry.bookId) continue;
         const existing = byBookId.get(entry.bookId);
         if (!existing || pickWinner(entry, existing) === entry) {
           byBookId.set(entry.bookId, entry);
@@ -453,16 +456,13 @@ export class BookRepository {
 
       const merged = [...byBookId.values()];
 
-      // Add local pending entries that aren't yet on remote
+      // Add local pending entries that aren't yet on remote.
       for (const pending of localPending) {
         const alreadyRemote = pending.bookId && merged.some(e => e.bookId === pending.bookId);
         if (!alreadyRemote) merged.push(pending);
       }
 
-      // Sort: newest first. Schema v0.3.0 made dateRead a ms-epoch number;
-      // legacy entries have already been coerced by normalizeLegacyEntry, so
-      // a numeric subtraction is safe here. Missing/non-numeric dateRead
-      // sorts to the bottom (treated as 0).
+      // Sort: newest first (by dateRead, then createdAt).
       merged.sort((a, b) => {
         const da = typeof a.dateRead === 'number' ? a.dateRead : 0;
         const db = typeof b.dateRead === 'number' ? b.dateRead : 0;
@@ -470,16 +470,15 @@ export class BookRepository {
         return (b.createdAt || 0) - (a.createdAt || 0);
       });
 
-      // Update cache
+      // Update cache.
       for (const entry of merged) {
         await this._cache.putEntry(entry);
       }
 
-      // Remove stale entries from IndexedDB that are no longer in the merged set
-      // (e.g. old txid superseded by an edit on another device)
+      // Remove stale entries from IndexedDB that aren't in the merged set.
       const mergedIds = new Set(merged.map(e => e.id));
       for (const entry of local) {
-        if (!mergedIds.has(entry.id) && entry.txid && entry.status !== 'pending') {
+        if (!mergedIds.has(entry.id) && entry.seenRemote && entry.status !== 'pending') {
           await this._cache.deleteById(entry.id);
         }
       }
@@ -488,7 +487,6 @@ export class BookRepository {
       this._emitChange();
     } catch (e) {
       console.error('[BookRepository] Sync failed:', e.message);
-      // Fall back to cached entries
       this._entries = await this._cache.getAllActive();
       this._emitChange();
       throw e;
@@ -512,56 +510,44 @@ export class BookRepository {
         if (op.type === 'create') {
           const local = this._entries.find(e => e.id === op.localId);
           if (!local) { await this._cache.removeOp(op.id); continue; }
-          if (local.txid) { await this._cache.removeOp(op.id); continue; }
+          if (local.seenRemote) { await this._cache.removeOp(op.id); continue; }
           try {
             const payload = buildPayloadFromEntry(local);
-            const { result, cek } = await friends._captureCekDuringCall(
-              () => client.createEntry('entry', payload),
-            );
-            const { txid } = result;
+            await client.books.create(payload);
             const oldId = local.id;
-            local.txid = txid; local.id = txid;
+            local.id = local.bookId;
             local.pending = false; local.status = 'confirmed'; local.seenRemote = true;
             await this._cache.replaceProvisional(oldId, local);
             await this._cache.removeOp(op.id);
             this._emitChange();
-            // Replay-side publish (#129) — same fan-out as the live path.
-            friends.publishBook(local, cek).catch(err => {
-              console.warn('[BookRepository] Replay publishBook failed:', err.message);
-            });
+            if (local.is_private !== true) {
+              shareToFriends(client, local.bookId).then(() => friends.invalidateFriendLibraryCache());
+            }
           } catch (e) {
             console.warn('[BookRepository] Replay create failed:', e.message);
-            break; // Stop replaying on first failure
+            break;
           }
         } else if (op.type === 'edit') {
-          const local = this._entries.find(e => e.txid === op.priorTxid) || this._entries.find(e => e.id === op.priorTxid);
-          if (!local) { await this._cache.removeOp(op.id); continue; }
+          // The legacy edit op carried `priorTxid`; the new path keys on bookId.
+          const local = this._entries.find(e => e.bookId === op.bookId)
+            || this._entries.find(e => e.bookId === op.priorTxid)
+            || this._entries.find(e => e.id === op.priorTxid);
+          if (!local || !local.bookId) { await this._cache.removeOp(op.id); continue; }
           try {
             const payload = buildPayloadFromEntry(local);
-            const { result } = await friends._captureCekDuringCall(
-              () => client.updateEntry(op.priorTxid, 'entry', payload),
-            );
-            const { txid } = result;
-            local.txid = txid; local.id = txid;
+            // Partial-merge path: pass the full payload minus the primary key.
+            const { bookId: _bookId, ...patch } = payload;
+            await client.books.update(local.bookId, patch);
             local.pending = false; local.status = 'confirmed'; local.seenRemote = true;
-            await this._cache.replaceProvisional(op.priorTxid, local);
+            await this._cache.replaceProvisional(local.id, local);
             await this._cache.removeOp(op.id);
             this._emitChange();
-            // Replay-side fan-out: we don't have a snapshot of the previous
-            // is_private state here (the queued op stores only priorTxid),
-            // so we treat replay edits as "stay-public" and call republish.
-            // Private books skip the call inside republishBook; transitions
-            // would have been handled in the live edit path that originally
-            // queued, with the queued retry only covering the network-failure
-            // case for the *last* edit's payload.
+            // Replay-side fan-out: stay-public → re-share (publishes the new
+            // tx_id). Private → unshare. Both paths idempotent on the SDK.
             if (local.is_private !== true) {
-              friends.republishBook(local).catch(err => {
-                console.warn('[BookRepository] Replay republishBook failed:', err.message);
-              });
+              shareToFriends(client, local.bookId).then(() => friends.invalidateFriendLibraryCache());
             } else {
-              friends.unpublishBook(local.bookId).catch(err => {
-                console.warn('[BookRepository] Replay unpublishBook failed:', err.message);
-              });
+              unshareFromAllFriends(client, local.bookId).then(() => friends.invalidateFriendLibraryCache());
             }
           } catch (e) {
             console.warn('[BookRepository] Replay edit failed:', e.message);
@@ -576,8 +562,8 @@ export class BookRepository {
 
   // --- Internal: edit upload chain ---
 
-  async _doEditUpload(entryKey, entry, prevTxid, snapshot) {
-    if (!entry.txid && !prevTxid) {
+  async _doEditUpload(entryKey, entry, snapshot) {
+    if (!entry.bookId) {
       this._editQueue.delete(entryKey);
       return;
     }
@@ -585,52 +571,36 @@ export class BookRepository {
     try {
       const client = await this._tarnService.getClient();
       const payload = buildPayloadFromEntry(entry);
-      // Capture CEK on edit too — needed if this edit transitions the book
-      // from private → public (we'd then call publishBook, not republishBook,
-      // because the friend-side share log has no entry yet for this content).
-      // Captured CEK is unused on a stable-public edit (we use updateShareContent
-      // which preserves the existing CEK), but capturing it cheaply keeps the
-      // public-toggle path uniform.
-      const { result, cek } = await friends._captureCekDuringCall(
-        () => client.updateEntry(prevTxid, 'entry', payload),
-      );
-      const { txid } = result;
+      const { bookId: _bookId, ...patch } = payload;
+      await client.books.update(entry.bookId, patch);
 
-      entry.txid = txid; entry.id = txid;
       entry.pending = false; entry.status = 'confirmed'; entry.seenRemote = true;
+      // bookId is the canonical id now; align local id.
+      entry.id = entry.bookId;
 
-      if (this._cache) await this._cache.replaceProvisional(prevTxid, entry);
+      if (this._cache) await this._cache.replaceProvisional(entry.id, entry);
       this._emitError(null, null);
       this._emitChange();
 
-      // Share-log fan-out (#129). Three transitions to handle:
-      //   - public → public: updateShareContent (swap tx_id, keep CEK)
-      //   - public → private: unshareContent (retroactive revoke)
-      //   - private → public: shareContent (fresh publish with new CEK)
-      //   - private → private: no-op
-      // The snapshot captured before _doEditUpload was called holds the
-      // pre-edit `is_private` so we can detect transitions.
+      // Share-log fan-out:
+      //   - was public, stays public: re-share (re-publishes new tx_id)
+      //   - was public, now private: unshare from all
+      //   - was private, now public: share with all (fresh publish)
+      //   - was private, stays private: no-op
       const wasPrivate = snapshot && snapshot.is_private === true;
       const isPrivate = entry.is_private === true;
-      // Fire-and-forget — share errors don't fail the edit.
       if (!wasPrivate && !isPrivate) {
-        friends.republishBook(entry).catch(err => {
-          console.warn('[BookRepository] republishBook failed:', err.message);
-        });
+        shareToFriends(client, entry.bookId).then(() => friends.invalidateFriendLibraryCache());
       } else if (!wasPrivate && isPrivate) {
-        friends.unpublishBook(entry.bookId).catch(err => {
-          console.warn('[BookRepository] unpublishBook failed:', err.message);
-        });
+        unshareFromAllFriends(client, entry.bookId).then(() => friends.invalidateFriendLibraryCache());
       } else if (wasPrivate && !isPrivate) {
-        friends.publishBook(entry, cek).catch(err => {
-          console.warn('[BookRepository] publishBook (toggle to public) failed:', err.message);
-        });
+        shareToFriends(client, entry.bookId).then(() => friends.invalidateFriendLibraryCache());
       }
 
       const queueEntry = this._editQueue.get(entryKey);
       if (queueEntry?.hasPendingEdit) {
         queueEntry.hasPendingEdit = false;
-        await this._doEditUpload(entryKey, entry, txid, snapshot);
+        await this._doEditUpload(entryKey, entry, snapshot);
       } else {
         this._editQueue.delete(entryKey);
       }
@@ -638,8 +608,8 @@ export class BookRepository {
       console.warn('[BookRepository] Edit upload failed:', e.message);
       this._editQueue.delete(entryKey);
 
-      // Queue for retry
-      const pending = { type: 'edit', priorTxid: prevTxid };
+      // Queue for retry. Key on bookId now.
+      const pending = { type: 'edit', bookId: entry.bookId };
       if (this._cache) await this._cache.queueOp(pending);
 
       this._emitError('save-failed', 'Could not save to cloud — will retry on next sync');
