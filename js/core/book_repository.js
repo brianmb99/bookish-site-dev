@@ -61,7 +61,12 @@ function buildPayloadFromEntry(entry) {
   if (entry.wtrPosition != null) payload.wtrPosition = entry.wtrPosition;
   if (entry.work_key) payload.work_key = entry.work_key;
   if (entry.isbn13) payload.isbn13 = entry.isbn13;
-  if (entry.is_private === true) payload.is_private = true;
+  // Always include is_private when the caller has an opinion (true OR false).
+  // Old behavior emitted only on `true`, which broke private→public toggles:
+  // `tarn.books.update(bookId, patch)` does partial-merge, so an omitted field
+  // means the previous `true` survives. Friends would never see the book even
+  // after the user toggled it back to public.
+  if (typeof entry.is_private === 'boolean') payload.is_private = entry.is_private;
   return payload;
 }
 

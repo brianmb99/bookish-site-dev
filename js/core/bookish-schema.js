@@ -32,7 +32,13 @@ export const bookishSchema = defineSchema({
         bookId: 'string',
         title: 'string',
         author: 'string?',
-        format: { type: 'string', enum: ['paperback', 'hardcover', 'ebook', 'audiobook', 'other'] },
+        // 'print' / 'audio' are the generic values the add-book form
+        // emits today (see public/index.html option values + mapFormat()
+        // in app.js). 'paperback' / 'hardcover' / 'audiobook' are reserved
+        // for a future fidelity bump if users ever ask for the distinction.
+        // 'ebook' and 'other' work for both surfaces. Keep all six valid
+        // until the form is canonicalized.
+        format: { type: 'string', enum: ['print', 'paperback', 'hardcover', 'ebook', 'audiobook', 'audio', 'other'] },
 
         // Read-shelf metadata. dateRead is a ms-epoch number at noon UTC
         // (legacy YYYY-MM-DD strings were normalized away pre-migration).

@@ -8,7 +8,7 @@ import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
 import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
 import { stripNoise } from './core/search_core.js';
-import { dateStringToMsNoonUtc, msToDateInputUtc, formatDateReadDisplay, formatMonthYearDisplay } from './core/id_core.js';
+import { deriveBookId, dateStringToMsNoonUtc, msToDateInputUtc, formatDateReadDisplay, formatMonthYearDisplay } from './core/id_core.js';
 import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
 import { haptic } from './core/haptic.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
@@ -2894,10 +2894,13 @@ async function initCacheLayer(){
       await window.bookishCache.clearAll();
     }
 
-    // Create the BookRepository — single owner of all book data operations
+    // Create the BookRepository — single owner of all book data operations.
+    // deriveBookId is required for the schema-first SDK (every record needs a
+    // primary key); the form never sets bookId so the repo derives one on save.
     bookRepo = new BookRepository({
       cache: window.bookishCache,
       tarnService,
+      deriveBookId,
       onDirty: markDirty,
     });
 
