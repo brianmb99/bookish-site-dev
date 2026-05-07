@@ -177,7 +177,9 @@ function getOrCreateBanner() {
   el.className = 'account-key-reminder';
   el.setAttribute('role', 'region');
   el.setAttribute('aria-label', 'Account key reminder');
-  el.style.display = 'none';
+  // Visibility is controlled via the .is-visible class. CSS sets the
+  // default `display:none`; adding the class swaps to `display:flex` and
+  // fades opacity in.
   el.innerHTML = `
     <div class="account-key-reminder-content">
       <div class="account-key-reminder-icon">${SVG_KEY}</div>
@@ -187,7 +189,7 @@ function getOrCreateBanner() {
       </div>
       <div class="account-key-reminder-actions">
         <button type="button" class="btn primary" id="reminderViewBtn">View now</button>
-        <button type="button" class="btn secondary" id="reminderSavedBtn">Already saved</button>
+        <button type="button" class="btn secondary" id="reminderSavedBtn">I have it</button>
       </div>
       <button type="button" class="account-key-reminder-close" id="reminderCloseBtn" aria-label="Dismiss">${SVG_CLOSE}</button>
     </div>
@@ -247,12 +249,17 @@ function wireBannerHandlers(el) {
 
 function showBanner() {
   const el = getOrCreateBanner();
-  el.style.display = 'flex';
+  // Strip any leftover inline display from earlier versions / tests so the
+  // class-toggled rule wins.
+  if (el.style.display) el.style.display = '';
+  el.classList.add('is-visible');
 }
 
 function hideBanner() {
   const el = document.getElementById(BANNER_ID);
-  if (el) el.style.display = 'none';
+  if (!el) return;
+  if (el.style.display) el.style.display = '';
+  el.classList.remove('is-visible');
 }
 
 // Test-only helpers exposed on the namespace for unit tests. Consumers

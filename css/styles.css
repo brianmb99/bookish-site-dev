@@ -1519,8 +1519,8 @@ html.modal-transitioning::view-transition-new(root){
    Slim, gentle banner shown to Model B users with ≥5 books on ≥2nd
    session who haven't yet confirmed they saved their account key.
    Sits above the book list, in the same vertical slot as .nudge-banner. */
-.account-key-reminder{background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);border-radius:10px;padding:12px 16px;margin:16px 0;display:none;animation:fadeIn .3s ease-out}
-.account-key-reminder[style*="flex"]{display:flex}
+.account-key-reminder{background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);border-radius:10px;padding:12px 16px;margin:16px 0;display:none;opacity:0;transition:opacity 150ms ease-out}
+.account-key-reminder.is-visible{display:flex;opacity:1;animation:fadeIn .3s ease-out}
 .account-key-reminder-content{display:flex;align-items:center;gap:12px;width:100%}
 .account-key-reminder-icon{flex:0 0 auto;color:#60a5fa;display:flex;align-items:center;justify-content:center}
 .account-key-reminder-text{flex:1 1 auto;display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -2841,6 +2841,38 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   border:1px solid var(--color-border-subtle);
   border-radius:6px;
 }
+/* Item 3: Replace account key — visually demoted text-link below
+   the prominent View action. Single-line, muted, aligned left. */
+.account-security-replace-link{
+  align-self:flex-start;
+  font-size:.8rem;
+  margin-top:4px;
+}
+/* Item 5: Passkey-added success affirmation. Calm green tint,
+   transient sibling above the passkey list. */
+.account-passkeys-success{
+  font-size:.78rem;
+  color:#10b981;
+  background:rgba(16,185,129,0.08);
+  border:1px solid rgba(16,185,129,0.25);
+  border-radius:6px;
+  padding:6px 10px;
+  margin-bottom:8px;
+}
+/* Item 4: Sign-in passkey button — center the fingerprint icon next
+   to the label. The button is hidden inline at render time via
+   `style="display:none;"`; once the support probe resolves true the JS
+   clears the inline style and this rule takes over to lay icon+text
+   side by side. */
+.auth-passkey-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.auth-passkey-btn svg{
+  flex:0 0 auto;
+}
 
 /* Phase 3 — registered passkeys list inside the Account & Security
    section. The list lives directly inside `.account-security-block`, so
@@ -2884,13 +2916,9 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   text-overflow:ellipsis;
   white-space:nowrap;
 }
-.account-passkeys-row-last{
+.account-passkeys-row-meta{
   font-size:.74rem;
   color:var(--color-text-secondary);
-}
-.account-passkeys-row-created{
-  font-size:.72rem;
-  color:var(--color-text-muted);
 }
 .account-passkeys-remove{
   flex:0 0 auto;

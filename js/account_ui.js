@@ -27,6 +27,7 @@ const SVG_SHIELD = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" 
 const SVG_USER = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
 const SVG_EDIT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 const SVG_DOWNLOAD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+const SVG_FINGERPRINT = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 4"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M9 6.8a6 6 0 0 1 9 5.2c0 .47 0 1.44-.05 2"/></svg>`;
 
 /**
  * Full logout: stop sync, clear Tarn session, clear IndexedDB cache,
@@ -459,8 +460,14 @@ function wireAccountKeyCopyButton(root, accountKey) {
 /**
  * Render the post-register account-key reveal. Shows the 24 words in a
  * numbered grid plus a copy button. The Continue button is enabled by
- * default; the user can also dismiss the modal via the normal close
- * affordance — both paths run the same post-signup handoff.
+ * default; only Continue triggers the post-signup handoff.
+ *
+ * Close-via-X / backdrop / swipe-dismiss close the modal via the normal
+ * modal-close path but DO NOT fire `onContinue()`. Tapping X means
+ * "close this dialog, I'm not done with it" — not "I've saved the key,
+ * take me into the app." If the user dismisses without tapping
+ * Continue, they're still logged in (the account exists) and can
+ * re-open Settings → Account & Security to view the key any time.
  *
  * No save-proof gate: the user can view this key again any time from
  * Settings (recovery v2, Model B by default). Type-back or checkbox
@@ -495,34 +502,16 @@ function renderAccountKeyView(content, opts) {
   const continueBtn = content.querySelector('#accountKeyContinueBtn');
   wireAccountKeyCopyButton(content, accountKey);
 
-  // Both Continue and the modal's normal close paths (X button, backdrop
-  // click, swipe-to-dismiss) should run the same post-signup handoff —
-  // there's no save-proof gate to preserve, and the user can re-view the
-  // account key from Settings any time. We guard with `fired` so a
-  // double-tap doesn't run the handoff twice.
+  // Only Continue triggers the handoff. X / backdrop / swipe-dismiss
+  // close via the modal's existing close listeners (no handoff fires).
+  // The `fired` guard is still useful because a fast double-tap on
+  // Continue could otherwise run the handoff twice.
   let fired = false;
-  const runHandoff = () => {
+  continueBtn.addEventListener('click', () => {
     if (fired) return;
     fired = true;
-    // Detach our own backdrop listener so it doesn't leak past this view.
-    if (modal) modal.removeEventListener('click', backdropHandler);
     onContinue();
-  };
-
-  continueBtn.addEventListener('click', runHandoff);
-
-  // Wire close-via-X and backdrop. These already call closeAccountModal
-  // (which tears down the UI); piggyback on them to run the handoff first.
-  // The existing init-time listener on the close button still runs after
-  // ours and will close the modal — runHandoff calls closeAccountModal()
-  // via onContinue too, but closeAccountModal is idempotent.
-  const modal = document.getElementById('accountModal');
-  const closeBtn = document.getElementById('accountModalClose');
-  if (closeBtn) closeBtn.addEventListener('click', runHandoff, { once: true });
-  const backdropHandler = (e) => {
-    if (e.target === modal) runHandoff();
-  };
-  if (modal) modal.addEventListener('click', backdropHandler);
+  });
 }
 
 // ============================================================================
@@ -562,7 +551,7 @@ function renderSignInForm(content) {
       <div class="auth-or-divider" id="signInOrDivider" style="display:none;"><span>or</span></div>
 
       <button id="signInPasskeyBtn" class="btn secondary auth-submit auth-passkey-btn" type="button" style="display:none;">
-        Sign in with passkey
+        ${SVG_FINGERPRINT}<span>Sign in with passkey</span>
       </button>
 
       <div id="signInError" class="auth-error" style="display:none;"></div>
@@ -776,7 +765,7 @@ function promptStalePasskeyRepair(content) {
         </button>
 
         <div class="auth-switch">
-          <a href="#" id="staleRepairCancel">Cancel</a>
+          <button type="button" class="btn-link" id="staleRepairCancel">Cancel</button>
         </div>
       </div>
     `;
@@ -820,8 +809,7 @@ function promptStalePasskeyRepair(content) {
       finish({ username, password });
     });
 
-    cancelLink.addEventListener('click', (e) => {
-      e.preventDefault();
+    cancelLink.addEventListener('click', () => {
       finish(null);
     });
   });
@@ -910,15 +898,15 @@ function renderAccountPanel(content) {
           <div class="account-security-desc">A 24-word phrase that's the only way to recover your account if you forget your password.</div>
           <div class="account-security-actions">
             <button type="button" id="viewAccountKeyBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">View account key</button>
-            <button type="button" id="replaceAccountKeyBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Replace account key</button>
           </div>
+          <button type="button" id="replaceAccountKeyBtn" class="btn-link account-security-replace-link">Replace account key &rarr;</button>
         </div>
 
         <div class="account-security-block">
-          <div class="account-security-subtitle">Manual account-key custody</div>
+          <div class="account-security-subtitle">Don't keep a backup on Bookish</div>
           <div class="account-security-desc">When on, your account key isn't stored on our servers. You'll need your saved key to recover your account if you forget your password. More private, less safe if you lose both.</div>
           <label class="account-friends-toggle" for="accountCustodyToggle">
-            <span class="account-friends-toggle-label" id="accountCustodyToggleLabel">Manual custody</span>
+            <span class="account-friends-toggle-label" id="accountCustodyToggleLabel"></span>
             <input type="checkbox" id="accountCustodyToggle" />
           </label>
           <div class="account-security-error" id="accountCustodyError" style="display:none;"></div>
@@ -1247,8 +1235,13 @@ function wireAccountSecuritySection(content) {
  *
  * - `true`  (Model B, server-stored) → toggle UNCHECKED (manual custody off)
  * - `false` (Model A, not stored)    → toggle CHECKED (manual custody on)
- * - `null`  (no auth round trip yet) → toggle disabled, label "Loading…",
- *                                       retry once on a 100ms timer.
+ * - `null`  (no auth round trip yet) → defer: schedule a 100ms retry
+ *                                       silently (no "Loading…" yet). If
+ *                                       the retry also returns null, NOW
+ *                                       show "Loading…" and keep retrying
+ *                                       on a 200ms cadence. This avoids a
+ *                                       ~100ms flicker on fast networks
+ *                                       where the SDK resolves quickly.
  */
 function hydrateCustodyToggle(content) {
   const toggle = content.querySelector('#accountCustodyToggle');
@@ -1256,51 +1249,70 @@ function hydrateCustodyToggle(content) {
   const errorEl = content.querySelector('#accountCustodyError');
   if (!toggle || !label) return;
 
+  // Apply a resolved state to the DOM. Used by every code path that
+  // actually has a true/false answer — keeps the rendering logic in
+  // one spot regardless of how many retries were needed to get there.
+  const applyState = (stored) => {
+    toggle.disabled = false;
+    // Once we've resolved, no live state label — the toggle's checked
+    // state speaks for itself, and the section subtitle conveys meaning.
+    label.textContent = '';
+    // checked = Model A (not stored). unchecked = Model B (stored).
+    toggle.checked = stored === false;
+    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+
+    if (!toggle.dataset.bound) {
+      toggle.dataset.bound = '1';
+      toggle.addEventListener('change', async () => {
+        const wantsManualCustody = toggle.checked;
+        // Disable while the flow runs to prevent a double-click landing two
+        // step-up calls in flight at once.
+        toggle.disabled = true;
+        try {
+          if (wantsManualCustody) {
+            // OFF → ON (B → A): disable storage. Confirmation + password.
+            await runDisableStorageFlow();
+          } else {
+            // ON → OFF (A → B): enable storage. Password + 24-word phrase.
+            await runEnableStorageFlow();
+          }
+        } finally {
+          // Always re-hydrate from authoritative state — handles success
+          // (toggle reflects new state), cancel (toggle reverts), and error
+          // (toggle reverts; inline error already shown by the flow).
+          hydrateCustodyToggle(content);
+        }
+      });
+    }
+  };
+
   const stored = tarnService.accountKey.isStored();
-  if (stored === null) {
-    toggle.disabled = true;
-    toggle.checked = false;
-    label.textContent = 'Loading…';
-    setTimeout(() => {
-      // The panel may have been torn down by then; bail if so.
-      if (!document.body.contains(toggle)) return;
-      hydrateCustodyToggle(content);
-    }, 100);
+  if (stored !== null) {
+    applyState(stored);
     return;
   }
 
-  toggle.disabled = false;
-  label.textContent = 'Manual custody';
-  // checked = Model A (not stored). unchecked = Model B (stored).
-  toggle.checked = stored === false;
-  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+  // Disable the toggle while we wait — but don't reveal "Loading…" yet.
+  // On a fast network the next probe will resolve in ~100ms and the
+  // user never sees a flicker.
+  toggle.disabled = true;
+  toggle.checked = false;
 
-  // Replace any existing change listener by cloning the node.
-  // We can't easily remove the previous anonymous handler, so on every
-  // hydrate we install one that internally guards against re-entrancy.
-  if (!toggle.dataset.bound) {
-    toggle.dataset.bound = '1';
-    toggle.addEventListener('change', async () => {
-      const wantsManualCustody = toggle.checked;
-      // Disable while the flow runs to prevent a double-click landing two
-      // step-up calls in flight at once.
-      toggle.disabled = true;
-      try {
-        if (wantsManualCustody) {
-          // OFF → ON (B → A): disable storage. Confirmation + password.
-          await runDisableStorageFlow();
-        } else {
-          // ON → OFF (A → B): enable storage. Password + 24-word phrase.
-          await runEnableStorageFlow();
-        }
-      } finally {
-        // Always re-hydrate from authoritative state — handles success
-        // (toggle reflects new state), cancel (toggle reverts), and error
-        // (toggle reverts; inline error already shown by the flow).
-        hydrateCustodyToggle(content);
-      }
-    });
-  }
+  setTimeout(() => {
+    if (!document.body.contains(toggle)) return;
+    const stored2 = tarnService.accountKey.isStored();
+    if (stored2 !== null) {
+      applyState(stored2);
+      return;
+    }
+    // Genuinely slow — surface the loading affordance and re-hydrate
+    // on a slower cadence. The recursive call handles further retries.
+    label.textContent = 'Loading…';
+    setTimeout(() => {
+      if (!document.body.contains(toggle)) return;
+      hydrateCustodyToggle(content);
+    }, 200);
+  }, 100);
 }
 
 /**
@@ -1457,7 +1469,7 @@ async function refreshPasskeysList(content) {
   if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
 
   if (!Array.isArray(entries) || entries.length === 0) {
-    listEl.innerHTML = `<li class="account-passkeys-empty">No passkeys registered yet.</li>`;
+    listEl.innerHTML = `<li class="account-passkeys-empty">No passkeys yet. Add one for faster sign-in.</li>`;
     return;
   }
 
@@ -1468,15 +1480,24 @@ async function refreshPasskeysList(content) {
     const labelText = entry.deviceLabel
       ? entry.deviceLabel
       : truncateCredentialId(entry.credentialId);
+    // Build a single-line metadata string from whichever of the two
+    // pieces are present. Both, one, or neither — the joiner only
+    // appears when both halves exist. "Never used" is a sentinel that
+    // shouldn't be prefixed with "Last used "; pass it through verbatim.
     const lastUsed = humanizePasskeyDate(entry.lastUsedAt, { neverText: 'Never used' });
     const created = humanizePasskeyDate(entry.createdAt, { neverText: '' });
+    const lastUsedText = !lastUsed
+      ? ''
+      : lastUsed === 'Never used'
+        ? 'Never used'
+        : `Last used ${lastUsed.charAt(0).toLowerCase() + lastUsed.slice(1)}`;
     const createdText = created ? `Added ${created}` : '';
+    const metaLine = [createdText, lastUsedText].filter(Boolean).join(' · ');
     return `
       <li class="account-passkeys-row" data-credential-id="${escapeHtml(entry.credentialId)}">
         <div class="account-passkeys-row-main">
           <div class="account-passkeys-row-label">${escapeHtml(labelText)}</div>
-          <div class="account-passkeys-row-last">${escapeHtml(lastUsed)}</div>
-          ${createdText ? `<div class="account-passkeys-row-created">${escapeHtml(createdText)}</div>` : ''}
+          ${metaLine ? `<div class="account-passkeys-row-meta">${escapeHtml(metaLine)}</div>` : ''}
         </div>
         <button type="button" class="account-panel-sub-btn account-panel-sub-btn-secondary account-passkeys-remove" data-action="remove-passkey">Remove</button>
       </li>
@@ -1596,6 +1617,35 @@ async function startAddPasskeyFlow(content) {
     return;
   }
   await refreshPasskeysList(content);
+  showPasskeyAddedAffirmation(content);
+}
+
+/**
+ * Show a transient success affirmation after a passkey is registered.
+ * Appears as a sibling above the list; auto-dismisses after 3s. Idempotent —
+ * re-uses the same element if called repeatedly so we don't leak nodes.
+ */
+function showPasskeyAddedAffirmation(content) {
+  const listEl = content.querySelector('#accountPasskeysList');
+  if (!listEl || !listEl.parentNode) return;
+
+  let el = content.querySelector('.account-passkeys-success');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'account-passkeys-success';
+    el.setAttribute('role', 'status');
+    listEl.parentNode.insertBefore(el, listEl);
+  }
+  el.textContent = '✓ Passkey added — sign in faster next time.';
+  el.style.display = 'block';
+
+  // Reset any pending dismiss timer so the affirmation stays visible for
+  // a full 3s after the most recent add.
+  if (el._dismissTimer) clearTimeout(el._dismissTimer);
+  el._dismissTimer = setTimeout(() => {
+    el.style.display = 'none';
+    el._dismissTimer = null;
+  }, 3000);
 }
 
 /**
@@ -2254,6 +2304,7 @@ export const __test__ = {
   normalizePastedPhrase,
   humanizePasskeySigninError,
   promptStalePasskeyRepair,
+  showPasskeyAddedAffirmation,
   resetPasskeysSupportedCache: () => {
     _passkeysSupportedCache = null;
     _passkeysSupportedProbe = null;
