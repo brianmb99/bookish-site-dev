@@ -2662,6 +2662,30 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   margin-top: 4px;
 }
 
+/* "or" divider between the password Sign In button and the passkey
+   sign-in CTA on the Welcome Back screen (recovery v2 phase 4). Hidden
+   by default in the markup; revealed atomically with the passkey button
+   when the support probe resolves true. */
+.auth-or-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0 12px;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+.auth-or-divider::before,
+.auth-or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border-subtle);
+}
+.auth-or-divider span {
+  padding: 0 12px;
+}
+
 /* Error display */
 .auth-error {
   margin-top: 12px;

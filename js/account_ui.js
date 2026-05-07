@@ -523,6 +523,10 @@ function renderAccountKeyView(content, opts) {
 // ============================================================================
 
 function renderSignInForm(content) {
+  // The passkey CTA + "or" divider are hidden by default (display:none).
+  // We probe `tarnService.passkeys.isSupported()` after render and only
+  // unhide both atomically when the probe resolves true. Browsers without
+  // PRF (Firefox, etc.) keep the screen identical to pre-Phase-4.
   content.innerHTML = `
     <div class="auth-form">
       <div class="auth-header">
@@ -548,6 +552,12 @@ function renderSignInForm(content) {
         Sign In
       </button>
 
+      <div class="auth-or-divider" id="signInOrDivider" style="display:none;"><span>or</span></div>
+
+      <button id="signInPasskeyBtn" class="btn secondary auth-submit auth-passkey-btn" type="button" style="display:none;">
+        Sign in with passkey
+      </button>
+
       <div id="signInError" class="auth-error" style="display:none;"></div>
       <div id="signInProgress" class="auth-progress" style="display:none;"></div>
 
@@ -561,6 +571,8 @@ function renderSignInForm(content) {
   const emailInput = content.querySelector('#signInEmail');
   const passwordInput = content.querySelector('#signInPassword');
   const signInBtn = content.querySelector('#signInBtn');
+  const passkeyBtn = content.querySelector('#signInPasskeyBtn');
+  const orDivider = content.querySelector('#signInOrDivider');
   const switchLink = content.querySelector('#switchToCreate');
 
   // Password toggle
@@ -587,6 +599,7 @@ function renderSignInForm(content) {
     const password = passwordInput.value;
 
     signInBtn.disabled = true;
+    if (passkeyBtn) passkeyBtn.disabled = true;
     const progress = content.querySelector('#signInProgress');
     const error = content.querySelector('#signInError');
     error.style.display = 'none';
@@ -597,28 +610,8 @@ function renderSignInForm(content) {
       progress.textContent = 'Deriving encryption keys...';
       await tarnService.login(email, password);
       tarnService.displayName(email.split('@')[0]);
-
-      transientState.justSignedIn = true;
-      transientState.signInTime = Date.now();
-
-      // Fresh subscription state for the signed-in user (#74).
-      subscription.resetStatus();
-      subscription.fetchStatus().catch(() => {});
-
       progress.textContent = 'Signed in!';
-      setTimeout(() => {
-        closeAccountModal();
-        startSync();
-        uiStatusManager.refresh();
-        if (typeof window.updateBookDots === 'function') window.updateBookDots();
-        // Friends invite redemption (#118). If the user signed in to redeem
-        // an invite they clicked while logged out, fire the accept modal
-        // now that auth is ready.
-        friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
-          console.warn('[Bookish:AccountUI] friends invite handler failed:', err?.message || err)
-        );
-      }, 500);
-
+      completePostSignIn();
     } catch (e) {
       console.error('[AccountUI] Sign in failed:', e);
       let msg = 'Sign in failed. Please check your email and password.';
@@ -627,12 +620,196 @@ function renderSignInForm(content) {
       error.textContent = msg;
       progress.style.display = 'none';
       signInBtn.disabled = false;
+      if (passkeyBtn) passkeyBtn.disabled = false;
+    }
+  });
+
+  passkeyBtn.addEventListener('click', async () => {
+    const progress = content.querySelector('#signInProgress');
+    const error = content.querySelector('#signInError');
+    error.style.display = 'none';
+    progress.style.display = 'block';
+    progress.textContent = 'Authenticating…';
+    passkeyBtn.disabled = true;
+    signInBtn.disabled = true;
+
+    // Capture the email field's current value (if any) at click time. The
+    // user may have typed an email then chosen passkey instead — we don't
+    // pre-fill the stale-repair view from this (the spec defers that), but
+    // we DO use it as a hint for `displayName` if the SDK auth succeeded
+    // and the user typed an email.
+    const typedEmail = emailInput.value.trim().toLowerCase();
+
+    try {
+      await tarnService.authenticateWithPasskey({
+        stalePasskeyHandler: () => promptStalePasskeyRepair(content),
+      });
+
+      // Passkey auth doesn't return the email (passkey-only sessions are
+      // username-less by design). Set displayName only if we have one in
+      // hand from the form field.
+      if (typedEmail && typedEmail.includes('@')) {
+        tarnService.displayName(typedEmail.split('@')[0]);
+      }
+
+      progress.textContent = 'Signed in!';
+      completePostSignIn();
+    } catch (e) {
+      console.error('[AccountUI] Passkey sign-in failed:', e);
+      // Re-render the original sign-in form fresh so the stale-repair
+      // view (if it was shown) cleanly disappears and any password the
+      // user typed in the repair form is dropped from the DOM.
+      renderSignInForm(content);
+      const errEl = content.querySelector('#signInError');
+      if (errEl) {
+        errEl.style.display = 'block';
+        errEl.textContent = humanizePasskeySigninError(e);
+      }
     }
   });
 
   switchLink.addEventListener('click', (e) => {
     e.preventDefault();
     renderCreateAccountForm(content);
+  });
+
+  // Asynchronously probe passkey support; reveal the CTA + divider only
+  // if supported. The cached probe from Phase 3 is reused.
+  getPasskeysSupported().then((supported) => {
+    if (!supported) return;
+    // Re-query in case the form was re-rendered between probe start
+    // and resolve; bail if the elements are gone.
+    const btn = content.querySelector('#signInPasskeyBtn');
+    const div = content.querySelector('#signInOrDivider');
+    if (btn) btn.style.display = '';
+    if (div) div.style.display = '';
+  }).catch(() => { /* swallow — keep button hidden on probe failure */ });
+}
+
+/**
+ * Run the post-sign-in handoff used by both the password and passkey
+ * paths. Sets transient state, kicks off subscription fetch, and (after
+ * a 500ms delay matching the original UX) closes the modal, starts sync,
+ * refreshes status, updates book dots, and runs the friends-invite
+ * redemption check.
+ *
+ * The 500ms delay lets the "Signed in!" progress text be visible briefly
+ * before the modal closes.
+ */
+function completePostSignIn() {
+  transientState.justSignedIn = true;
+  transientState.signInTime = Date.now();
+
+  // Fresh subscription state for the signed-in user (#74).
+  subscription.resetStatus();
+  subscription.fetchStatus().catch(() => {});
+
+  setTimeout(() => {
+    closeAccountModal();
+    startSync();
+    uiStatusManager.refresh();
+    if (typeof window.updateBookDots === 'function') window.updateBookDots();
+    // Friends invite redemption (#118). If the user signed in to redeem
+    // an invite they clicked while logged out, fire the accept modal
+    // now that auth is ready.
+    friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
+      console.warn('[Bookish:AccountUI] friends invite handler failed:', err?.message || err)
+    );
+  }, 500);
+}
+
+/**
+ * Render the stale-credential repair view in place of the sign-in form
+ * and resolve the returned Promise with `{ username, password }` if the
+ * user submits, or `null` if they cancel. Called by the SDK via
+ * `stalePasskeyHandler` only when the just-used credential is stale —
+ * users will rarely see this view.
+ *
+ * The view fully replaces the sign-in form's content so any half-typed
+ * state (email-only, partial password) doesn't leak in. On submit, the
+ * password is collected and the form is removed from the DOM before the
+ * Promise resolves — by the time the SDK is processing the repair, no
+ * password is visible anywhere on the page.
+ *
+ * @param {HTMLElement} content - the modal content container
+ * @returns {Promise<{ username: string, password: string } | null>}
+ */
+function promptStalePasskeyRepair(content) {
+  return new Promise((resolve) => {
+    content.innerHTML = `
+      <div class="auth-form">
+        <div class="auth-header">
+          <div class="auth-icon">${SVG_SHIELD}</div>
+          <h2>Just a moment</h2>
+          <p>We need to confirm it's you to keep this device signed in. Enter your email and password — this only happens occasionally.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="staleRepairEmail">Email</label>
+          <input type="email" id="staleRepairEmail" autocomplete="email" placeholder="you@example.com" required />
+        </div>
+
+        <div class="form-group">
+          <label for="staleRepairPassword">Password</label>
+          <div class="password-field">
+            <input type="password" id="staleRepairPassword" autocomplete="current-password" placeholder="Your password" required />
+            <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
+          </div>
+        </div>
+
+        <button id="staleRepairBtn" class="btn primary auth-submit" disabled>
+          Continue
+        </button>
+
+        <div class="auth-switch">
+          <a href="#" id="staleRepairCancel">Cancel</a>
+        </div>
+      </div>
+    `;
+
+    const emailInput = content.querySelector('#staleRepairEmail');
+    const pwInput = content.querySelector('#staleRepairPassword');
+    const btn = content.querySelector('#staleRepairBtn');
+    const cancelLink = content.querySelector('#staleRepairCancel');
+
+    content.querySelectorAll('.password-toggle').forEach(b => {
+      b.addEventListener('click', () => {
+        const input = b.previousElementSibling;
+        const showing = input.type === 'text';
+        input.type = showing ? 'password' : 'text';
+        b.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
+      });
+    });
+
+    const validate = () => {
+      btn.disabled = !(emailInput.value.trim() && pwInput.value.length >= 1);
+    };
+    emailInput.addEventListener('input', validate);
+    pwInput.addEventListener('input', validate);
+
+    let resolved = false;
+    const finish = (val) => {
+      if (resolved) return;
+      resolved = true;
+      // Clear password field BEFORE resolving so the value is gone from
+      // the DOM by the time the SDK starts processing it. The form will
+      // also be replaced wholesale by the success/failure path, but
+      // belt-and-suspenders.
+      try { pwInput.value = ''; } catch { /* noop */ }
+      resolve(val);
+    };
+
+    btn.addEventListener('click', () => {
+      const username = emailInput.value.trim().toLowerCase();
+      const password = pwInput.value;
+      if (!username || !password) return;
+      finish({ username, password });
+    });
+
+    cancelLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      finish(null);
+    });
   });
 }
 
@@ -1462,6 +1639,50 @@ function humanizePasskeyError(err) {
 }
 
 /**
+ * Translate a passkey *sign-in* error into a user-facing string. Sibling
+ * of `humanizePasskeyError` (registration). The error space is different:
+ * sign-in surfaces "no passkey on this device", `StalePasskeyError` (raised
+ * by the SDK when the stale-repair handler returns null), and the usual
+ * WebAuthn cancel / network / generic cases.
+ */
+function humanizePasskeySigninError(err) {
+  const msg = err?.message || '';
+  const name = err?.name || '';
+
+  // SDK raises StalePasskeyError when stalePasskeyHandler returns null.
+  // Detect by name (the SDK's class isn't re-exported from the bundle).
+  if (name === 'StalePasskeyError' || /StalePasskeyError/i.test(msg)) {
+    return 'Sign-in cancelled.';
+  }
+
+  // WebAuthn user-cancel: NotAllowedError on most browsers.
+  if (name === 'NotAllowedError' || /not allowed|user cancelled|user canceled|cancelled by user/i.test(msg)) {
+    return 'Passkey sign-in was cancelled. Try again or sign in with your password.';
+  }
+
+  // No registered passkey for this device / account. The server's
+  // /api/v1/auth/passkey/authentication-options route returns a 404-ish
+  // when no credential matches; the SDK wraps this into "options failed".
+  // Match on common phrasings — "no credentials", "no passkeys", etc.
+  if (
+    /no credentials|no passkey|no registered|credential not found|no_credentials_found|options failed/i.test(msg)
+  ) {
+    return "We couldn't find a passkey on this device. Sign in with your password to add one.";
+  }
+
+  // Network / fetch failure.
+  if (
+    name === 'TypeError' && /failed to fetch|network|load failed/i.test(msg) ||
+    /network|fetch|offline/i.test(msg)
+  ) {
+    return "Couldn't reach the server. Check your connection and try again.";
+  }
+
+  // Generic fallback.
+  return "Passkey sign-in didn't work. Try again or sign in with your password.";
+}
+
+/**
  * Open the Add-passkey dialog. Resolves with `{ deviceLabel }` on
  * confirm, `null` on cancel/backdrop dismiss. The returned label is
  * trimmed; an empty trimmed value blocks the confirm button.
@@ -1987,6 +2208,8 @@ export const __test__ = {
   suggestDeviceLabel,
   truncateCredentialId,
   normalizePastedPhrase,
+  humanizePasskeySigninError,
+  promptStalePasskeyRepair,
   resetPasskeysSupportedCache: () => {
     _passkeysSupportedCache = null;
     _passkeysSupportedProbe = null;

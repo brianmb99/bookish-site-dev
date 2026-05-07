@@ -141,6 +141,53 @@ export async function login(email, password) {
 }
 
 /**
+ * Authenticate using a registered passkey (recovery v2 — phase 4). Peer
+ * of `login()`: no prior session required, succeeds the same way (JWT +
+ * DEK chain installed, persisted session blob written by the SDK), and
+ * the resulting client behaves identically to a password-authenticated
+ * one. Subsequent collection / settings / sharing calls all work.
+ *
+ * Side-effects mirror `login()`:
+ *   - On success, cache the SDK's `dataLookupKey` in memory and persist
+ *     it to localStorage so subscription / per-user routes can keep
+ *     working. The SDK does NOT expose the email on the result of a
+ *     passkey auth (passkey-only sessions are username-less by design),
+ *     so the email cache is left alone here — callers that have an
+ *     email in hand (e.g. the stale-repair handler) can persist it
+ *     themselves via the EMAIL storage key if they choose to.
+ *
+ * `stalePasskeyHandler` is invoked by the SDK ONLY when the server
+ * flags the just-used credential as stale (no `passkey_prf` wrapping
+ * on the latest gen — typically because a `changeCredentials` ran on
+ * another device without re-tapping this passkey). When invoked, the
+ * handler MUST return `{ username, password } | null`:
+ *   - `{ username, password }` lets the SDK derive the password KEK,
+ *     unwrap the latest gen, re-wrap it under this passkey's PRF key,
+ *     and submit the repaired envelope. Auth then continues as if the
+ *     credential had never been stale.
+ *   - `null` aborts the repair; the SDK throws `StalePasskeyError`
+ *     (detectable via `err.name === 'StalePasskeyError'`).
+ * The wrapper itself does not invoke the handler — it's purely a
+ * passthrough.
+ *
+ * @param {{
+ *   stalePasskeyHandler?: () => Promise<{ username: string, password: string } | null>,
+ *   credentialId?: string,
+ *   deviceLabel?: string,
+ * }} [opts]
+ * @returns {Promise<{dataLookupKey?: string}>}
+ */
+export async function authenticateWithPasskey(opts = {}) {
+  const client = await ensureClient();
+  const result = await client.authenticateWithPasskey(opts);
+  if (result?.dataLookupKey) {
+    _dataLookupKey = result.dataLookupKey;
+    localStorage.setItem(DLK_STORAGE_KEY, result.dataLookupKey);
+  }
+  return result;
+}
+
+/**
  * Log out — clears the local session via the SDK (which forgets the
  * persisted blob and invalidates the IndexedDB wrapping key) and clears
  * Bookish's UI-side metadata.
@@ -335,16 +382,17 @@ export const accountKey = {
   isStored: isAccountKeyStored,
 };
 
-// ============ PASSKEYS (recovery v2 — phase 3) ============
+// ============ PASSKEYS (recovery v2 — phase 3, sign-in in phase 4) ============
 //
 // Thin passthroughs to `client.passkeys.*`. The SDK handles WebAuthn-PRF
 // registration / list / remove / supported-detection internally. Bookish
 // just surfaces these in the Account & Security settings section.
 //
-// Sign-in via passkey (`authenticateWithPasskey`) and the password-change
-// re-tap callback (`passkeyTapHandler`) are intentionally NOT wrapped here
-// — they belong to phase 4 (sign-in flow) and a future change-password
-// affordance respectively.
+// Sign-in via passkey (`authenticateWithPasskey`) is exposed as a top-level
+// wrapper below — it's a peer of `login()` (no prior session), not a
+// passkeys-namespace method. The password-change re-tap callback
+// (`passkeyTapHandler`) remains unwrapped: it belongs to a future
+// change-password affordance Bookish doesn't have yet.
 
 /**
  * Whether this browser/device can register and use passkeys (WebAuthn +
