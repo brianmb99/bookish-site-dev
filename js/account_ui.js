@@ -10,6 +10,7 @@ import { attachSwipeDismiss } from './core/swipe_dismiss.js';
 import { msToDateInputUtc } from './core/id_core.js';
 import * as friends from './core/friends.js';
 import * as friendsRouter from './core/friends_router.js';
+import * as accountKeyReminder from './core/account_key_reminder.js';
 import {
   isFriendsHiddenFromHeader,
   setHideFriendsFromHeader,
@@ -35,6 +36,12 @@ async function performLogout() {
   stopSync();
   await tarnService.logout();
   subscription.resetStatus();
+
+  // Clear the account-key reminder counter + flags so a different user
+  // signing in on the same browser is evaluated freshly. The reminder's
+  // localStorage state is per-device; the previous user's "saved" flag
+  // shouldn't suppress the new user's reminder. (Phase 5)
+  try { accountKeyReminder.reset(); } catch {}
 
   // Clear IndexedDB cache so next user doesn't see stale books
   try {
@@ -715,6 +722,13 @@ function completePostSignIn() {
     friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
       console.warn('[Bookish:AccountUI] friends invite handler failed:', err?.message || err)
     );
+    // Phase 5: engagement-milestone reminder. init() is idempotent
+    // within a page life — the session counter only increments on the
+    // first call. Banner is rendered only when shouldShow() returns
+    // true (Model B + ≥2 sessions + ≥5 books + not already saved).
+    try { accountKeyReminder.init(); } catch (err) {
+      console.warn('[Bookish:AccountUI] accountKeyReminder.init failed:', err?.message || err);
+    }
   }, 500);
 }
 
@@ -1771,8 +1785,21 @@ function humanizeAccountKeyError(err, { phraseFlow }) {
  * Start the View account key flow: password prompt (with inline-error
  * retry) → SDK call → grid overlay. The password dialog stays open on
  * wrong-password attempts; cancel aborts the flow.
+ *
+ * Accepts an optional `onCompleted` callback fired ONLY when the user
+ * has successfully reached the result overlay AND tapped the Done
+ * button — i.e. the user has actually seen the words. Cancel from the
+ * password prompt, wrong-password retry that the user abandons, or any
+ * thrown error all leave `onCompleted` un-fired. Used by the Phase 5
+ * engagement-milestone reminder to mark the key as "saved".
+ *
+ * Exported so the reminder module can invoke it without going through
+ * the Settings → Account & Security panel.
+ *
+ * @param {{ onCompleted?: () => void }} [opts]
  */
-async function startViewAccountKeyFlow() {
+export async function startViewAccountKeyFlow(opts = {}) {
+  const { onCompleted } = opts;
   const result = await requestPasswordConfirmation({
     title: 'View your account key',
     body: 'Re-enter your password to see your 24-word account key.',
@@ -1784,6 +1811,7 @@ async function startViewAccountKeyFlow() {
     heading: 'Your account key',
     body: "Save these 24 words somewhere safe — a password manager works well. We won't be able to give them to you again if you lose them.",
     accountKey: result.accountKey,
+    onDone: typeof onCompleted === 'function' ? onCompleted : undefined,
   });
 }
 
@@ -1822,7 +1850,18 @@ async function startReplaceAccountKeyFlow() {
  * Show the 24-word grid in a full overlay above the account panel. The
  * Done button removes the overlay and returns the user to the panel.
  *
- * @param {{ heading: string, body: string, accountKey: string }} opts
+ * The optional `onDone` callback fires ONLY when the user taps Done —
+ * not on overlay teardown via other paths (there are none today, but
+ * this contract is documented so future changes don't break callers
+ * that depend on "Done = user actually saw the words"). Used by the
+ * Phase 5 engagement reminder to mark the account key as saved.
+ *
+ * @param {{
+ *   heading: string,
+ *   body: string,
+ *   accountKey: string,
+ *   onDone?: () => void,
+ * }} opts
  */
 function showAccountKeyResultOverlay(opts) {
   const overlay = createOverlay('account-key-result-overlay');
@@ -1843,6 +1882,11 @@ function showAccountKeyResultOverlay(opts) {
   if (done) {
     done.addEventListener('click', () => {
       overlay.remove();
+      if (typeof opts.onDone === 'function') {
+        try { opts.onDone(); } catch (err) {
+          console.warn('[AccountUI] onDone callback threw:', err?.message || err);
+        }
+      }
     });
   }
 }

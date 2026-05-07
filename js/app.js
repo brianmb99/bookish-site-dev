@@ -17,6 +17,7 @@ import { initPullToRefresh } from './core/pull_to_refresh.js';
 import { getFieldPref, setFieldPref } from './core/field_prefs.js';
 import * as subscription from './core/subscription.js';
 import * as friendsRouter from './core/friends_router.js';
+import * as accountKeyReminder from './core/account_key_reminder.js';
 import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend-glyph-trigger.js';
 import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCardDetails, generatedCoverColor as sharedGeneratedCoverColor, escapeHtml as sharedEscapeHtml } from './components/book-card.js';
 import { renderPipOverlay } from './components/friend-pip.js';
@@ -2949,6 +2950,13 @@ async function initCacheLayer(){
       friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
         console.warn('[Bookish] Friends invite handler failed:', err?.message || err)
       );
+      // Phase 5: engagement-milestone reminder. Increment the session
+      // counter (idempotent within a page life) and render the banner if
+      // the user qualifies (Model B + ≥2 sessions + ≥5 books + not
+      // already saved + not dismissed this session).
+      try { accountKeyReminder.init(); } catch (err) {
+        console.warn('[Bookish] accountKeyReminder.init failed:', err?.message || err);
+      }
     } else {
       console.log('[Bookish] User not logged in, sync loop will not start');
       // Friends invite redemption (#118) — if they landed via /invite/... and
