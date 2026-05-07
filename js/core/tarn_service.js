@@ -24,7 +24,6 @@ import { bookishSchema } from './bookish-schema.js';
 
 const TARN_API = window.BOOKISH_API_BASE || 'https://api.tarn.dev';
 const APP_ID = 'bookish';
-const APP_NAME = 'Bookish';
 
 const STORAGE_KEYS = {
   EMAIL: 'bookish.email',
@@ -88,30 +87,33 @@ async function ensureClient() {
 /**
  * Register a new account.
  *
- * The Tarn SDK generates a 24-word BIP39 recovery phrase + a rendered PDF
- * client-side, and (by default) forwards the PDF to the user's email via
- * Tarn's recovery-email forwarder. The phrase + PDF are returned in-memory
- * so the caller can also display the words + offer a local download.
+ * The Tarn SDK generates a 24-word BIP39 account key client-side and (in
+ * Model B, the default) ships an encrypted wrap of it to Tarn so the user
+ * can retrieve it later from Settings. The plaintext account key is
+ * returned in memory so the caller can surface it to the user once at
+ * signup.
  *
- * The caller MUST surface the phrase to the user. The SDK does not cache
- * either the phrase or the PDF bytes; Bookish never persists them either.
+ * Tarn no longer renders a PDF kit or forwards anything by email — kit
+ * format and delivery are an app concern. Bookish currently shows the
+ * 24 words on screen with a copy button and stops there; a downloadable
+ * kit can be added later as a separate piece of work.
+ *
+ * The caller MUST surface the account key to the user (that's what
+ * `recoveryAcknowledged: true` is asserting). The SDK does not cache it;
+ * Bookish does not persist it either.
  *
  * @param {string} email
  * @param {string} password
  * @returns {Promise<{
  *   dataLookupKey?: string,
- *   recoveryPhrase: string,
- *   pdfBytes: Uint8Array,
- *   emailDelivered?: boolean,
+ *   accountKey: string,
  * }>}
  */
 export async function register(email, password) {
   const client = await ensureClient();
   const result = await client.register(email, password, {
+    storeAccountKey: true,
     recoveryAcknowledged: true,
-    emailRecoveryKit: true,
-    recipientEmail: email,
-    appName: APP_NAME,
   });
   if (email) localStorage.setItem(STORAGE_KEYS.EMAIL, email);
   if (result?.dataLookupKey) {

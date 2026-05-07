@@ -217,13 +217,8 @@ function renderCreateAccountForm(content) {
       </div>
 
       <div class="auth-note">
-        Your reading list is private — even Bookish can't read it or reset your password. After signup we'll show you a 24-word recovery phrase and email you a PDF copy. Save them both somewhere safe.
+        Your reading list is private — even Bookish can't read it or reset your password. After signup we'll show you a 24-word account key. You can view it again any time in Settings.
       </div>
-
-      <label class="auth-consent">
-        <input type="checkbox" id="recoveryConsent" />
-        <span>I understand I'll be shown a 24-word recovery phrase and that without it and my password, my data can't be recovered.</span>
-      </label>
 
       <button id="createAccountBtn" class="btn primary auth-submit" disabled>
         Create Account
@@ -242,7 +237,6 @@ function renderCreateAccountForm(content) {
   const emailInput = content.querySelector('#acctEmail');
   const passwordInput = content.querySelector('#acctPassword');
   const confirmInput = content.querySelector('#acctConfirmPassword');
-  const consentCheckbox = content.querySelector('#recoveryConsent');
   const createBtn = content.querySelector('#createAccountBtn');
   const switchLink = content.querySelector('#switchToSignIn');
 
@@ -250,12 +244,11 @@ function renderCreateAccountForm(content) {
     const email = emailInput.value.trim();
     const password = passwordInput.value;
     const confirm = confirmInput.value;
-    const consent = consentCheckbox.checked;
     const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const passwordValid = password.length >= 8;
     const confirmMatch = password === confirm && confirm.length > 0;
 
-    createBtn.disabled = !(emailValid && passwordValid && confirmMatch && consent);
+    createBtn.disabled = !(emailValid && passwordValid && confirmMatch);
   }
 
   // Email preview
@@ -308,7 +301,6 @@ function renderCreateAccountForm(content) {
     validate();
   });
 
-  consentCheckbox.addEventListener('change', validate);
   emailInput.addEventListener('input', validate);
 
   // Create account
@@ -324,12 +316,13 @@ function renderCreateAccountForm(content) {
     progress.textContent = 'Creating account...';
 
     try {
-      // Step 1: Register with Tarn. The SDK derives keys, generates a
-      // 24-word recovery phrase + PDF, and (by default) forwards the PDF
-      // through the recovery-email forwarder.
+      // Step 1: Register with Tarn. The SDK derives keys and generates a
+      // 24-word BIP39 account key. In Model B (the default) the SDK also
+      // ships an encrypted wrap of the key to Tarn so the user can view
+      // it again later from Settings — no PDF, no email.
       progress.textContent = 'Deriving encryption keys...';
       const reg = await tarnService.register(email, password);
-      const { dataLookupKey, recoveryPhrase, pdfBytes, emailDelivered } = reg;
+      const { dataLookupKey, accountKey } = reg;
 
       // Step 2: Set free-tier rules via Bookish API. Critical — without
       // rules, writes are denied. Retry up to 3 times with backoff.
@@ -369,15 +362,12 @@ function renderCreateAccountForm(content) {
       subscription.resetStatus();
       subscription.fetchStatus().catch(() => {});
 
-      // Step 4: Hand off to the recovery-phrase view. The user CANNOT
-      // dismiss this until they acknowledge having saved the phrase —
-      // that's the whole point of surfacing it. Hold sync until then so
-      // the post-modal startSync() runs from the same code path.
-      renderRecoveryPhraseView(content, {
-        phrase: recoveryPhrase,
-        pdfBytes,
-        emailDelivered,
-        provisioned,
+      // Step 4: Hand off to the account-key reveal. The user can dismiss
+      // via Continue OR the modal close button — both run the same
+      // post-signup handoff. We don't gate the dismiss anymore because
+      // the user can re-view the account key from Settings any time.
+      renderAccountKeyView(content, {
+        accountKey,
         onContinue: () => {
           closeAccountModal();
           startSync();
@@ -391,8 +381,8 @@ function renderCreateAccountForm(content) {
         },
       });
 
-      // Drop the in-memory phrase + PDF reference from this scope. The
-      // SDK already doesn't cache them; the recovery view holds its own
+      // Drop the in-memory account-key reference from this scope. The
+      // SDK already doesn't cache it; the reveal view holds its own
       // closure-scoped copy until dismiss.
     } catch (e) {
       console.error('[AccountUI] Registration failed:', e);
@@ -413,89 +403,61 @@ function renderCreateAccountForm(content) {
 }
 
 // ============================================================================
-// RECOVERY PHRASE VIEW (post-register)
+// ACCOUNT KEY VIEW (post-register)
 // ============================================================================
 
 /**
- * Render the post-register recovery-phrase view. Shows the 24 words in a
- * numbered grid, a Download PDF button, an email-delivery indicator, and
- * an acknowledgment checkbox that gates the Continue button.
+ * Render the post-register account-key reveal. Shows the 24 words in a
+ * numbered grid plus a copy button. The Continue button is enabled by
+ * default; the user can also dismiss the modal via the normal close
+ * affordance — both paths run the same post-signup handoff.
  *
- * The user cannot dismiss this except by acknowledging — modal close is
- * also locked while this view is mounted.
+ * No save-proof gate: the user can view this key again any time from
+ * Settings (recovery v2, Model B by default). Type-back or checkbox
+ * gating at signup is security theater that retrieval-from-Settings
+ * solves more cleanly.
  *
  * @param {HTMLElement} content
  * @param {{
- *   phrase: string,
- *   pdfBytes: Uint8Array,
- *   emailDelivered: boolean,
- *   provisioned: boolean,
+ *   accountKey: string,
  *   onContinue: () => void,
  * }} opts
  */
-function renderRecoveryPhraseView(content, opts) {
-  const { phrase, pdfBytes, emailDelivered, provisioned, onContinue } = opts;
-  const words = phrase.trim().split(/\s+/);
-
-  // Lock modal close while this view is mounted — there's no other way
-  // for the user to see the phrase.
-  const modal = document.getElementById('accountModal');
-  if (modal) modal.dataset.allowClose = 'false';
+function renderAccountKeyView(content, opts) {
+  const { accountKey, onContinue } = opts;
+  const words = accountKey.trim().split(/\s+/);
 
   const wordCells = words.map((w, i) => {
     const n = String(i + 1).padStart(2, '0');
-    return `<li class="recovery-word"><span class="recovery-word-num">${n}</span><span class="recovery-word-text">${w}</span></li>`;
+    return `<li class="account-key-word"><span class="account-key-word-num">${n}</span><span class="account-key-word-text">${w}</span></li>`;
   }).join('');
 
-  const emailMessage = emailDelivered
-    ? `<div class="recovery-email-status recovery-email-ok">We also sent the PDF to your email — save it somewhere safe and delete the email. Inboxes are a common attack target.</div>`
-    : `<div class="recovery-email-status recovery-email-warn">Email delivery failed. Please download the PDF before continuing — it's the only copy you'll see.</div>`;
-
-  const provisioningNote = provisioned
-    ? ''
-    : `<div class="recovery-email-status recovery-email-warn" style="margin-top:8px;">Cloud sync setup will retry shortly — your account is ready, but writes may be delayed by a few seconds.</div>`;
-
   content.innerHTML = `
-    <div class="auth-form recovery-phrase-view">
+    <div class="auth-form account-key-view">
       <div class="auth-header">
         <div class="auth-icon">${SVG_SHIELD}</div>
-        <h2>Save your recovery phrase</h2>
-        <p>These 24 words are the only way to recover your account if you forget your password. Bookish never sees them.</p>
+        <h2>Your account key</h2>
+        <p>Save these 24 words somewhere safe — a password manager works well. We can't reset your account for you, but you can view this key again any time in Settings → Account &amp; Security.</p>
       </div>
 
-      <ol class="recovery-phrase-grid">${wordCells}</ol>
+      <ol class="account-key-grid">${wordCells}</ol>
 
-      <div class="recovery-actions-row">
-        <button id="recoveryCopyBtn" type="button" class="btn secondary">Copy words</button>
-        <button id="recoveryDownloadBtn" type="button" class="btn secondary">${SVG_DOWNLOAD} Download PDF</button>
+      <div class="account-key-actions-row">
+        <button id="accountKeyCopyBtn" type="button" class="btn secondary">Copy words</button>
       </div>
 
-      ${emailMessage}
-      ${provisioningNote}
-
-      <label class="auth-consent">
-        <input type="checkbox" id="recoverySavedAck" />
-        <span>I've saved my recovery phrase. I understand that without it, I cannot recover my account if I forget my password.</span>
-      </label>
-
-      <button id="recoveryContinueBtn" class="btn primary auth-submit" disabled>
+      <button id="accountKeyContinueBtn" class="btn primary auth-submit">
         Continue to Bookish
       </button>
     </div>
   `;
 
-  const ackCheckbox = content.querySelector('#recoverySavedAck');
-  const continueBtn = content.querySelector('#recoveryContinueBtn');
-  const copyBtn = content.querySelector('#recoveryCopyBtn');
-  const downloadBtn = content.querySelector('#recoveryDownloadBtn');
-
-  ackCheckbox.addEventListener('change', () => {
-    continueBtn.disabled = !ackCheckbox.checked;
-  });
+  const continueBtn = content.querySelector('#accountKeyContinueBtn');
+  const copyBtn = content.querySelector('#accountKeyCopyBtn');
 
   copyBtn.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(phrase);
+      await navigator.clipboard.writeText(accountKey);
       copyBtn.textContent = 'Copied';
       setTimeout(() => { copyBtn.textContent = 'Copy words'; }, 1500);
     } catch {
@@ -504,25 +466,34 @@ function renderRecoveryPhraseView(content, opts) {
     }
   });
 
-  downloadBtn.addEventListener('click', () => {
-    // pdfBytes is a Uint8Array from the SDK. Wrap in a Blob so the
-    // browser triggers a download with the right MIME type.
-    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'bookish-recovery-phrase.pdf';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
-  });
-
-  continueBtn.addEventListener('click', () => {
-    if (!ackCheckbox.checked) return;
-    if (modal) modal.dataset.allowClose = 'true';
+  // Both Continue and the modal's normal close paths (X button, backdrop
+  // click, swipe-to-dismiss) should run the same post-signup handoff —
+  // there's no save-proof gate to preserve, and the user can re-view the
+  // account key from Settings any time. We guard with `fired` so a
+  // double-tap doesn't run the handoff twice.
+  let fired = false;
+  const runHandoff = () => {
+    if (fired) return;
+    fired = true;
+    // Detach our own backdrop listener so it doesn't leak past this view.
+    if (modal) modal.removeEventListener('click', backdropHandler);
     onContinue();
-  });
+  };
+
+  continueBtn.addEventListener('click', runHandoff);
+
+  // Wire close-via-X and backdrop. These already call closeAccountModal
+  // (which tears down the UI); piggyback on them to run the handoff first.
+  // The existing init-time listener on the close button still runs after
+  // ours and will close the modal — runHandoff calls closeAccountModal()
+  // via onContinue too, but closeAccountModal is idempotent.
+  const modal = document.getElementById('accountModal');
+  const closeBtn = document.getElementById('accountModalClose');
+  if (closeBtn) closeBtn.addEventListener('click', runHandoff, { once: true });
+  const backdropHandler = (e) => {
+    if (e.target === modal) runHandoff();
+  };
+  if (modal) modal.addEventListener('click', backdropHandler);
 }
 
 // ============================================================================
