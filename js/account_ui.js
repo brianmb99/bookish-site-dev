@@ -407,6 +407,49 @@ function renderCreateAccountForm(content) {
 // ============================================================================
 
 /**
+ * Build the inner markup for the 24-word account-key grid. Used by signup
+ * reveal, Settings → View account key, and Settings → Replace account key
+ * (post-rotate). Returns the HTML string for the grid + copy row; the
+ * caller wraps it in whatever surrounding chrome it needs (auth-header,
+ * action button, etc.) and is responsible for wiring the copy button.
+ *
+ * @param {string} accountKey 24-word string
+ * @returns {string} HTML
+ */
+function buildAccountKeyGridMarkup(accountKey) {
+  const words = accountKey.trim().split(/\s+/);
+  const wordCells = words.map((w, i) => {
+    const n = String(i + 1).padStart(2, '0');
+    return `<li class="account-key-word"><span class="account-key-word-num">${n}</span><span class="account-key-word-text">${escapeHtml(w)}</span></li>`;
+  }).join('');
+  return `
+    <ol class="account-key-grid">${wordCells}</ol>
+    <div class="account-key-actions-row">
+      <button data-account-key-copy type="button" class="btn secondary">Copy words</button>
+    </div>
+  `;
+}
+
+/**
+ * Wire the copy button (`[data-account-key-copy]`) inside `root` to copy
+ * `accountKey` to the clipboard, with transient feedback on the button.
+ */
+function wireAccountKeyCopyButton(root, accountKey) {
+  const copyBtn = root.querySelector('[data-account-key-copy]');
+  if (!copyBtn) return;
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(accountKey);
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => { copyBtn.textContent = 'Copy words'; }, 1500);
+    } catch {
+      copyBtn.textContent = "Couldn't copy";
+      setTimeout(() => { copyBtn.textContent = 'Copy words'; }, 1500);
+    }
+  });
+}
+
+/**
  * Render the post-register account-key reveal. Shows the 24 words in a
  * numbered grid plus a copy button. The Continue button is enabled by
  * default; the user can also dismiss the modal via the normal close
@@ -425,12 +468,6 @@ function renderCreateAccountForm(content) {
  */
 function renderAccountKeyView(content, opts) {
   const { accountKey, onContinue } = opts;
-  const words = accountKey.trim().split(/\s+/);
-
-  const wordCells = words.map((w, i) => {
-    const n = String(i + 1).padStart(2, '0');
-    return `<li class="account-key-word"><span class="account-key-word-num">${n}</span><span class="account-key-word-text">${w}</span></li>`;
-  }).join('');
 
   content.innerHTML = `
     <div class="auth-form account-key-view">
@@ -440,11 +477,7 @@ function renderAccountKeyView(content, opts) {
         <p>Save these 24 words somewhere safe — a password manager works well. We can't reset your account for you, but you can view this key again any time in Settings → Account &amp; Security.</p>
       </div>
 
-      <ol class="account-key-grid">${wordCells}</ol>
-
-      <div class="account-key-actions-row">
-        <button id="accountKeyCopyBtn" type="button" class="btn secondary">Copy words</button>
-      </div>
+      ${buildAccountKeyGridMarkup(accountKey)}
 
       <button id="accountKeyContinueBtn" class="btn primary auth-submit">
         Continue to Bookish
@@ -453,18 +486,7 @@ function renderAccountKeyView(content, opts) {
   `;
 
   const continueBtn = content.querySelector('#accountKeyContinueBtn');
-  const copyBtn = content.querySelector('#accountKeyCopyBtn');
-
-  copyBtn.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(accountKey);
-      copyBtn.textContent = 'Copied';
-      setTimeout(() => { copyBtn.textContent = 'Copy words'; }, 1500);
-    } catch {
-      copyBtn.textContent = "Couldn't copy";
-      setTimeout(() => { copyBtn.textContent = 'Copy words'; }, 1500);
-    }
-  });
+  wireAccountKeyCopyButton(content, accountKey);
 
   // Both Continue and the modal's normal close paths (X button, backdrop
   // click, swipe-to-dismiss) should run the same post-signup handoff —
@@ -689,6 +711,29 @@ function renderAccountPanel(content) {
         <button type="button" id="accountArchiveBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Open archive <span aria-hidden="true" class="external-link-icon">\u2197</span></button>
       </div>
 
+      <div class="account-panel-security" id="accountPanelSecurity">
+        <div class="account-panel-sub-label">Account &amp; Security</div>
+
+        <div class="account-security-block">
+          <div class="account-security-subtitle">Account key</div>
+          <div class="account-security-desc">A 24-word phrase that's the only way to recover your account if you forget your password.</div>
+          <div class="account-security-actions">
+            <button type="button" id="viewAccountKeyBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">View account key</button>
+            <button type="button" id="replaceAccountKeyBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Replace account key</button>
+          </div>
+        </div>
+
+        <div class="account-security-block">
+          <div class="account-security-subtitle">Manual account-key custody</div>
+          <div class="account-security-desc">When on, your account key isn't stored on our servers. You'll need your saved key to recover your account if you forget your password. More private, less safe if you lose both.</div>
+          <label class="account-friends-toggle" for="accountCustodyToggle">
+            <span class="account-friends-toggle-label" id="accountCustodyToggleLabel">Manual custody</span>
+            <input type="checkbox" id="accountCustodyToggle" />
+          </label>
+          <div class="account-security-error" id="accountCustodyError" style="display:none;"></div>
+        </div>
+      </div>
+
       <div class="account-panel-friends" id="accountPanelFriends">
         <div class="account-panel-sub-label">Friends</div>
         <!-- #122: "+ Add a friend" entry moved to the Friends drawer (header glyph).
@@ -768,6 +813,9 @@ function renderAccountPanel(content) {
       window.open(ARCHIVE_URL, '_blank', 'noopener,noreferrer');
     });
   }
+
+  // Account & Security section — View / Replace / custody toggle (recovery v2 phase 2).
+  wireAccountSecuritySection(content);
 
   // Friends section (#118 → #122). The "+ Add a friend" entry now lives in
   // the Friends drawer (header glyph). Account keeps the read-only
@@ -965,6 +1013,523 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, ch => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
   ));
+}
+
+// ============================================================================
+// ACCOUNT & SECURITY (recovery v2 — phase 2)
+// ============================================================================
+
+/**
+ * Wire the Account & Security section: View account key, Replace account
+ * key, and the manual-custody toggle. Called once after the panel HTML is
+ * rendered. The section is statically present in the panel markup; this
+ * just attaches handlers and hydrates the toggle's initial state.
+ *
+ * @param {HTMLElement} content
+ */
+function wireAccountSecuritySection(content) {
+  const viewBtn = content.querySelector('#viewAccountKeyBtn');
+  const replaceBtn = content.querySelector('#replaceAccountKeyBtn');
+  if (viewBtn) {
+    viewBtn.addEventListener('click', () => startViewAccountKeyFlow());
+  }
+  if (replaceBtn) {
+    replaceBtn.addEventListener('click', () => startReplaceAccountKeyFlow());
+  }
+  hydrateCustodyToggle(content);
+}
+
+/**
+ * Reflect the SDK's `accountKey.isStored()` state on the custody toggle.
+ *
+ * - `true`  (Model B, server-stored) → toggle UNCHECKED (manual custody off)
+ * - `false` (Model A, not stored)    → toggle CHECKED (manual custody on)
+ * - `null`  (no auth round trip yet) → toggle disabled, label "Loading…",
+ *                                       retry once on a 100ms timer.
+ */
+function hydrateCustodyToggle(content) {
+  const toggle = content.querySelector('#accountCustodyToggle');
+  const label = content.querySelector('#accountCustodyToggleLabel');
+  const errorEl = content.querySelector('#accountCustodyError');
+  if (!toggle || !label) return;
+
+  const stored = tarnService.accountKey.isStored();
+  if (stored === null) {
+    toggle.disabled = true;
+    toggle.checked = false;
+    label.textContent = 'Loading…';
+    setTimeout(() => {
+      // The panel may have been torn down by then; bail if so.
+      if (!document.body.contains(toggle)) return;
+      hydrateCustodyToggle(content);
+    }, 100);
+    return;
+  }
+
+  toggle.disabled = false;
+  label.textContent = 'Manual custody';
+  // checked = Model A (not stored). unchecked = Model B (stored).
+  toggle.checked = stored === false;
+  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+
+  // Replace any existing change listener by cloning the node.
+  // We can't easily remove the previous anonymous handler, so on every
+  // hydrate we install one that internally guards against re-entrancy.
+  if (!toggle.dataset.bound) {
+    toggle.dataset.bound = '1';
+    toggle.addEventListener('change', async () => {
+      const wantsManualCustody = toggle.checked;
+      // Disable while the flow runs to prevent a double-click landing two
+      // step-up calls in flight at once.
+      toggle.disabled = true;
+      try {
+        if (wantsManualCustody) {
+          // OFF → ON (B → A): disable storage. Confirmation + password.
+          await runDisableStorageFlow();
+        } else {
+          // ON → OFF (A → B): enable storage. Password + 24-word phrase.
+          await runEnableStorageFlow();
+        }
+      } finally {
+        // Always re-hydrate from authoritative state — handles success
+        // (toggle reflects new state), cancel (toggle reverts), and error
+        // (toggle reverts; inline error already shown by the flow).
+        hydrateCustodyToggle(content);
+      }
+    });
+  }
+}
+
+/**
+ * Off → On (B → A) flow: confirmation dialog, then password prompt with
+ * inline-error retry, calls `disableKeyStorage` on submit. The dialog
+ * stays open across wrong-password attempts; cancel/backdrop dismiss
+ * aborts the flow.
+ */
+async function runDisableStorageFlow() {
+  const errorEl = document.getElementById('accountCustodyError');
+  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+
+  const confirmed = await confirmDialog({
+    title: 'Stop storing your account key?',
+    body: "Stop storing the wrapped account key on our servers? Make sure you've saved your 24 words first — we won't be able to give them to you again.",
+    confirmLabel: 'Continue',
+  });
+  if (!confirmed) return;
+
+  await requestPasswordConfirmation({
+    title: 'Confirm your password',
+    body: 'Re-enter your password to turn off server-side storage of your account key.',
+    confirmLabel: 'Turn on manual custody',
+    submit: async (password) => {
+      await tarnService.accountKey.disableKeyStorage({ password });
+    },
+  });
+}
+
+/**
+ * On → Off (A → B) flow: dialog with password + 24-word phrase, then
+ * `enableKeyStorage`. AccountKeyPinningError surfaces a dedicated message
+ * inside the dialog and keeps it open for retry; other errors do the same.
+ */
+async function runEnableStorageFlow() {
+  const errorEl = document.getElementById('accountCustodyError');
+  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+
+  await openEnableStorageDialog(async ({ password, accountKey: phrase }) => {
+    await tarnService.accountKey.enableKeyStorage({ password, accountKey: phrase });
+  });
+}
+
+/**
+ * Translate an SDK error into a user-facing string for the Account &
+ * Security section. `phraseFlow=true` means the error came from the
+ * enable-storage path where the user typed a phrase, so a pinning failure
+ * gets a phrase-specific message.
+ */
+function humanizeAccountKeyError(err, { phraseFlow }) {
+  const msg = err?.message || '';
+  // AccountKeyPinningError is detectable by name OR by the message text
+  // when subclassing trips up the bundler. Be defensive.
+  if (err?.name === 'AccountKeyPinningError' || /pinning|pin check|does not match/i.test(msg)) {
+    return phraseFlow
+      ? "That doesn't look like your account key. Check the spelling and try again."
+      : 'Account-key check failed. Please try again.';
+  }
+  if (/no_account_key_stored/i.test(msg)) {
+    return 'No account key is stored on our servers right now. Toggle manual custody off to start storing one.';
+  }
+  if (/step-up|challenge|wrong password|invalid password|credential/i.test(msg)) {
+    return 'Wrong password. Please try again.';
+  }
+  if (/network|fetch|timeout|offline/i.test(msg)) {
+    return "Couldn't reach our servers. Check your connection and try again.";
+  }
+  return 'Something went wrong. Please try again.';
+}
+
+/**
+ * Start the View account key flow: password prompt (with inline-error
+ * retry) → SDK call → grid overlay. The password dialog stays open on
+ * wrong-password attempts; cancel aborts the flow.
+ */
+async function startViewAccountKeyFlow() {
+  const result = await requestPasswordConfirmation({
+    title: 'View your account key',
+    body: 'Re-enter your password to see your 24-word account key.',
+    confirmLabel: 'Show account key',
+    submit: async (password) => tarnService.accountKey.view({ password }),
+  });
+  if (!result || !result.accountKey) return;
+  showAccountKeyResultOverlay({
+    heading: 'Your account key',
+    body: "Save these 24 words somewhere safe — a password manager works well. We won't be able to give them to you again if you lose them.",
+    accountKey: result.accountKey,
+  });
+}
+
+/**
+ * Start the Replace account key flow: confirmation → password (with
+ * inline-error retry) → rotate → new grid. The confirmation copy spells
+ * out that the saved 24 words stop working.
+ */
+async function startReplaceAccountKeyFlow() {
+  const confirmed = await confirmDialog({
+    title: 'Replace your account key?',
+    body: "Your saved 24 words will stop working. We'll show you a new account key — save it somewhere safe before continuing.",
+    confirmLabel: 'Continue',
+  });
+  if (!confirmed) return;
+
+  const result = await requestPasswordConfirmation({
+    title: 'Confirm your password',
+    body: 'Re-enter your password to replace your account key.',
+    confirmLabel: 'Replace account key',
+    submit: async (password) => tarnService.accountKey.rotate({ password }),
+  });
+  if (!result || !result.accountKey) return;
+  showAccountKeyResultOverlay({
+    heading: 'Your new account key',
+    body: 'Your old 24 words no longer work. Save these new 24 words somewhere safe before closing this screen.',
+    accountKey: result.accountKey,
+  });
+}
+
+// ----------------------------------------------------------------------------
+// Account-key result overlay (View / Replace shared)
+// ----------------------------------------------------------------------------
+
+/**
+ * Show the 24-word grid in a full overlay above the account panel. The
+ * Done button removes the overlay and returns the user to the panel.
+ *
+ * @param {{ heading: string, body: string, accountKey: string }} opts
+ */
+function showAccountKeyResultOverlay(opts) {
+  const overlay = createOverlay('account-key-result-overlay');
+  overlay.innerHTML = `
+    <div class="security-overlay-card">
+      <div class="auth-header">
+        <div class="auth-icon">${SVG_SHIELD}</div>
+        <h2>${escapeHtml(opts.heading)}</h2>
+        <p>${escapeHtml(opts.body)}</p>
+      </div>
+      ${buildAccountKeyGridMarkup(opts.accountKey)}
+      <button type="button" data-overlay-done class="btn primary auth-submit">Done</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  wireAccountKeyCopyButton(overlay, opts.accountKey);
+  const done = overlay.querySelector('[data-overlay-done]');
+  if (done) {
+    done.addEventListener('click', () => {
+      overlay.remove();
+    });
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Inline modal helpers — password prompt, confirm/alert dialog, enable-storage
+// inputs. Each renders a card on top of an overlay sibling to the account
+// modal so the panel stays mounted and visible underneath.
+//
+// Password handling: the input value is captured into a local variable on
+// submit and the input element is cleared (`.value = ''`) before the
+// promise resolves. Never logged, never persisted.
+// ----------------------------------------------------------------------------
+
+function createOverlay(extraClass = '') {
+  const overlay = document.createElement('div');
+  overlay.className = 'security-overlay';
+  if (extraClass) overlay.classList.add(extraClass);
+  return overlay;
+}
+
+/**
+ * Show a password-prompt modal.
+ *
+ * Two shapes:
+ *   1. With `submit`: the dialog stays open across submit failures. On
+ *      success the dialog closes and the promise resolves with whatever
+ *      `submit(password)` resolved to. On failure an inline error appears
+ *      inside the dialog and the user can edit + retry. Cancel / backdrop
+ *      dismiss resolves `null`.
+ *   2. Without `submit`: classic prompt — resolves with the password
+ *      string on confirm, `null` on cancel.
+ *
+ * Password handling: the input value is captured into a local on confirm,
+ * the input element is cleared before resolving. Never logged, never
+ * persisted.
+ *
+ * @template T
+ * @param {{
+ *   title: string,
+ *   body: string,
+ *   confirmLabel?: string,
+ *   submit?: (password: string) => Promise<T>,
+ * }} opts
+ * @returns {Promise<string | T | null>}
+ */
+function requestPasswordConfirmation({ title, body, confirmLabel = 'Continue', submit }) {
+  return new Promise((resolve) => {
+    const overlay = createOverlay();
+    overlay.innerHTML = `
+      <div class="security-overlay-card" role="dialog" aria-modal="true">
+        <h2 class="security-overlay-title">${escapeHtml(title)}</h2>
+        <p class="security-overlay-body">${escapeHtml(body)}</p>
+        <div class="form-group">
+          <label for="securityPasswordInput">Password</label>
+          <div class="password-field">
+            <input type="password" id="securityPasswordInput" autocomplete="current-password" placeholder="Your password" />
+            <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
+          </div>
+        </div>
+        <div class="security-overlay-error" data-error style="display:none;"></div>
+        <div class="security-overlay-actions">
+          <button type="button" class="btn secondary" data-cancel>Cancel</button>
+          <button type="button" class="btn primary" data-confirm disabled>${escapeHtml(confirmLabel)}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const card = overlay.querySelector('.security-overlay-card');
+    const input = overlay.querySelector('#securityPasswordInput');
+    const confirmBtn = overlay.querySelector('[data-confirm]');
+    const cancelBtn = overlay.querySelector('[data-cancel]');
+    const toggleBtn = overlay.querySelector('.password-toggle');
+    const errorEl = overlay.querySelector('[data-error]');
+
+    const cleanupAndResolve = (value) => {
+      // Clear the input before resolving so the password doesn't sit in
+      // the DOM after the overlay is removed.
+      if (input) input.value = '';
+      overlay.remove();
+      resolve(value);
+    };
+
+    input.addEventListener('input', () => {
+      confirmBtn.disabled = input.value.length === 0;
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !confirmBtn.disabled) {
+        e.preventDefault();
+        confirmBtn.click();
+      }
+    });
+
+    confirmBtn.addEventListener('click', async () => {
+      const pw = input.value;
+      if (!submit) {
+        cleanupAndResolve(pw);
+        return;
+      }
+      // Run the submit handler with the dialog still open. On error,
+      // show inline error and keep the dialog mounted so the user can
+      // edit and retry without re-opening.
+      confirmBtn.disabled = true;
+      errorEl.style.display = 'none';
+      errorEl.textContent = '';
+      try {
+        const result = await submit(pw);
+        cleanupAndResolve(result);
+      } catch (err) {
+        console.warn('[AccountUI] password-prompt submit failed:', err?.message || err);
+        errorEl.textContent = humanizeAccountKeyError(err, { phraseFlow: false });
+        errorEl.style.display = 'block';
+        confirmBtn.disabled = input.value.length === 0;
+      }
+    });
+    cancelBtn.addEventListener('click', () => cleanupAndResolve(null));
+
+    toggleBtn.addEventListener('click', () => {
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      toggleBtn.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cleanupAndResolve(null);
+    });
+    // Click on card stops bubbling so the backdrop handler doesn't fire.
+    card.addEventListener('click', (e) => e.stopPropagation());
+
+    // Focus the input on the next frame.
+    requestAnimationFrame(() => input.focus({ preventScroll: true }));
+  });
+}
+
+/**
+ * Confirm dialog (yes/no). Resolves true on confirm, false on cancel.
+ *
+ * @param {{ title: string, body: string, confirmLabel?: string, cancelLabel?: string }} opts
+ * @returns {Promise<boolean>}
+ */
+function confirmDialog({ title, body, confirmLabel = 'Continue', cancelLabel = 'Cancel' }) {
+  return new Promise((resolve) => {
+    const overlay = createOverlay();
+    overlay.innerHTML = `
+      <div class="security-overlay-card" role="dialog" aria-modal="true">
+        <h2 class="security-overlay-title">${escapeHtml(title)}</h2>
+        <p class="security-overlay-body">${escapeHtml(body)}</p>
+        <div class="security-overlay-actions">
+          <button type="button" class="btn secondary" data-cancel>${escapeHtml(cancelLabel)}</button>
+          <button type="button" class="btn primary" data-confirm>${escapeHtml(confirmLabel)}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const confirmBtn = overlay.querySelector('[data-confirm]');
+    const cancelBtn = overlay.querySelector('[data-cancel]');
+    const card = overlay.querySelector('.security-overlay-card');
+    const cleanup = (val) => { overlay.remove(); resolve(val); };
+    confirmBtn.addEventListener('click', () => cleanup(true));
+    cancelBtn.addEventListener('click', () => cleanup(false));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
+    card.addEventListener('click', (e) => e.stopPropagation());
+    requestAnimationFrame(() => confirmBtn.focus({ preventScroll: true }));
+  });
+}
+
+/**
+ * Open the enable-storage dialog (password + 24-word phrase). The dialog
+ * stays open across submit failures — `submit({password, accountKey})` is
+ * awaited; if it throws, an inline error is shown inside the dialog and
+ * the user can edit and try again. The dialog only closes on a successful
+ * submit (resolves), or cancel / backdrop dismiss.
+ *
+ * The pasted phrase is normalized client-side (strip leading numbers like
+ * "1." or "1)", collapse whitespace, lowercase) before being passed to
+ * `submit`. The SDK normalizes again internally — this is purely a
+ * friendliness layer for password-manager paste UX.
+ *
+ * @param {(args: { password: string, accountKey: string }) => Promise<void>} submit
+ * @returns {Promise<void>} resolves when the dialog closes
+ */
+function openEnableStorageDialog(submit) {
+  return new Promise((resolve) => {
+    const overlay = createOverlay();
+    overlay.innerHTML = `
+      <div class="security-overlay-card" role="dialog" aria-modal="true">
+        <h2 class="security-overlay-title">Turn off manual custody</h2>
+        <p class="security-overlay-body">To start storing your account key, enter your password and paste your saved 24 words.</p>
+        <div class="form-group">
+          <label for="securityEnablePassword">Password</label>
+          <div class="password-field">
+            <input type="password" id="securityEnablePassword" autocomplete="current-password" placeholder="Your password" />
+            <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="securityEnablePhrase">Account key</label>
+          <textarea id="securityEnablePhrase" rows="4" placeholder="Paste your saved 24 words"></textarea>
+        </div>
+        <div class="security-overlay-error" data-error style="display:none;"></div>
+        <div class="security-overlay-actions">
+          <button type="button" class="btn secondary" data-cancel>Cancel</button>
+          <button type="button" class="btn primary" data-confirm disabled>Turn off manual custody</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const card = overlay.querySelector('.security-overlay-card');
+    const passwordInput = overlay.querySelector('#securityEnablePassword');
+    const phraseInput = overlay.querySelector('#securityEnablePhrase');
+    const confirmBtn = overlay.querySelector('[data-confirm]');
+    const cancelBtn = overlay.querySelector('[data-cancel]');
+    const toggleBtn = overlay.querySelector('.password-toggle');
+    const errorEl = overlay.querySelector('[data-error]');
+
+    const closeAndResolve = () => {
+      // Clear sensitive values from the DOM before tearing down.
+      if (passwordInput) passwordInput.value = '';
+      if (phraseInput) phraseInput.value = '';
+      overlay.remove();
+      resolve();
+    };
+
+    const validate = () => {
+      const pwOk = passwordInput.value.length > 0;
+      const phraseOk = normalizePastedPhrase(phraseInput.value).split(' ').filter(Boolean).length === 24;
+      confirmBtn.disabled = !(pwOk && phraseOk);
+    };
+
+    passwordInput.addEventListener('input', validate);
+    phraseInput.addEventListener('input', validate);
+
+    confirmBtn.addEventListener('click', async () => {
+      const password = passwordInput.value;
+      const accountKey = normalizePastedPhrase(phraseInput.value);
+      confirmBtn.disabled = true;
+      errorEl.style.display = 'none';
+      errorEl.textContent = '';
+      try {
+        await submit({ password, accountKey });
+        closeAndResolve();
+      } catch (err) {
+        console.warn('[AccountUI] enableKeyStorage submit failed:', err?.message || err);
+        errorEl.textContent = humanizeAccountKeyError(err, { phraseFlow: true });
+        errorEl.style.display = 'block';
+        // Re-enable based on current input validity — keep dialog open.
+        validate();
+      }
+    });
+    cancelBtn.addEventListener('click', () => closeAndResolve());
+    toggleBtn.addEventListener('click', () => {
+      const showing = passwordInput.type === 'text';
+      passwordInput.type = showing ? 'password' : 'text';
+      toggleBtn.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeAndResolve(); });
+    card.addEventListener('click', (e) => e.stopPropagation());
+    requestAnimationFrame(() => passwordInput.focus({ preventScroll: true }));
+  });
+}
+
+/**
+ * Normalize a pasted 24-word phrase. Tolerates:
+ *   - Leading/trailing whitespace
+ *   - Newlines / mixed whitespace between words
+ *   - Numbered prefixes per line ("1. word", "01) word", "(1) word")
+ *   - Mixed case
+ *
+ * Result: lowercase words separated by single spaces. The SDK's own
+ * `validateAccountKey` runs a stricter NFKD/lowercase normalization
+ * afterwards, so this is purely a friendliness layer for paste UX.
+ */
+function normalizePastedPhrase(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  // Strip numbered list prefixes (e.g. "1.", "01)", "(1)") at the start of
+  // each whitespace-separated chunk.
+  return raw
+    .replace(/[ \t]+/g, ' ')                 // tabs / nbsp → space
+    .split(/\s+/)
+    .map(tok => tok.replace(/^[\(\[]?\d{1,2}[\)\.\]:\-]?$/i, ''))  // pure number tokens → drop
+    .map(tok => tok.replace(/^[\(\[]?\d{1,2}[\)\.\]:\-]/, ''))     // "1." / "(1)" prefix → strip
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+    .toLowerCase();
 }
 
 // ============================================================================

@@ -231,5 +231,109 @@ export function setActiveFields(fields) {
   localStorage.setItem(STORAGE_KEYS.ACTIVE_FIELDS, JSON.stringify(fields));
 }
 
+// ============ ACCOUNT KEY (recovery v2) ============
+//
+// Thin passthroughs to `client.accountKey.*`. The SDK handles the step-up
+// auth dance internally for view / rotate / enable / disable — Bookish just
+// passes the freshly re-entered password. The plaintext account key is
+// returned in memory and must be surfaced once and dropped — never persisted.
+//
+// `isStored()` is sync but may return null on a fresh client that hasn't
+// completed an auth round-trip yet. Callers (e.g. the custody toggle in
+// account_ui) handle that null by rendering a "Loading…" state and
+// retrying.
+
+/**
+ * View the user's stored 24-word account key (Model B only). Triggers a
+ * step-up auth dance under the covers; on success returns the phrase in
+ * memory. Drop it from any closure as soon as the user has copied it.
+ *
+ * Throws an Error with `no_account_key_stored` in the message for Model A
+ * accounts; throws `AccountKeyPinningError` on a wrap-pinning mismatch
+ * (security warning — surface distinctly, do NOT show the would-be phrase).
+ *
+ * @param {{ password: string }} opts
+ * @returns {Promise<{ accountKey: string }>}
+ */
+async function viewAccountKey(opts) {
+  const client = await getClient();
+  return client.accountKey.view(opts);
+}
+
+/**
+ * Rotate the account key. Generates a new 24-word phrase, re-wraps the
+ * DEK chain under it, and atomically publishes the bundle. The OLD
+ * account key stops working for `recoverAccount` immediately on success.
+ *
+ * Password and username are unchanged. Pre-rotation data remains
+ * decryptable. If the account is in Model B, the new key is also stored
+ * (re-wrapped under DEK_gen1).
+ *
+ * @param {{ password: string }} opts
+ * @returns {Promise<{ accountKey: string }>}
+ */
+async function rotateAccountKey(opts) {
+  const client = await getClient();
+  return client.accountKey.rotate(opts);
+}
+
+/**
+ * Disable Model B storage (B → A). Server-side wrap is removed; subsequent
+ * `viewAccountKey()` calls fail with `no_account_key_stored`. Idempotent —
+ * safe to call on an already-Model-A account.
+ *
+ * @param {{ password: string }} opts
+ * @returns {Promise<void>}
+ */
+async function disableKeyStorage(opts) {
+  const client = await getClient();
+  await client.accountKey.disableKeyStorage(opts);
+}
+
+/**
+ * Enable Model B storage (A → B). Caller passes the password AND the user's
+ * existing 24-word account key. The SDK runs a wrap-pinning check before
+ * any server round trip — a phrase that doesn't belong to this account
+ * throws `AccountKeyPinningError` synchronously.
+ *
+ * @param {{ password: string, accountKey: string }} opts
+ * @returns {Promise<void>}
+ */
+async function enableKeyStorage(opts) {
+  const client = await getClient();
+  await client.accountKey.enableKeyStorage(opts);
+}
+
+/**
+ * Whether Tarn currently stores a wrap of this account's account key.
+ *
+ * - `true`  — Model B. `viewAccountKey()` is available.
+ * - `false` — Model A (no backup stored). `viewAccountKey()` will fail
+ *             with `no_account_key_stored`.
+ * - `null`  — unknown (fresh client; no `/auth/verify` round-trip yet).
+ *             Callers render a "Loading…" UI and retry shortly after.
+ *
+ * @returns {boolean | null}
+ */
+function isAccountKeyStored() {
+  if (!_client) return null;
+  return _client.accountKey.isStored();
+}
+
+/**
+ * Namespaced accessor for the new account-key surface — mirrors the SDK
+ * grouping (`tarn.accountKey.*`). The flat names above are kept for
+ * symmetry with the existing flat exports (`register`, `login`, etc.) but
+ * UI code should prefer this namespace because it reads cleaner at the
+ * callsite.
+ */
+export const accountKey = {
+  view: viewAccountKey,
+  rotate: rotateAccountKey,
+  disableKeyStorage,
+  enableKeyStorage,
+  isStored: isAccountKeyStored,
+};
+
 /** Storage keys used by this service (for external cleanup). */
 export { STORAGE_KEYS };
