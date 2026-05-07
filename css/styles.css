@@ -2796,6 +2796,65 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   border-radius:6px;
 }
 
+/* Phase 3 — registered passkeys list inside the Account & Security
+   section. The list lives directly inside `.account-security-block`, so
+   reset list defaults and lay out each row with the device label on the
+   left and a Remove button on the right. */
+.account-passkeys-list{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.account-passkeys-loading,
+.account-passkeys-empty{
+  font-size:.78rem;
+  color:var(--color-text-muted);
+  padding:6px 0;
+}
+.account-passkeys-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 10px;
+  border:1px solid var(--color-border-subtle);
+  border-radius:8px;
+  background:var(--color-bg-base);
+}
+.account-passkeys-row-main{
+  flex:1 1 auto;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.account-passkeys-row-label{
+  font-size:.86rem;
+  color:var(--color-text-primary);
+  font-weight:600;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.account-passkeys-row-last{
+  font-size:.74rem;
+  color:var(--color-text-secondary);
+}
+.account-passkeys-row-created{
+  font-size:.72rem;
+  color:var(--color-text-muted);
+}
+.account-passkeys-remove{
+  flex:0 0 auto;
+}
+.account-passkeys-unsupported{
+  /* Inherits from .account-security-desc — adds a tiny extra top margin
+     so the line stands alone visually below the custody toggle. */
+  margin-top:2px;
+}
+
 /* Security overlay — full-viewport scrim that sits ABOVE the account
    modal so the underlying panel stays mounted (and visible) under the
    dialog. Each invocation appends a fresh overlay; closing removes it.

@@ -335,5 +335,82 @@ export const accountKey = {
   isStored: isAccountKeyStored,
 };
 
+// ============ PASSKEYS (recovery v2 — phase 3) ============
+//
+// Thin passthroughs to `client.passkeys.*`. The SDK handles WebAuthn-PRF
+// registration / list / remove / supported-detection internally. Bookish
+// just surfaces these in the Account & Security settings section.
+//
+// Sign-in via passkey (`authenticateWithPasskey`) and the password-change
+// re-tap callback (`passkeyTapHandler`) are intentionally NOT wrapped here
+// — they belong to phase 4 (sign-in flow) and a future change-password
+// affordance respectively.
+
+/**
+ * Whether this browser/device can register and use passkeys (WebAuthn +
+ * PRF extension + platform authenticator). Apps must feature-detect
+ * before surfacing the affordance.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function passkeysIsSupported() {
+  const client = await ensureClient();
+  return client.passkeys.isSupported();
+}
+
+/**
+ * Register a new passkey for the logged-in account. Triggers the
+ * platform-authenticator prompt (Touch ID / Face ID / Windows Hello /
+ * security key). The DEK chain gains a `passkey_prf` wrapping per gen so
+ * the resulting credential can independently unwrap data.
+ *
+ * @param {{ deviceLabel?: string }} [opts]
+ * @returns {Promise<{ credentialId: string, deviceLabel: string | null }>}
+ */
+async function passkeysRegister(opts = {}) {
+  const client = await getClient();
+  return client.passkeys.register(opts);
+}
+
+/**
+ * List the passkeys registered for this account. Each entry is one
+ * device the user has enrolled. `lastUsedAt` is null for credentials
+ * that have never authenticated.
+ *
+ * Each entry also carries a `stale` flag, but Bookish does NOT surface
+ * it in the UI — just-in-time repair handles staleness transparently at
+ * sign-in time. The flag is left on the returned objects untouched in
+ * case future phases need it.
+ *
+ * @returns {Promise<Array<{ credentialId: string, deviceLabel: string | null, createdAt: number, lastUsedAt: number | null, stale: boolean }>>}
+ */
+async function passkeysList() {
+  const client = await getClient();
+  return client.passkeys.list();
+}
+
+/**
+ * Remove a registered passkey. Step-up gated — caller passes the
+ * freshly-typed password so the server can confirm possession.
+ *
+ * @param {{ credentialId: string, password: string }} opts
+ * @returns {Promise<void>}
+ */
+async function passkeysRemove(opts) {
+  const client = await getClient();
+  return client.passkeys.remove(opts);
+}
+
+/**
+ * Namespaced accessor for the passkey surface — mirrors the SDK grouping
+ * (`tarn.passkeys.*`). Same shape and motivation as `accountKey` above.
+ */
+export const passkeys = {
+  isSupported: passkeysIsSupported,
+  register: passkeysRegister,
+  list: passkeysList,
+  remove: passkeysRemove,
+};
+
 /** Storage keys used by this service (for external cleanup). */
 export { STORAGE_KEYS };
