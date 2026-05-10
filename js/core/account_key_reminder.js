@@ -4,7 +4,7 @@
 // A gentle in-app banner that nudges Model B users who have accumulated
 // some engagement (≥ MIN_BOOKS books, ≥ MIN_SESSIONS sessions) but have
 // not yet confirmed they saved their account key. Suppressed permanently
-// once they tap "Already saved" or successfully view the key, and
+// once they tap "I have it" or successfully view the key, and
 // suppressed for the current session if they tap the X.
 //
 // Public surface:
@@ -137,7 +137,7 @@ export function shouldShow() {
 
 /**
  * Permanently suppress the banner. Called when the user has either
- * confirmed "Already saved" or successfully completed the View flow.
+ * confirmed "I have it" or successfully completed the View flow.
  */
 export function markSaved() {
   localStorage.setItem(LS_SAVED, '1');
