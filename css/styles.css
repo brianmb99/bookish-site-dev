@@ -588,6 +588,77 @@ button.secondary:hover, .btn.secondary:hover{
   transform:translateY(-2px);
 }
 
+/* Search-first empty-state CTA (#143)
+   Styled clickable element that LOOKS like a search input. On click it
+   focuses the real omnibox (desktop) or triggers the search takeover
+   (mobile). It is NOT a real <input> — keeping a single source of truth
+   for the search query in the header omnibox. */
+.empty-search-cta{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  max-width:380px;
+  padding:14px 18px;
+  margin:0 auto;
+  border-radius:10px;
+  background:var(--color-bg-surface);
+  border:1px solid var(--color-border-default);
+  box-shadow:0 1px 3px rgba(0,0,0,.25);
+  color:var(--color-text-secondary);
+  font-family:var(--font-body);
+  font-size:1rem;
+  cursor:pointer;
+  text-align:left;
+  transition:border-color .2s ease,background .2s ease,box-shadow .2s ease,transform .15s ease;
+}
+.empty-search-cta:hover,
+.empty-search-cta:focus-visible{
+  border-color:var(--color-primary);
+  background:var(--color-bg-deep);
+  box-shadow:0 2px 8px -2px rgba(59,130,246,.3);
+  color:var(--color-text-primary);
+  outline:none;
+}
+.empty-search-cta:active{transform:translateY(1px)}
+.empty-search-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+  color:var(--color-text-muted);
+}
+.empty-search-cta:hover .empty-search-icon,
+.empty-search-cta:focus-visible .empty-search-icon{color:var(--color-primary)}
+.empty-search-text{flex:1;line-height:1.3}
+.empty-search-examples{
+  font-family:var(--font-body);
+  font-size:.8rem;
+  color:var(--color-text-muted);
+  margin:14px 0 0 0;
+  line-height:1.5;
+  max-width:380px;
+}
+.empty-search-example{font-style:italic;color:var(--color-text-secondary);opacity:.85}
+.empty-add-manual-link{
+  background:none;
+  border:none;
+  color:var(--color-text-muted);
+  font-family:var(--font-body);
+  font-size:.85rem;
+  padding:8px 4px;
+  margin-top:18px;
+  cursor:pointer;
+  text-decoration:underline;
+  text-underline-offset:3px;
+  text-decoration-color:rgba(255,255,255,.15);
+  transition:color .15s ease,text-decoration-color .15s ease;
+}
+.empty-add-manual-link:hover{
+  color:var(--color-text-secondary);
+  text-decoration-color:rgba(255,255,255,.4);
+}
+
 /* Sign-in link on empty state */
 .empty-signin{margin-top:20px;font-size:.85rem;color:var(--color-text-muted)}
 .empty-signin .link-btn{background:none;border:none;color:var(--color-text-secondary);font-size:inherit;font-family:inherit;cursor:pointer;padding:0;text-decoration:none;transition:color .2s}
@@ -1986,7 +2057,10 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   .cards{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:26px}
 }
 /* Tile layout for book modal (shared by add & edit) */
-.modal-inner.add-mode{border:2px solid #2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15);border-radius:16px}
+/* Add-mode visual: subtle 1px border, no glow (#143). The "Add to List"
+   button already signals add-vs-edit; the modal-level border just gives a
+   light frame instead of an aggressive blue focus ring. */
+.modal-inner.add-mode{border:1px solid var(--color-border-default);border-radius:16px}
 @media (pointer: coarse){.modal-inner.add-mode{border-radius:16px 16px 0 0}}
 .modal-inner form.inline{margin-top:0}
 .modal-inner .form-as-tile{display:flex;flex-direction:row;align-items:flex-start;gap:16px}
@@ -3435,12 +3509,18 @@ body.modal-open{overscroll-behavior-y:contain}
   border:2px dashed var(--color-border-default);
   box-shadow:none;
 }
-/* Placards: title + author rendered as auto-grow textareas that look static */
-.book-detail-placards{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;text-align:center}
+/* Placards: title + author rendered as auto-grow textareas that look static.
+   #143: capped max-width so the placards read as centered "labels" rather than
+   edge-to-edge form fields, and so the focus border doesn't stretch under the
+   close-X. Cap is responsive — narrower modals just fill the available width. */
+.book-detail-placards{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;max-width:480px;margin:0 auto;text-align:center}
 .placard{
   font-family:inherit;
   background:transparent!important;
   border:1px solid transparent!important;
+  /* #143: persistent low-opacity dashed underline at rest signals editability.
+     The :focus rule below clears it so the focus border replaces it (no stack). */
+  border-bottom:1px dashed var(--color-border-subtle)!important;
   border-radius:6px;
   color:inherit;
   width:100%;
@@ -3455,10 +3535,21 @@ body.modal-open{overscroll-behavior-y:contain}
 .placard:focus{
   outline:none;
   border-color:var(--color-border-default)!important;
+  /* Explicitly override the dashed border-bottom so the focus border
+     replaces it cleanly instead of stacking. */
+  border-bottom:1px solid var(--color-border-default)!important;
   background:var(--color-bg-deep)!important;
 }
 .placard.has-error{
   border-color:var(--color-error)!important;
+}
+/* #143: italic muted placeholder so "Add a title" / "Add an author" reads
+   clearly as a hint, not as content. */
+.placard::placeholder{
+  color:var(--color-text-muted);
+  opacity:.6;
+  font-style:italic;
+  font-weight:400;
 }
 .placard-title{
   font-size:.95rem;
@@ -3528,7 +3619,10 @@ body.modal-open{overscroll-behavior-y:contain}
 .summary-row .summary-sep{opacity:.4;align-self:center;pointer-events:none}
 
 /* Detail rows (Format, Started, Finished, etc.) */
-.detail-rows{display:flex;flex-direction:column;gap:0}
+/* #143: capped max-width so label and value sit visually paired, not at
+   opposite edges of the modal. Cap is responsive — narrower viewports fill
+   the available width, so mobile bottom sheet is unchanged. */
+.detail-rows{display:flex;flex-direction:column;gap:0;max-width:460px;margin:0 auto}
 .detail-row{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:10px 0;
@@ -4144,29 +4238,43 @@ body.modal-open{overscroll-behavior-y:contain}
 }
 .privacy-lock-overlay svg{width:10px;height:10px;display:block}
 
-/* --- Add-form privacy checkbox (#129) ------------------------------------
-   Lives below the optional fields and above the save button. Unobtrusive:
-   small text, muted color, no card-style chrome. Visible only in add-mode
-   (the .add-only family above already handles the show/hide). */
+/* --- Add-form privacy toggle (#129, switched from checkbox to toggle in #143) -----
+   Lives below the optional fields and above the save button. Reuses the
+   shared `.toggle-switch` pattern (same as the Owned toggle) so the visual
+   chrome is themed and matches the rest of the form. The text label sits
+   to the left, the track to the right. Visible only in add-mode (the
+   .add-only family handles show/hide). */
+.privacy-add-toggle{
+  /* The base .toggle-switch rule is `display:flex;gap:10px` with the input
+     and track as siblings — perfect for our markup. We just need to push
+     the label to the left and the track to the right. */
+  justify-content:space-between;
+  padding:8px 4px;
+  margin-top:6px;
+  font-size:.78rem;
+  color:var(--color-text-muted);
+  user-select:none;
+}
+.privacy-add-toggle .privacy-add-text{
+  flex:1;
+  font-size:.78rem;
+  color:var(--color-text-muted);
+  line-height:1.3;
+}
+.privacy-add-toggle:hover .privacy-add-text{color:var(--color-text-primary)}
+/* Backward-compat: keep the legacy .privacy-add-checkbox class as a thin
+   alias in case any external selectors / saved screenshots still reference
+   it. The id #privacyAddCheckbox on the input is preserved. */
 .privacy-add-checkbox{
   display:flex;
   align-items:center;
   gap:8px;
   padding:8px 4px;
-  margin-top:6px;
   font-size:.78rem;
   color:var(--color-text-muted);
   cursor:pointer;
   user-select:none;
 }
-.privacy-add-checkbox input[type=checkbox]{
-  width:16px;
-  height:16px;
-  margin:0;
-  accent-color:var(--color-text-muted);
-  cursor:pointer;
-}
-.privacy-add-checkbox:hover .privacy-add-text{color:var(--color-text-primary)}
 
 /* --- Book-detail privacy lock toggle (#129) ------------------------------
    Sits in the top-right corner of the book-detail page, slightly offset from

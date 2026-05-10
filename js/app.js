@@ -399,7 +399,7 @@ if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropaga
 // components/book-card.js (#123) so the friend's-shelf view can reuse the
 // same builders verbatim. Local aliases preserve the rest of app.js.
 const escapeHtml = sharedEscapeHtml;
-function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>No cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); }
+function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Add cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); }
 function showCoverLoaded(){ if(coverRemoveBtn) coverRemoveBtn.style.display='inline-flex'; }
 
 // --- State ---
@@ -1378,14 +1378,21 @@ function render(){
 
     const headline = emptyEl.querySelector('.empty-headline');
     const subtext = emptyEl.querySelector('.empty-subtext');
-    const addBtn = emptyEl.querySelector('.empty-cta');
+    // #143: empty-state CTA is now a search affordance (`#emptySearchCta`)
+    // plus example queries and a manual-add fallback link. Hide all three
+    // together while syncing so the loading message reads cleanly.
+    const searchCta = emptyEl.querySelector('#emptySearchCta');
+    const examples = emptyEl.querySelector('.empty-search-examples');
+    const manualLink = emptyEl.querySelector('.empty-add-manual-link');
     const signInDiv = document.getElementById('emptySignIn');
     const illustration = emptyEl.querySelector('.empty-illustration');
 
     if(isLoading){
       if(headline) headline.textContent = 'Syncing your books\u2026';
       if(subtext) subtext.textContent = 'Fetching your library from the cloud.';
-      if(addBtn) addBtn.style.display = 'none';
+      if(searchCta) searchCta.style.display = 'none';
+      if(examples) examples.style.display = 'none';
+      if(manualLink) manualLink.style.display = 'none';
       if(signInDiv) signInDiv.style.display = 'none';
       if(illustration) illustration.textContent = '\u23F3';
       showShelfSkeletons(6);
@@ -1393,15 +1400,20 @@ function render(){
     } else {
       if(headline) headline.textContent = 'Your reading journey starts here';
       if(subtext) subtext.textContent = 'Track what you read. Keep it forever. Access it anywhere.';
-      if(addBtn) addBtn.style.display = '';
+      if(searchCta) searchCta.style.display = '';
+      if(examples) examples.style.display = '';
+      if(manualLink) manualLink.style.display = '';
       if(signInDiv) signInDiv.style.display = tarnService.isLoggedIn() ? 'none' : '';
       if(illustration) illustration.textContent = '\uD83D\uDCDA';
       if(cardsEl.children.length > 0) cardsEl.replaceChildren();
       emptyEl.style.display='block';
     }
     if(shelfEmptyEl) shelfEmptyEl.style.display = 'none';
-    setOmniboxVisible(false);
-    if(headerSearchBtn) headerSearchBtn.style.display = 'none';
+    // #143: keep the omnibox visible in the empty state so first-run users
+    // have a path to OpenLibrary search. The empty-state CTA is now a
+    // search-first affordance, not a manual-add button. (Old behavior:
+    // setOmniboxVisible(false) + hide headerSearchBtn — both removed.)
+    setOmniboxVisible(true);
     if(yearHeader) yearHeader.style.display = 'none';
     closeSpinePanel();
     hideAccountNudge();
@@ -2848,6 +2860,19 @@ deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value
 
 // Phase 2: First-run experience event handlers
 emptyAddBookBtn?.addEventListener('click', ()=>openModal(null));
+
+// #143: search-first empty-state CTA. On mobile, trigger the search takeover
+// (which focuses the omnibox inside the takeover header). On desktop, focus
+// the inline omnibox directly. The CTA is a styled <button>, not a real
+// <input> — keeps a single source of truth for the search query.
+const emptySearchCta = document.getElementById('emptySearchCta');
+emptySearchCta?.addEventListener('click', ()=>{
+  if(isTouchDevice){
+    openSearchTakeover();
+  } else {
+    omniboxInput?.focus();
+  }
+});
 
 // Empty state sign-in link
 const emptySignInBtn = document.getElementById('emptySignInBtn');

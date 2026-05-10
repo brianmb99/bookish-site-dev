@@ -19,8 +19,8 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     if(!ph) return;
     ph.style.display='flex';
     if(state==='loading') ph.innerHTML='<div class="placeholder-loading">Loading cover\u2026</div>';
-    else if(state==='no-cover') ph.innerHTML='<div class="placeholder-icon">'+BOOK_SVG+'<span>No cover</span></div>';
-    else ph.innerHTML='<div class="placeholder-icon">'+BOOK_SVG+'<span>Click or search to add cover</span></div>';
+    else if(state==='no-cover') ph.innerHTML='<div class="placeholder-icon">'+BOOK_SVG+'<span>Add cover</span></div>';
+    else ph.innerHTML='<div class="placeholder-icon">'+BOOK_SVG+'<span>Add cover</span></div>';
   }
   let sortMode='relevance'; let activeFilter='all';
   let lastQuery=''; let queryTokens=[]; let strictActive=false;
