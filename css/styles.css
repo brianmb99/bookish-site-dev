@@ -4246,12 +4246,13 @@ body.modal-open{overscroll-behavior-y:contain}
    to the left, the track to the right. Visible only in add-mode (the
    .add-only family handles show/hide). */
 .privacy-add-toggle{
-  /* Force display:flex here because `form.inline label{display:block}`
-     elsewhere in the stylesheet has higher specificity than `.toggle-switch`,
-     which silently breaks the track's 36px width on inline children. The
-     base .toggle-switch rule is `display:flex;gap:10px` — we re-assert that
-     and add justify-content:space-between to push label and track apart. */
-  display:flex!important;
+  /* `form.inline label{display:block}` has higher specificity than
+     `.toggle-switch{display:flex}` and silently breaks the track's
+     36px width. We win the specificity fight via the
+     `form.inline label.privacy-add-toggle` rule below — NOT via
+     !important, because that would also defeat the
+     `.modal-inner:not(.add-mode) .add-only{display:none}` hide-in-edit-mode
+     rule and leak this toggle into the edit modal. */
   align-items:center;
   justify-content:space-between;
   gap:10px;
@@ -4261,6 +4262,10 @@ body.modal-open{overscroll-behavior-y:contain}
   color:var(--color-text-muted);
   user-select:none;
 }
+form.inline label.privacy-add-toggle{display:flex}
+/* Edit-mode hide must still win — restate at matching specificity so it
+   overrides the rule above when the modal is in edit mode. */
+.modal-inner:not(.add-mode) form.inline label.privacy-add-toggle{display:none}
 .privacy-add-toggle .privacy-add-text{
   flex:1;
   font-size:.78rem;
