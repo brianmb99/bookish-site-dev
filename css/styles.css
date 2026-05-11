@@ -654,19 +654,29 @@ button.secondary:hover, .btn.secondary:hover{
   text-decoration-color:rgba(255,255,255,.15);
   transition:color .15s ease,text-decoration-color .15s ease;
 }
-.empty-add-manual-link:hover{
+.empty-add-manual-link:hover,
+.empty-add-manual-link:focus-visible{
   color:var(--color-text-secondary);
   text-decoration-color:rgba(255,255,255,.4);
+}
+.empty-add-manual-link:focus-visible{
+  outline:none;
+  text-decoration-color:var(--color-primary);
+  color:var(--color-text-primary);
 }
 
 /* Sign-in link on empty state */
 .empty-signin{margin-top:20px;font-size:.85rem;color:var(--color-text-muted)}
 .empty-signin .link-btn{background:none;border:none;color:var(--color-text-secondary);font-size:inherit;font-family:inherit;cursor:pointer;padding:0;text-decoration:none;transition:color .2s}
-.empty-signin .link-btn:hover{color:var(--color-text-primary);text-decoration:underline;text-underline-offset:2px}
+.empty-signin .link-btn:hover,
+.empty-signin .link-btn:focus-visible{color:var(--color-text-primary);text-decoration:underline;text-underline-offset:2px}
+.empty-signin .link-btn:focus-visible{outline:none;text-decoration-color:var(--color-primary)}
 .empty-links{margin-top:16px;font-size:.8rem;color:var(--color-text-muted)}
 .empty-links span{opacity:.4;margin:0 2px}
 .empty-links a{color:var(--color-text-muted);text-decoration:none;transition:color .2s}
-.empty-links a:hover{color:var(--color-text-primary)}
+.empty-links a:hover,
+.empty-links a:focus-visible{color:var(--color-text-primary);text-decoration:underline;text-underline-offset:2px}
+.empty-links a:focus-visible{outline:none;text-decoration-color:var(--color-primary)}
 
 /* Shelf-empty state (has WTR books but no shelf books) */
 .shelf-empty{
