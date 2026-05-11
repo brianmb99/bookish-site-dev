@@ -3606,7 +3606,14 @@ body.modal-open{overscroll-behavior-y:contain}
    #143: capped max-width so the placards read as centered "labels" rather than
    edge-to-edge form fields, and so the focus border doesn't stretch under the
    close-X. Cap is responsive — narrower modals just fill the available width. */
-.book-detail-placards{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;max-width:min(480px,calc(100% - 48px));margin:0 auto;text-align:center}
+.book-detail-placards{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;max-width:480px;margin:0 auto;text-align:center}
+/* The X close button sits at top:12px right:12px (absolute) inside the
+   modal-inner. The .book-detail-hero is the topmost row inside the form,
+   so its top-right corner is what overlaps the X. Reserve a 48px right
+   gutter here so the placards / cover-edit-link / focus-border never
+   reach into the X's territory, regardless of how the row's flex
+   children distribute width. */
+.book-detail-hero{padding-right:48px}
 .placard{
   font-family:inherit;
   background:transparent!important;
