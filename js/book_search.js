@@ -121,7 +121,13 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     currentWorkKey=(meta&&typeof meta.key==='string')?meta.key:'';
     currentIsbn13=pickIsbn13(meta&&meta.isbn);
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
-    populateFromBasic(meta); loadEditionsFromSearch(meta); }
+    populateFromBasic(meta);
+    // Suppress "Add cover" flash — we're about to load editions. Must run AFTER
+    // populateFromBasic because that sets the placeholder back to "Add cover" too.
+    const _ph0=document.getElementById('coverPlaceholder');
+    if(_ph0){ _ph0.style.display='flex'; _ph0.innerHTML=''; _ph0.classList.add('cover-skeleton-pulse'); }
+    if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers…'; }
+    loadEditionsFromSearch(meta); }
   // fetchAndValidateCover and MIN_COVER_BYTES imported from cover_pipeline.js
   // Wrap to inject resizeFn dependency
   function fetchAndValidateCoverLocal(url, source){
@@ -340,6 +346,12 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     currentWorkKey=(payload&&Array.isArray(payload.olWorkKeys)&&payload.olWorkKeys.length)?String(payload.olWorkKeys[0]||''):'';
     currentIsbn13='';
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
+    // clearCoverPreview baked "Add cover" markup into the placeholder. We're
+    // about to fetch covers, so immediately swap to the loading skeleton state
+    // so the user never sees "Add cover" text flash before the cover lands.
+    const _ph0=document.getElementById('coverPlaceholder');
+    if(_ph0){ _ph0.style.display='flex'; _ph0.innerHTML=''; _ph0.classList.add('cover-skeleton-pulse'); }
+    if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers…'; }
     form.title.value = cleanTitle(payload.title || '');
     form.author.value = payload.author || '';
     form.format.value=activeFilter==='audiobook'?'audio':'print';

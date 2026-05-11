@@ -2450,11 +2450,7 @@ omniboxDropdown?.addEventListener('click', (ev)=>{
       const _inner = modal.querySelector('.modal-inner');
       if(_inner) _inner.classList.remove('no-cover');
       const _ph = document.getElementById('coverPlaceholder');
-      if(_ph){
-        const beforeHTML = _ph.innerHTML;
-        _ph.style.display='flex'; _ph.innerHTML=''; _ph.classList.add('cover-skeleton-pulse');
-        console.log('[Bookish:OmniSync] ph cleared. before=', beforeHTML.length, 'after=', _ph.innerHTML.length);
-      }
+      if(_ph){ _ph.style.display='flex'; _ph.innerHTML=''; _ph.classList.add('cover-skeleton-pulse'); }
       const _changeLink = document.getElementById('changeCoverLink');
       if(_changeLink) _changeLink.style.display='none';
       const _coverActions = document.getElementById('coverActions');
