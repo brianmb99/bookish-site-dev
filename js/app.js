@@ -2444,10 +2444,18 @@ omniboxDropdown?.addEventListener('click', (ev)=>{
       // Reserve the cover tile space immediately so the modal opens at its final
       // size — selectItunes runs in a setTimeout below and would otherwise leave
       // the modal in the compact (.no-cover) state for ~50ms before expanding.
+      // Also pre-hide changeCoverLink (which the cover pipeline will hide via
+      // showCoverNav() once the cover lands) so the layout doesn't shrink later.
       const _inner = modal.querySelector('.modal-inner');
       if(_inner) _inner.classList.remove('no-cover');
       const _ph = document.getElementById('coverPlaceholder');
       if(_ph){ _ph.style.display='flex'; _ph.innerHTML=''; _ph.classList.add('cover-skeleton-pulse'); }
+      const _changeLink = document.getElementById('changeCoverLink');
+      if(_changeLink) _changeLink.style.display='none';
+      const _coverActions = document.getElementById('coverActions');
+      if(_coverActions) _coverActions.style.display='none';
+      const _editionInfo = document.getElementById('editionInfo');
+      if(_editionInfo){ _editionInfo.style.display='block'; _editionInfo.textContent='Finding covers…'; }
       // Directly select the book via book_search module (no search dropdown)
       setTimeout(()=>{
         // Pre-fill search input so it's ready if user wants to search later
