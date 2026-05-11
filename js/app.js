@@ -1910,7 +1910,48 @@ function setOmniboxLocation(location){
     }
     omniboxWrap.classList.remove('omnibox-in-empty');
   }
+  // Re-anchor the dropdown after relocating the wrap. The dropdown uses
+  // `position: fixed` and its CSS-driven top/left target the header position;
+  // when the wrap moves into the empty-state slot, we need to override those
+  // coordinates inline so the dropdown sits directly under the wrap.
+  positionOmniboxDropdown();
 }
+
+/**
+ * Position the omnibox dropdown relative to the omnibox wrap. The dropdown
+ * is `position: fixed` (so it floats above siblings), so we set its
+ * top/left/width inline when the wrap is in the empty-state slot, and clear
+ * the overrides when the wrap is back in the header (CSS rules take over).
+ *
+ * Called from `setOmniboxLocation`, on window resize, and whenever the
+ * dropdown is shown (so a layout shift between hide-and-show doesn't leave
+ * the dropdown stale).
+ */
+function positionOmniboxDropdown(){
+  if(!omniboxDropdown || !omniboxWrap) return;
+  if(omniboxWrap.classList.contains('omnibox-in-empty')){
+    const r = omniboxWrap.getBoundingClientRect();
+    omniboxDropdown.style.top = (r.bottom + 4) + 'px';
+    omniboxDropdown.style.left = r.left + 'px';
+    omniboxDropdown.style.right = 'auto';
+    omniboxDropdown.style.width = r.width + 'px';
+    omniboxDropdown.style.maxWidth = 'none';
+  } else {
+    // Clear overrides so the CSS `top/left/right/max-width` rules apply.
+    omniboxDropdown.style.top = '';
+    omniboxDropdown.style.left = '';
+    omniboxDropdown.style.right = '';
+    omniboxDropdown.style.width = '';
+    omniboxDropdown.style.maxWidth = '';
+  }
+}
+
+// Keep the dropdown anchored to the wrap on resize while in empty state.
+window.addEventListener('resize', () => {
+  if(omniboxWrap && omniboxWrap.classList.contains('omnibox-in-empty')){
+    positionOmniboxDropdown();
+  }
+});
 
 // --- Subscription helpers (#74) ---
 
@@ -2016,6 +2057,9 @@ let _omniboxSelectionMade = false;
 function showOmniboxDropdown(){
   if(!omniboxDropdown) return;
   omniboxDropdown.style.display = '';
+  // Re-anchor each time we open — the wrap's position may have shifted since
+  // the last setOmniboxLocation call (resize, layout reflow, etc.).
+  positionOmniboxDropdown();
   omniboxInput?.setAttribute('aria-expanded', 'true');
   if(!omniboxBackdrop){
     omniboxBackdrop = document.createElement('div');
