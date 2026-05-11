@@ -383,7 +383,13 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       setCoverPlaceholder(ph,'no-cover');
       coverPreview.style.display = 'none';
     } }
-  function applyEdition(){ if(!editions.length||editionIndex<0) return; const ed=editions[editionIndex];
+  function applyEdition(){ if(!editions.length||editionIndex<0) return;
+    // If an Adjust session is in progress, late-arriving edition swaps from
+    // the async cover pipeline must not clobber the user's current pan/zoom.
+    // (typeof guard handles the rare case of an early call before isAdjusting
+    // is defined in the IIFE scope — function declarations hoist, but defensive.)
+    if(typeof isAdjusting === 'function' && isAdjusting()) return;
+    const ed=editions[editionIndex];
     if(!coverOnlyMode){ let changed=false; if(ed.title){ form.title.value=cleanTitle(ed.title); changed=true; } if(ed.author_name&&ed.author_name.length){ form.author.value=ed.author_name.join(', '); changed=true; } if(changed) markDirty(); }
     if(ed._coverData) {
       const cd=ed._coverData;
@@ -420,6 +426,8 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       }
       const blob = await resp.blob();
       const { base64, mime, wasResized, dataUrl, width, height } = await resizeImageToBase64(blob);
+      // Late-arriving fetch must not clobber an active Adjust session.
+      if(typeof isAdjusting === 'function' && isAdjusting()) return;
       if(wasResized) console.info('[Bookish] Cover resized for storage efficiency');
       coverPreview.src = dataUrl;
       coverPreview.style.display = 'block';
