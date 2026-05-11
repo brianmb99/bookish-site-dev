@@ -147,6 +147,23 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       return [...isbn10s];
     }catch(err){ console.warn('[Bookish:Covers] Google Books fetch failed:', err?.message||err); return []; }
   }
+  async function lookupOLWorkKey(title, author){
+    try{
+      const olFields='key,title,author_name';
+      const url='https://openlibrary.org/search.json?title='+encodeURIComponent(title)+(author?'&author='+encodeURIComponent(author):'')+'&limit=5&fields='+olFields;
+      const resp=await fetch(url);
+      if(!resp.ok) return '';
+      const data=await resp.json();
+      const docs=data.docs||[];
+      if(!docs.length) return '';
+      const authorLow=(author||'').toLowerCase().trim();
+      if(authorLow){
+        const exact=docs.find(d=>(d.author_name||[]).some(a=>a.toLowerCase()===authorLow));
+        if(exact && exact.key) return exact.key;
+      }
+      return docs[0].key||'';
+    }catch(err){ console.warn('[Bookish:Covers] OL workkey lookup failed:', err?.message||err); return ''; }
+  }
   async function loadCoversFromGoogleBooks(title, author){
     const isbn10s=await fetchGoogleBooksISBNs(title, author);
     if(!isbn10s.length) return;
@@ -311,7 +328,22 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     markDirty();
     const hasWorkKey = payload.olWorkKeys && payload.olWorkKeys.length;
     console.info('[Bookish:Covers] selectItunes: title=%s, hasWorkKey=%s, olWorkKeys=%o', payload.title, hasWorkKey, payload.olWorkKeys);
-    if(hasWorkKey){ coverOnlyMode=true; loadEditionsFromSearch({ key: payload.olWorkKeys[0], title: payload.title }); } else { coverOnlyMode=true; loadCoversFromGoogleBooks(payload.title, payload.author); }
+    coverOnlyMode=true;
+    if(hasWorkKey){
+      loadEditionsFromSearch({ key: payload.olWorkKeys[0], title: payload.title });
+    } else {
+      // Race recovery: omnibox renders iTunes results before OL merges in, so a fast
+      // click may arrive with no workKey. Try OL lookup before the Google Books fallback.
+      lookupOLWorkKey(payload.title, payload.author).then(wk => {
+        if(wk){
+          console.info('[Bookish:Covers] selectItunes race-recovered OL workKey %s', wk);
+          currentWorkKey = wk;
+          loadEditionsFromSearch({ key: wk, title: payload.title });
+        } else {
+          loadCoversFromGoogleBooks(payload.title, payload.author);
+        }
+      });
+    }
     if(payload.artwork){ const hi=payload.artwork.replace(/100x100/,'600x600');
       const ph = document.getElementById('coverPlaceholder');
       setCoverPlaceholder(ph,'loading');
