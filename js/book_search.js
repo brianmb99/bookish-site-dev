@@ -127,7 +127,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
   function fetchAndValidateCoverLocal(url, source){
     return fetchAndValidateCover(url, source, { resizeFn: resizeImageToBase64 });
   }
-  const GOOGLE_BOOKS_API_KEY='AIzaSyC7vvlcImIp5Pg22plRgwI1HqyqhRr436s';
+  const GOOGLE_BOOKS_API_KEY='AIzaSyBz6feZWwzrOXaN5omMlarg1H_h3RgSzQk';
   async function fetchGoogleBooksISBNs(title, author){
     try{
       let q=encodeURIComponent(title);

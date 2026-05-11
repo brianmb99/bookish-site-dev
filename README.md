@@ -1,4 +1,4 @@
-﻿# Bookish DEV (Deployment Artifact)
+# Bookish DEV (Deployment Artifact)
 
 **This is the DEVELOPMENT/STAGING deployment.** Not for end users.
 
@@ -10,4 +10,4 @@ Source code, tests, tools, and private utilities live in a separate private repo
 
 Do not edit files here directly; changes will be overwritten on next publish.
 
-Last publish: 2026-05-11 11:38:47 -04:00
+Last publish: 2026-05-11 13:03:54 -0400
