@@ -460,5 +460,95 @@ export const passkeys = {
   remove: passkeysRemove,
 };
 
+// ============ UNIFIED CREDENTIALS CHANGE ============
+//
+// `tarn.account.changeCredentials(newUsername, newPassword, opts)` takes both
+// username and password as inputs in a single SDK call and re-wraps the DEK
+// chain (the cryptographic reality: master_key = KDF(username, password) —
+// changing either input rotates everything). This wrapper hides the
+// orchestration:
+//   1. Verify the current password app-side and fetch the 24-word account-key
+//      phrase via `client.accountKey.view({ password })`. The SDK has no
+//      `oldPassword` parameter — trust comes from the session AND the phrase
+//      requirement (the new gen needs a recovery wrapping).
+//   2. Compute effective new credentials. Omitted fields fall back to current
+//      values so the caller can change just one half.
+//   3. Call `client.account.changeCredentials(newUsername, newPassword, opts)`
+//      with the retrieved phrase + an optional `passkeyTapHandler`.
+//   4. On success, refresh the cached email if username changed.
+//
+// `acceptRecoveryGap: true` is deliberately NEVER set — silently breaking
+// recovery for new data is contra Bookish's product stance.
+
+/**
+ * Change the user's username (email) and/or password atomically. Either
+ * field can be omitted to keep the current value (the SDK still does a full
+ * re-wrap; cryptographically there's no "change just one half").
+ *
+ * Verifies the current password app-side via `accountKey.view` (this is the
+ * step-up that BOTH proves the password AND retrieves the phrase the SDK
+ * needs for the new generation's recovery wrapping). If the account is in
+ * Model A (`no_account_key_stored`), the view fails — caller should surface
+ * the model-A error from `humanizeCredentialChangeError`.
+ *
+ * If the account has registered passkeys, the SDK invokes
+ * `passkeyTapHandler` per credential during the change. The handler must
+ * return true (proceed → SDK invokes WebAuthn) or false / throw (skip → that
+ * credential becomes stale on the new gen and will trigger the stale-repair
+ * flow on next passkey sign-in). The wrapper does NOT pass
+ * `acceptRecoveryGap: true`.
+ *
+ * @param {{
+ *   currentPassword: string,
+ *   newUsername?: string,
+ *   newPassword?: string,
+ *   passkeyTapHandler?: (cred: { credentialId: string, deviceLabel: string | null }) => Promise<boolean>,
+ * }} opts
+ * @returns {Promise<unknown>} The SDK return value (opaque; success-only).
+ */
+export async function changeCredentials({
+  currentPassword,
+  newUsername,
+  newPassword,
+  passkeyTapHandler,
+} = {}) {
+  if (!currentPassword) {
+    throw new Error('changeCredentials: currentPassword is required');
+  }
+  const client = await getClient();
+
+  // Step-up + phrase fetch. Throws on wrong password / Model A / network.
+  const { accountKey: phrase } = await client.accountKey.view({ password: currentPassword });
+
+  const currentEmail = localStorage.getItem(STORAGE_KEYS.EMAIL) || '';
+  const effectiveUsername =
+    typeof newUsername === 'string' && newUsername.length > 0 ? newUsername : currentEmail;
+  const effectivePassword =
+    typeof newPassword === 'string' && newPassword.length > 0 ? newPassword : currentPassword;
+
+  if (!effectiveUsername) {
+    throw new Error('changeCredentials: no current username available — cannot compute effective new username');
+  }
+
+  const sdkOpts = { phrase };
+  if (typeof passkeyTapHandler === 'function') {
+    sdkOpts.passkeyTapHandler = passkeyTapHandler;
+  }
+
+  const result = await client.account.changeCredentials(
+    effectiveUsername,
+    effectivePassword,
+    sdkOpts,
+  );
+
+  // Refresh the cached email if username changed. The SDK's session-resume
+  // path doesn't write back to localStorage; we own this cache.
+  if (effectiveUsername !== currentEmail) {
+    localStorage.setItem(STORAGE_KEYS.EMAIL, effectiveUsername);
+  }
+
+  return result;
+}
+
 /** Storage keys used by this service (for external cleanup). */
 export { STORAGE_KEYS };

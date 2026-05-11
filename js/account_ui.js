@@ -908,6 +908,14 @@ function renderAccountPanel(content) {
                list placeholder, Add button) when supported, or a single
                muted "not supported" line when not. -->
         </div>
+
+        <div class="account-security-block" id="accountCredentialsBlock">
+          <div class="account-security-subtitle">Username &amp; password</div>
+          <div class="account-security-desc">Together, these let you sign in. Change either or both at any time.</div>
+          <div class="account-security-actions">
+            <button type="button" id="changeCredentialsBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Change username or password</button>
+          </div>
+        </div>
       </div>
 
       <div class="account-panel-friends" id="accountPanelFriends">
@@ -1216,6 +1224,15 @@ function wireAccountSecuritySection(content) {
   }
   if (replaceBtn) {
     replaceBtn.addEventListener('click', () => startReplaceAccountKeyFlow());
+  }
+  // #145: Unified change-credentials affordance. Single modal handles
+  // username (email) and/or password changes — matches the SDK's single
+  // `changeCredentials` call and the underlying cryptographic reality
+  // (master_key = KDF(username, password); change either input and the DEK
+  // chain re-wraps).
+  const changeCredsBtn = content.querySelector('#changeCredentialsBtn');
+  if (changeCredsBtn) {
+    changeCredsBtn.addEventListener('click', () => startChangeCredentialsFlow(content));
   }
   // Registered passkeys block. Async because the support probe + initial
   // list() both touch the SDK.
@@ -1809,6 +1826,375 @@ function showAccountKeyResultOverlay(opts) {
   }
 }
 
+// ============================================================================
+// CHANGE CREDENTIALS (issue #145 — unified username/password change)
+// ============================================================================
+//
+// The SDK exposes a single `changeCredentials(newUsername, newPassword, opts)`
+// call that re-wraps the DEK chain — there's no separate "change email" or
+// "change password" path because the master key derives from BOTH inputs. The
+// UI mirrors that: one modal, one flow, either or both fields editable.
+//
+// Step-up: the current password is verified app-side via `accountKey.view`,
+// which (a) proves possession of the password and (b) returns the 24-word
+// phrase the SDK needs to extend the recovery wrapping to the new gen.
+//
+// Passkey re-tap: if the account has registered passkeys, the SDK calls our
+// per-credential handler during the change. Cancel from the handler surfaces
+// as a "couldn't confirm all your passkeys" inline error.
+//
+// Forbidden: `acceptRecoveryGap: true`. Silently breaking recovery on a
+// cancel is contra Bookish's product stance.
+
+/**
+ * Start the Change credentials flow. Renders a modal with current-password,
+ * new-username (pre-filled), new-password, and confirm-new-password fields.
+ * Save is disabled until at least one field differs from initial values.
+ *
+ * On success: clears password inputs, closes the modal, toasts, and re-renders
+ * the Account panel so the header reflects any new email.
+ *
+ * @param {HTMLElement} content — the Account panel container, used to find
+ *   the refresh hook after a successful change.
+ */
+async function startChangeCredentialsFlow(content) {
+  const currentEmail = tarnService.getEmail() || '';
+  await openChangeCredentialsDialog({
+    currentEmail,
+    onSuccess: async () => {
+      // Re-render the Account panel so the header reflects the new email
+      // (if it changed) and the avatar initial updates accordingly. Re-running
+      // renderAccountPanel re-wires all the panel handlers including ours, so
+      // the modal can re-open cleanly.
+      try { renderAccountPanel(content); } catch (err) {
+        console.warn('[AccountUI] panel refresh after credentials change failed:', err?.message || err);
+      }
+      showChangeCredentialsToast(content, 'Sign-in credentials updated.');
+    },
+  });
+}
+
+/**
+ * Open the Change-credentials modal. Returns when the user dismisses
+ * (cancel / backdrop / success). On success, `onSuccess` is awaited before
+ * the overlay tears down so the panel re-render lands before the modal
+ * disappears.
+ *
+ * @param {{
+ *   currentEmail: string,
+ *   onSuccess: () => Promise<void> | void,
+ * }} opts
+ * @returns {Promise<void>}
+ */
+function openChangeCredentialsDialog({ currentEmail, onSuccess }) {
+  return new Promise((resolve) => {
+    const overlay = createOverlay('change-credentials-overlay');
+    overlay.innerHTML = `
+      <div class="security-overlay-card" role="dialog" aria-modal="true" aria-labelledby="changeCredentialsTitle">
+        <h2 class="security-overlay-title" id="changeCredentialsTitle">Change username or password</h2>
+        <p class="security-overlay-body">Your username and password together let you sign in. Change either field, or both &mdash; leave anything you don&rsquo;t want to change as-is.</p>
+        <div class="form-group">
+          <label for="ccCurrentPassword">Current password</label>
+          <div class="password-field">
+            <input type="password" id="ccCurrentPassword" autocomplete="current-password" placeholder="Your current password" />
+            <button type="button" class="password-toggle" data-toggle-for="ccCurrentPassword" tabindex="-1">${SVG_EYE}</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="ccNewUsername">New username</label>
+          <input type="email" id="ccNewUsername" autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label for="ccNewPassword">New password</label>
+          <div class="password-field">
+            <input type="password" id="ccNewPassword" autocomplete="new-password" placeholder="Leave blank to keep current" />
+            <button type="button" class="password-toggle" data-toggle-for="ccNewPassword" tabindex="-1">${SVG_EYE}</button>
+          </div>
+        </div>
+        <div class="form-group" id="ccConfirmGroup" style="display:none;">
+          <label for="ccConfirmPassword">Confirm new password</label>
+          <div class="password-field">
+            <input type="password" id="ccConfirmPassword" autocomplete="new-password" />
+            <button type="button" class="password-toggle" data-toggle-for="ccConfirmPassword" tabindex="-1">${SVG_EYE}</button>
+          </div>
+        </div>
+        <div class="security-overlay-error" data-error style="display:none;"></div>
+        <div class="security-overlay-actions">
+          <button type="button" class="btn secondary" data-cancel>Cancel</button>
+          <button type="button" class="btn primary" data-confirm disabled>Save changes</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const card = overlay.querySelector('.security-overlay-card');
+    const currentPwInput = overlay.querySelector('#ccCurrentPassword');
+    const newUsernameInput = overlay.querySelector('#ccNewUsername');
+    const newPwInput = overlay.querySelector('#ccNewPassword');
+    const confirmPwInput = overlay.querySelector('#ccConfirmPassword');
+    const confirmGroup = overlay.querySelector('#ccConfirmGroup');
+    const errorEl = overlay.querySelector('[data-error]');
+    const confirmBtn = overlay.querySelector('[data-confirm]');
+    const cancelBtn = overlay.querySelector('[data-cancel]');
+
+    newUsernameInput.value = currentEmail;
+    const initialUsername = currentEmail;
+
+    const clearPasswordsFromDom = () => {
+      currentPwInput.value = '';
+      newPwInput.value = '';
+      confirmPwInput.value = '';
+    };
+
+    const cleanup = () => {
+      clearPasswordsFromDom();
+      overlay.remove();
+      resolve();
+    };
+
+    // Save-disabled-until-changed logic. Enable when:
+    //   - new username differs from initial, OR
+    //   - new password has any content.
+    // The confirm-password field appears only when new-password is non-empty.
+    const recomputeEnable = () => {
+      errorEl.style.display = 'none';
+      errorEl.textContent = '';
+      const newPwHasContent = newPwInput.value.length > 0;
+      confirmGroup.style.display = newPwHasContent ? '' : 'none';
+      if (!newPwHasContent) confirmPwInput.value = '';
+
+      const usernameChanged = newUsernameInput.value !== initialUsername;
+      const passwordChanged = newPwHasContent;
+      const anyChange = usernameChanged || passwordChanged;
+      const haveCurrentPw = currentPwInput.value.length > 0;
+      confirmBtn.disabled = !(anyChange && haveCurrentPw);
+    };
+
+    [currentPwInput, newUsernameInput, newPwInput, confirmPwInput].forEach(el => {
+      el.addEventListener('input', recomputeEnable);
+    });
+
+    // Password-toggle buttons (eye icon). Each toggles its associated input
+    // by data-toggle-for; we share one handler.
+    overlay.querySelectorAll('.password-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-toggle-for');
+        const target = overlay.querySelector('#' + targetId);
+        if (!target) return;
+        const showing = target.type === 'text';
+        target.type = showing ? 'password' : 'text';
+        btn.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
+      });
+    });
+
+    cancelBtn.addEventListener('click', cleanup);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(); });
+    card.addEventListener('click', (e) => e.stopPropagation());
+
+    // Enter on any field submits (when enabled).
+    [currentPwInput, newUsernameInput, newPwInput, confirmPwInput].forEach(el => {
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !confirmBtn.disabled) {
+          e.preventDefault();
+          confirmBtn.click();
+        }
+      });
+    });
+
+    confirmBtn.addEventListener('click', async () => {
+      const currentPassword = currentPwInput.value;
+      const newUsernameRaw = newUsernameInput.value.trim();
+      const newPasswordRaw = newPwInput.value;
+      const confirmPasswordRaw = confirmPwInput.value;
+
+      // Client-side validation: if a new password is provided, confirm-field
+      // must match. Empty new password → confirm field is hidden + ignored.
+      if (newPasswordRaw && newPasswordRaw !== confirmPasswordRaw) {
+        errorEl.textContent = "New passwords don't match.";
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      const usernameChanged = newUsernameRaw !== initialUsername;
+      const passwordChanged = newPasswordRaw.length > 0;
+      if (!usernameChanged && !passwordChanged) {
+        // Save-disabled logic should prevent this, but be defensive.
+        errorEl.textContent = "Nothing to change.";
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      confirmBtn.disabled = true;
+      cancelBtn.disabled = true;
+      errorEl.style.display = 'none';
+      errorEl.textContent = '';
+
+      // Track passkey-cancel state across the per-credential handler so we
+      // can surface a passkey-specific error after `changeCredentials`
+      // resolves. The SDK swallows handler throws (treating them as
+      // skip → stale credential), so we propagate the cancel signal via a
+      // closure flag rather than relying on the throw to abort the SDK call.
+      let passkeyCancelled = false;
+      const passkeyTapHandler = async ({ credentialId, deviceLabel }) => {
+        const confirmed = await showPasskeyTapPromptOverlay({
+          deviceLabel: deviceLabel || truncateCredentialId(credentialId),
+        });
+        if (!confirmed) {
+          passkeyCancelled = true;
+          // Throw so the SDK marks this credential stale on the new gen
+          // (matches the spec's "abort" intent at the per-credential
+          // level). The wrapper afterwards surfaces a passkey-specific
+          // error so the user knows what happened.
+          throw new Error('User cancelled passkey re-tap');
+        }
+        return true;
+      };
+
+      try {
+        await tarnService.changeCredentials({
+          currentPassword,
+          newUsername: usernameChanged ? newUsernameRaw : undefined,
+          newPassword: passwordChanged ? newPasswordRaw : undefined,
+          passkeyTapHandler,
+        });
+        if (passkeyCancelled) {
+          // The credentials DID change server-side, but at least one passkey
+          // wasn't re-confirmed (stale on new gen). Surface the spec's
+          // passkey-cancel copy so the user knows to repair on next sign-in.
+          errorEl.textContent = "Couldn't confirm all your passkeys. Try again when you have access to them.";
+          errorEl.style.display = 'block';
+          confirmBtn.disabled = false;
+          cancelBtn.disabled = false;
+          clearPasswordsFromDom();
+          // Trigger the success path anyway since credentials changed.
+          // Keep the modal open so the user can dismiss after reading the
+          // passkey notice — manual cancel will close.
+          try { await onSuccess(); } catch (err) {
+            console.warn('[AccountUI] onSuccess after partial passkey re-tap failed:', err?.message || err);
+          }
+          return;
+        }
+        clearPasswordsFromDom();
+        // Run onSuccess BEFORE removing the overlay so the panel refresh
+        // and toast land while the modal is still teardown-pending.
+        try { await onSuccess(); } catch (err) {
+          console.warn('[AccountUI] onSuccess after credentials change failed:', err?.message || err);
+        }
+        overlay.remove();
+        resolve();
+      } catch (err) {
+        console.warn('[AccountUI] changeCredentials failed:', err?.message || err);
+        errorEl.textContent = humanizeCredentialChangeError(err);
+        errorEl.style.display = 'block';
+        confirmBtn.disabled = false;
+        cancelBtn.disabled = false;
+        clearPasswordsFromDom();
+      }
+    });
+
+    requestAnimationFrame(() => currentPwInput.focus({ preventScroll: true }));
+  });
+}
+
+/**
+ * Per-credential passkey-tap prompt. Renders a small overlay above the
+ * credentials-change modal asking the user to confirm tapping the specified
+ * device's passkey; resolves true on confirm, false on cancel/backdrop.
+ *
+ * @param {{ deviceLabel: string }} opts
+ * @returns {Promise<boolean>}
+ */
+function showPasskeyTapPromptOverlay({ deviceLabel }) {
+  return new Promise((resolve) => {
+    const overlay = createOverlay('passkey-tap-overlay');
+    overlay.innerHTML = `
+      <div class="security-overlay-card" role="dialog" aria-modal="true">
+        <h2 class="security-overlay-title">Confirm your passkey</h2>
+        <p class="security-overlay-body">Tap your <strong>${escapeHtml(deviceLabel)}</strong> passkey so it keeps working with your new sign-in.</p>
+        <div class="security-overlay-actions">
+          <button type="button" class="btn secondary" data-cancel>Skip this passkey</button>
+          <button type="button" class="btn primary" data-confirm>Continue</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const card = overlay.querySelector('.security-overlay-card');
+    const confirmBtn = overlay.querySelector('[data-confirm]');
+    const cancelBtn = overlay.querySelector('[data-cancel]');
+    const cleanup = (val) => { overlay.remove(); resolve(val); };
+    confirmBtn.addEventListener('click', () => cleanup(true));
+    cancelBtn.addEventListener('click', () => cleanup(false));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
+    card.addEventListener('click', (e) => e.stopPropagation());
+    requestAnimationFrame(() => confirmBtn.focus({ preventScroll: true }));
+  });
+}
+
+/**
+ * Show a transient success toast after a successful credential change.
+ * Re-uses the passkey-success affirmation rendering for visual consistency,
+ * but as a sibling above the credentials block so it sits in-section.
+ */
+function showChangeCredentialsToast(content, message) {
+  const block = content.querySelector('#accountCredentialsBlock');
+  if (!block) return;
+  let el = content.querySelector('.account-credentials-success');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'account-credentials-success account-passkeys-success';
+    el.setAttribute('role', 'status');
+    block.insertBefore(el, block.firstChild);
+  }
+  el.textContent = '✓ ' + message;
+  el.style.display = 'block';
+  if (el._dismissTimer) clearTimeout(el._dismissTimer);
+  el._dismissTimer = setTimeout(() => {
+    el.style.display = 'none';
+    el._dismissTimer = null;
+  }, 3500);
+}
+
+/**
+ * Translate an SDK error from the unified `changeCredentials` flow into a
+ * user-facing string. Sibling of `humanizeAccountKeyError` /
+ * `humanizePasskeyError`; covers the credentials-change-specific cases
+ * (combination-in-use 409, passkey re-tap missing handler, etc.) before
+ * falling back to the shared account-key error mapping.
+ */
+function humanizeCredentialChangeError(err) {
+  const msg = err?.message || '';
+  // 409 Conflict on the new credential lookup key — the username + password
+  // combination already maps to an existing account. Per the spec, surface
+  // the combination-aware copy (don't soften — it's intentional).
+  if (
+    /new_credential_lookup_key.*already in use/i.test(msg) ||
+    /credential_lookup_key.*409/i.test(msg) ||
+    /409/.test(msg) && /lookup/i.test(msg) ||
+    /credential.*conflict|lookup.*conflict|combination.*in use|conflict.*credential/i.test(msg)
+  ) {
+    return 'That username and password combination is already in use. Try a different password.';
+  }
+  // Model A: step-up `accountKey.view` returns `no_account_key_stored`.
+  if (/no_account_key_stored/i.test(msg)) {
+    return "Your account key isn't stored on our servers. Contact support if you need to change credentials.";
+  }
+  // Passkey re-tap missing handler — SDK throws when the account has
+  // passkeys and we forgot to pass one. Caught defensively.
+  if (/passkeyTapHandler/i.test(msg)) {
+    return "Couldn't confirm all your passkeys. Try again when you have access to them.";
+  }
+  // Wrong current password (from step-up). Step-up errors look like
+  // "step-up auth failed" or "invalid password" / "credential" — share
+  // the same mapping as the View flow's password prompt.
+  if (/step-up|challenge|wrong password|invalid password|credential/i.test(msg)) {
+    return 'Current password is incorrect.';
+  }
+  if (/network|fetch|timeout|offline/i.test(msg)) {
+    return "Couldn't reach our servers. Check your connection and try again.";
+  }
+  return "Couldn't update credentials. Try again.";
+}
+
 // ----------------------------------------------------------------------------
 // Inline modal helpers — password prompt, confirm/alert dialog, enable-storage
 // inputs. Each renders a card on top of an overlay sibling to the account
@@ -2076,6 +2462,7 @@ export const __test__ = {
   truncateCredentialId,
   normalizePastedPhrase,
   humanizePasskeySigninError,
+  humanizeCredentialChangeError,
   promptStalePasskeyRepair,
   showPasskeyAddedAffirmation,
   resetPasskeysSupportedCache: () => {
