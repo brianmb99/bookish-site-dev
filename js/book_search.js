@@ -147,6 +147,24 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       return [...isbn10s];
     }catch(err){ console.warn('[Bookish:Covers] Google Books fetch failed:', err?.message||err); return []; }
   }
+  async function fetchOLISBNs(title, author){
+    try{
+      const url='https://openlibrary.org/search.json?title='+encodeURIComponent(title)+(author?'&author='+encodeURIComponent(author):'')+'&limit=5&fields=isbn';
+      const resp=await fetch(url);
+      if(!resp.ok){ console.warn('[Bookish:Covers] OL ISBN search error:', resp.status); return []; }
+      const data=await resp.json();
+      const isbn10s=new Set();
+      for(const doc of (data.docs||[])){
+        for(const raw of (doc.isbn||[])){
+          const digits=String(raw||'').replace(/[^0-9X]/gi,'');
+          if(digits.length===10) isbn10s.add(digits);
+          else if(digits.length===13){ const c=convertISBN13to10(digits); if(c) isbn10s.add(c); }
+        }
+      }
+      console.info('[Bookish:Covers] OL ISBN search returned %d ISBN-10s for "%s"', isbn10s.size, title);
+      return [...isbn10s];
+    }catch(err){ console.warn('[Bookish:Covers] OL ISBN search failed:', err?.message||err); return []; }
+  }
   async function lookupOLWorkKey(title, author){
     try{
       const olFields='key,title,author_name';
@@ -165,7 +183,9 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     }catch(err){ console.warn('[Bookish:Covers] OL workkey lookup failed:', err?.message||err); return ''; }
   }
   async function loadCoversFromGoogleBooks(title, author){
-    const isbn10s=await fetchGoogleBooksISBNs(title, author);
+    // Try OL ISBN search first (no key required, more reliable); fall back to Google Books.
+    let isbn10s=await fetchOLISBNs(title, author);
+    if(!isbn10s.length){ isbn10s=await fetchGoogleBooksISBNs(title, author); }
     if(!isbn10s.length) return;
     const ph=document.getElementById('coverPlaceholder');
     const seenFingerprints=new Set();
