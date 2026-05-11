@@ -3612,8 +3612,12 @@ body.modal-open{overscroll-behavior-y:contain}
    so its top-right corner is what overlaps the X. Reserve a 48px right
    gutter here so the placards / cover-edit-link / focus-border never
    reach into the X's territory, regardless of how the row's flex
-   children distribute width. */
-.book-detail-hero{padding-right:48px}
+   children distribute width.
+
+   Critical: `box-sizing: border-box` so width:100% from the base rule
+   INCLUDES the padding. Without this, content-box makes the hero 48px
+   wider than its parent rather than pulling content inward. */
+.book-detail-hero{padding-right:48px;box-sizing:border-box}
 .placard{
   font-family:inherit;
   background:transparent!important;
