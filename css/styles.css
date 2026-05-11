@@ -3686,10 +3686,12 @@ body.modal-open{overscroll-behavior-y:contain}
   background:var(--color-bg-surface)!important;
 }
 /* Show the small CTA only when the modal has no cover. Hide the full tile
-   and the "Change cover ▾" link in that state. */
+   and the "Change cover ▾" link in that state. !important is needed on the
+   link/actions because book_search.js sets inline display:block/flex on
+   them during modal-open wiring, which would otherwise win over the class. */
 .modal-inner.no-cover .cover-add-cta{display:block}
 .modal-inner.no-cover .tile-cover{display:none}
-.modal-inner.no-cover .cover-edit-link{display:none}
+.modal-inner.no-cover .cover-edit-link{display:none!important}
 .modal-inner.no-cover #coverActions{display:none!important}
 /* When .no-cover is on a modal, collapse the wrap so it no longer reserves
    the wide column on desktop or the full top section on mobile. */
@@ -3802,13 +3804,15 @@ body.modal-open{overscroll-behavior-y:contain}
    date string benefits from sitting at the row's right edge for column-style
    scanning), but for FORMAT it strands a short "Print ▾" 180px away from the
    "FORMAT" label, with empty space between them. Override for the format row:
-   the select shrinks to its natural width and sits adjacent to the label
-   with the row's 16px gap. text-align stays left so the chevron-and-label
-   visually pair as "Format: Print ▾" rather than "FORMAT ........... Print ▾". */
+   the select shrinks to its natural width (width:auto cancels the form.inline
+   100% rule) and sits adjacent to the label with the row's 16px gap.
+   text-align stays left so the chevron-and-label visually pair as
+   "Format: Print ▾" rather than "FORMAT ........... Print ▾". */
 .detail-row[data-field="format"] .detail-value{
   flex:0 0 auto;
   text-align:left;
   text-align-last:left;
+  width:auto;
   max-width:none;
 }
 
