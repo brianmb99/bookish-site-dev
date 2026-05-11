@@ -1122,14 +1122,23 @@ button.secondary:hover, .btn.secondary:hover{
 }
 .account-panel-sub-btn:hover{background:var(--color-primary-hover)}
 .account-panel-sub-btn:disabled{opacity:.5;cursor:wait}
+/* #147 item A: demoted treatment for non-Subscribe panel buttons (Open archive,
+   View account key, Change username or password, Manage subscription). These
+   are routine settings actions — they should read as secondary affordances,
+   not as CTAs competing with Subscribe. Quiet card-like surface, subtle
+   border, muted-primary text, normal weight. */
 .account-panel-sub-btn-secondary{
-  background:transparent;
-  color:var(--color-primary);
-  border:1px solid var(--color-primary-muted);
+  background:var(--color-bg-surface);
+  color:var(--color-text-primary);
+  border:1px solid var(--color-border-subtle);
+  font-weight:500;
+  font-size:.85rem;
+  padding:10px 16px;
 }
 .account-panel-sub-btn-secondary:hover{
-  background:var(--color-primary-muted);
-  color:var(--color-primary-hover);
+  background:var(--color-bg-deep);
+  border-color:var(--color-border-default);
+  color:var(--color-text-primary);
 }
 .external-link-icon{
   display:inline-block;
@@ -3649,6 +3658,46 @@ body.modal-open{overscroll-behavior-y:contain}
 .modal-inner.no-cover .placard-title{font-size:1.1rem}
 .modal-inner.no-cover .placard-author{font-size:.95rem}
 
+/* #147 item B: collapse the cover slot when no cover is attached.
+   The full tile (dashed border + book icon + ADD COVER text) is too loud
+   when empty — it dominates the modal on both desktop and mobile. Instead,
+   show a small "+ Add cover" CTA button that, when clicked, expands the slot
+   to reveal the standard placeholder + Browse covers / Upload my own buttons.
+   Once a cover is attached (manual upload, browse, or search prefill), the
+   slot stays expanded with the image. Removing the cover re-collapses. */
+.cover-add-cta{
+  display:none;
+  background:transparent!important;
+  border:1px dashed var(--color-border-default)!important;
+  box-shadow:none!important;
+  color:var(--color-text-secondary)!important;
+  font-size:.8rem!important;font-weight:500;
+  padding:10px 14px!important;min-height:auto!important;
+  border-radius:8px;
+  cursor:pointer;
+  letter-spacing:.01em;
+  transition:color .15s,border-color .15s,background .15s;
+  width:100%;
+  text-align:center;
+}
+.cover-add-cta:hover{
+  color:var(--color-text-primary)!important;
+  border-color:var(--color-primary-muted)!important;
+  background:var(--color-bg-surface)!important;
+}
+/* Show the small CTA only when the modal has no cover. Hide the full tile
+   and the "Change cover ▾" link in that state. */
+.modal-inner.no-cover .cover-add-cta{display:block}
+.modal-inner.no-cover .tile-cover{display:none}
+.modal-inner.no-cover .cover-edit-link{display:none}
+.modal-inner.no-cover #coverActions{display:none!important}
+/* When .no-cover is on a modal, collapse the wrap so it no longer reserves
+   the wide column on desktop or the full top section on mobile. */
+.modal-inner.no-cover .tile-cover-wrap{
+  width:auto;max-width:none;min-width:0;
+  align-self:stretch;
+}
+
 /* Cover-edit affordance: muted text link with disclosure caret */
 .cover-edit-link{
   background:none!important;border:none!important;box-shadow:none!important;
@@ -3748,6 +3797,20 @@ body.modal-open{overscroll-behavior-y:contain}
 /* Date inputs are right-aligned natively, but tighten layout */
 .detail-row input[type="date"].detail-value{max-width:180px}
 .detail-row select.detail-value{max-width:180px;text-align-last:right}
+/* #147 item C: pair the FORMAT label with its value. The base .detail-value
+   rule applies flex:1 + text-align:right, which works for the date row (the
+   date string benefits from sitting at the row's right edge for column-style
+   scanning), but for FORMAT it strands a short "Print ▾" 180px away from the
+   "FORMAT" label, with empty space between them. Override for the format row:
+   the select shrinks to its natural width and sits adjacent to the label
+   with the row's 16px gap. text-align stays left so the chevron-and-label
+   visually pair as "Format: Print ▾" rather than "FORMAT ........... Print ▾". */
+.detail-row[data-field="format"] .detail-value{
+  flex:0 0 auto;
+  text-align:left;
+  text-align-last:left;
+  max-width:none;
+}
 
 /* Optional chips — view-mode "+ chip" affordance for non-activated fields */
 .optional-chips{

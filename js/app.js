@@ -393,6 +393,23 @@ optFieldsZone?.addEventListener('click',e=>{
 
 if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn,.cover-nav-arrow')) return; coverFileInput.click(); }); }
 if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.add('no-cover'); updateDirty(); if(form.priorTxid.value) _autoSaveIfDirty(); }); }
+// #147 item B: collapsed "+ Add cover" CTA expands the cover slot. Removes
+// the .no-cover class on .modal-inner (so the full tile + dashed-border
+// placeholder + ADD COVER text become visible) and opens the Change-cover
+// action panel so the Browse covers / Upload my own buttons are immediately
+// reachable — same as if the user clicked the "Change cover ▾" link.
+const addCoverCtaEl = document.getElementById('addCoverCta');
+if(addCoverCtaEl){
+  addCoverCtaEl.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    const inner = modal.querySelector('.modal-inner');
+    if(inner) inner.classList.remove('no-cover');
+    const coverActionsEl = document.getElementById('coverActions');
+    const changeCoverLink = document.getElementById('changeCoverLink');
+    if(coverActionsEl) coverActionsEl.style.display = 'flex';
+    if(changeCoverLink) changeCoverLink.setAttribute('aria-expanded','true');
+  });
+}
 
 // --- Helpers ---
 // escapeHtml + buildCardHTML + buildCardDetails + generatedCoverColor moved to
