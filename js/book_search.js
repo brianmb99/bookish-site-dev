@@ -226,7 +226,6 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     if(ph){ ph.style.display='flex'; ph.innerHTML=''; ph.classList.add('cover-skeleton-pulse'); }
     coverPreview.style.display='none';
     if(editionInfo) editionInfo.textContent='Finding covers\u2026';
-    let coverFirstShown=false;
     let rawEntries=[];
     try{
       const edController=new AbortController();
@@ -251,31 +250,6 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
         if(result.fingerprint) seenFingerprints.add(result.fingerprint);
         const ed=buildCoverEdition(result, meta);
         insertByRank(editions, ed);
-        // Auto-select first portrait Amazon cover
-        if(!coverFirstShown && result.height/result.width>=1.18){
-          coverFirstShown=true;
-          editionIndex=editions.indexOf(ed);
-          if(ph){ ph.classList.remove('cover-skeleton-pulse'); ph.style.display='none'; }
-          coverPreview.src=result.dataUrl;
-          coverPreview.style.display='block';
-          coverPreview.style.animation='fadeIn 0.35s ease';
-          coverPreview.dataset.b64=result.base64;
-          coverPreview.dataset.mime=result.mime;
-          coverPreview.dataset.fit=coverFitMode(result.width, result.height);
-          if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${result.dataUrl}')`);
-          if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded();
-          markDirty();
-        }
-        // Show/update nav when 2+ editions with covers
-        const withCovers=editions.filter(e=>e.cover_url);
-        if(withCovers.length>=2){
-          showCoverNav();
-          prevBtn.style.animation='fadeIn 0.35s ease';
-          nextBtn.style.animation='fadeIn 0.35s ease';
-        }
-        editionInfo.textContent=coverFirstShown?`Cover ${editionIndex+1} of ${withCovers.length}`:'Finding covers\u2026';
-        prevBtn.disabled=editionIndex===0;
-        nextBtn.disabled=editionIndex>=editions.length-1;
       });
     });
     // Also try OL cover-by-ISBN as secondary source (no auto-select — Amazon preferred)
@@ -289,11 +263,6 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
         seenCovers.add(url);
         const ed=buildCoverEdition(result, meta);
         insertByRank(editions, ed);
-        const withCovers=editions.filter(e=>e.cover_url);
-        if(withCovers.length>=2){ showCoverNav(); }
-        editionInfo.textContent=coverFirstShown?`Cover ${editionIndex+1} of ${withCovers.length}`:'Finding covers\u2026';
-        prevBtn.disabled=editionIndex===0;
-        nextBtn.disabled=editionIndex>=editions.length-1;
       });
     });
     // Start with OL editions while Amazon covers load
@@ -309,7 +278,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     if(ph){ ph.classList.remove('cover-skeleton-pulse'); }
     const amzCovers=editions.filter(e=>e._coverData&&e._coverData.source==='amazon').length;
     const olIsbnCovers=editions.filter(e=>e._coverData&&e._coverData.source==='ol').length;
-    console.info('[Bookish:Covers] Pipeline done: %d editions total (%d Amazon, %d OL-ISBN, %d deduped), coverFirstShown=%s', editions.length, amzCovers, olIsbnCovers, seenFingerprints.size - editions.length, coverFirstShown);
+    console.info('[Bookish:Covers] Pipeline done: %d editions total (%d Amazon, %d OL-ISBN, %d deduped)', editions.length, amzCovers, olIsbnCovers, seenFingerprints.size - editions.length);
     if(coverOnlyMode){
       editions=filterCoverMatches(editions, meta.title);
       // Include iTunes cover if available (from selectItunes flow)
