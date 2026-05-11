@@ -926,9 +926,15 @@ function renderAccountPanel(content) {
              from the header and tap "+ Add".
              #124: added the "Show in header" toggle so users who hid the glyph
              from the drawer have a clear path to re-enable it. -->
-        <label class="account-friends-toggle" for="accountFriendsShowToggle">
+        <!-- #146: switched from native checkbox to the .toggle-switch
+             pattern used by the Owned toggle and the privacy-add toggle.
+             Order matters: input must immediately precede .toggle-track
+             so the input:checked + .toggle-track adjacent-sibling rule
+             applies. Input id stays the same so the wiring still finds it. -->
+        <label class="toggle-switch account-friends-toggle" for="accountFriendsShowToggle">
           <span class="account-friends-toggle-label">Show in header</span>
           <input type="checkbox" id="accountFriendsShowToggle" />
+          <span class="toggle-track"></span>
         </label>
         <div class="account-friends-section" id="accountConnectionsSection" style="display:none;">
           <div class="account-friends-heading">Connections</div>
@@ -1306,7 +1312,11 @@ async function hydratePasskeysSection(content) {
 
   const supported = await getPasskeysSupported();
   if (!supported) {
+    // #146: keep the subtitle so the block reads as a sibling of Account
+    // key / Username & password, not as an orphaned muted line. Without
+    // it, the block visually "floats" between two clearly-titled blocks.
     block.innerHTML = `
+      <div class="account-security-subtitle">Passkeys</div>
       <div class="account-security-desc account-passkeys-unsupported">Passkeys aren't supported on this browser. Try a recent Chrome, Safari, or Edge.</div>
     `;
     return;

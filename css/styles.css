@@ -631,6 +631,17 @@ button.secondary:hover, .btn.secondary:hover{
   color:var(--color-text-secondary);
   text-decoration-color:rgba(255,255,255,.4);
 }
+/* #146: suppress the browser-default focus outline that shows on click /
+   programmatic focus (`:focus` matches both keyboard and pointer focus).
+   The themed `:focus-visible` rule below still styles keyboard focus.
+   `:focus-visible{outline:none}` alone was not enough because a click
+   triggers `:focus` (not `:focus-visible`), so the native ring leaked
+   through on these link-styled elements. */
+.empty-add-manual-link:focus,
+.empty-signin .link-btn:focus,
+.empty-links a:focus{
+  outline:none;
+}
 .empty-add-manual-link:focus-visible{
   outline:none;
   text-decoration-color:var(--color-primary);
@@ -2940,13 +2951,15 @@ form.inline label.toggle-switch{display:flex}
   gap:6px;
 }
 /* #144: visual grouping — second-and-subsequent blocks get a margin gap
-   and faint divider above them so they read as siblings within the
-   Account & Security section rather than equal-weight peers of the
-   section label itself. */
+   and divider above them so they read as siblings within the Account &
+   Security section rather than equal-weight peers of the section label.
+   #146: bumped to --color-border-default (from --color-border-subtle)
+   plus a touch more vertical breathing room; the subtle border was
+   nearly invisible against the panel background. */
 .account-security-block + .account-security-block{
-  margin-top:18px;
-  padding-top:18px;
-  border-top:1px solid var(--color-border-subtle);
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px solid var(--color-border-default);
 }
 /* #144: subtitle reads as clearly subordinate to the section label.
    Reduced size + slightly muted weight steps the hierarchy. */
@@ -3849,12 +3862,16 @@ body.modal-open{overscroll-behavior-y:contain}
 .account-friend-revoke{font-size:.78rem;background:none;border:none;color:var(--color-primary);cursor:pointer;padding:0}
 .account-friends-status{font-size:.78rem;color:var(--color-text-muted)}
 
-/* "Show in header" toggle (#124). Single-row layout with the label on the
-   left and a checkbox on the right. Uses the native checkbox to keep the
-   surface area tiny and the keyboard semantics correct; the row itself is
-   a <label> so taps anywhere flip the box. */
+/* "Show in header" toggle (#124, #146).
+   #124 introduced this row using a native checkbox.
+   #146 switched it to the shared `.toggle-switch` slider pattern (same
+   as the Owned toggle in the add-book modal) so it visually matches the
+   rest of the app instead of rendering a native browser checkbox.
+   This rule supplies the row chrome (background, border, padding,
+   justify-content:space-between) on top of the `.toggle-switch` base.
+   The slider visuals come from `.toggle-track` + `.toggle-switch input:checked+.toggle-track`. */
 .account-friends-toggle{
-  display:flex;align-items:center;justify-content:space-between;
+  justify-content:space-between;
   gap:12px;
   padding:8px 10px;
   background:var(--color-bg-base);
@@ -3862,15 +3879,9 @@ body.modal-open{overscroll-behavior-y:contain}
   border-radius:6px;
   font-size:.85rem;
   color:var(--color-text-primary);
-  cursor:pointer;
   user-select:none;
 }
 .account-friends-toggle-label{flex:1 1 auto}
-.account-friends-toggle input[type="checkbox"]{
-  width:18px;height:18px;
-  accent-color:var(--color-primary);
-  cursor:pointer;
-}
 
 /* Invite modal — shared structure for sender + recipient panes */
 /* Both bump z-index above .account-modal (1001) so they reliably layer on
