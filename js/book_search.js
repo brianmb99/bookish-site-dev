@@ -183,7 +183,13 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     }catch(err){ console.warn('[Bookish:Covers] OL workkey lookup failed:', err?.message||err); return ''; }
   }
   async function loadCoversFromGoogleBooks(title, author){
+    // Reserve the tile-cover space so the modal doesn't resize when the cover lands.
+    const inner=document.querySelector('.modal-inner');
+    if(inner) inner.classList.remove('no-cover');
     const ph=document.getElementById('coverPlaceholder');
+    if(ph){ ph.style.display='flex'; ph.innerHTML=''; ph.classList.add('cover-skeleton-pulse'); }
+    coverPreview.style.display='none';
+    if(editionInfo) editionInfo.textContent='Finding covers…';
     function paintItunesFallback(){
       if(itunesCoverState && itunesCoverState.width){
         editions=[buildCoverEdition(itunesCoverState, { title })];
@@ -231,6 +237,9 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     const workKey=meta.key;
     if(!workKey){ console.warn('[Bookish:Covers] loadEditionsFromSearch: no workKey, skipping'); return; }
     console.info('[Bookish:Covers] loadEditionsFromSearch: workKey=%s, title=%s, coverOnlyMode=%s', workKey, meta.title, coverOnlyMode);
+    // Reserve the tile-cover space so the modal doesn't resize when the cover lands.
+    const inner=document.querySelector('.modal-inner');
+    if(inner) inner.classList.remove('no-cover');
     // Show skeleton loading state on cover tile
     const ph=document.getElementById('coverPlaceholder');
     if(ph){ ph.style.display='flex'; ph.innerHTML=''; ph.classList.add('cover-skeleton-pulse'); }
