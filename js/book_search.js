@@ -189,7 +189,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     const ph=document.getElementById('coverPlaceholder');
     if(ph){ ph.style.display='flex'; ph.innerHTML=''; ph.classList.add('cover-skeleton-pulse'); }
     coverPreview.style.display='none';
-    if(editionInfo) editionInfo.textContent='Finding covers…';
+    if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers…'; }
     function paintItunesFallback(){
       if(itunesCoverState && itunesCoverState.width){
         editions=[buildCoverEdition(itunesCoverState, { title })];
@@ -244,7 +244,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     const ph=document.getElementById('coverPlaceholder');
     if(ph){ ph.style.display='flex'; ph.innerHTML=''; ph.classList.add('cover-skeleton-pulse'); }
     coverPreview.style.display='none';
-    if(editionInfo) editionInfo.textContent='Finding covers\u2026';
+    if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers\u2026'; }
     function paintItunesFallback(){
       if(ph) ph.classList.remove('cover-skeleton-pulse');
       if(itunesCoverState && itunesCoverState.width){
