@@ -153,12 +153,10 @@
   <div class="empty-illustration">📚</div>
   <h2 class="empty-headline">Your reading journey starts here</h2>
   <p class="empty-subtext">Track what you read. Keep it forever. Access it anywhere.</p>
-  <button type="button" id="emptySearchCta" class="empty-search-cta" aria-label="Search to add a book">
-    <span class="empty-search-icon" aria-hidden="true">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    </span>
-    <span class="empty-search-text">Search for a book to add</span>
-  </button>
+  <!-- #144: real omnibox is relocated here in the empty branch via app.js.
+       The slot starts empty; app.js detaches #omniboxWrap from the header
+       and appends it here when the shelf is empty. -->
+  <div id="emptyOmniboxSlot" class="empty-omnibox-slot"></div>
   <p class="empty-search-examples">Try: <span class="empty-search-example">Project Hail Mary</span>, <span class="empty-search-example">Tomorrow and Tomorrow and Tomorrow</span></p>
   <button type="button" id="emptyAddBookBtn" class="empty-add-manual-link">Can't find it? Add manually</button>
   <div id="emptySignIn" class="empty-signin">Already have an account? <button class="link-btn" id="emptySignInBtn">Sign in</button></div>
@@ -170,7 +168,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.225</div>
+  <div class="footer-meta">Alpha &bull; v0.2.226</div>
 </footer>
 </div>
 

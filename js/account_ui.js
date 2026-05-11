@@ -902,16 +902,6 @@ function renderAccountPanel(content) {
           <button type="button" id="replaceAccountKeyBtn" class="btn-link account-security-replace-link">Replace account key &rarr;</button>
         </div>
 
-        <div class="account-security-block">
-          <div class="account-security-subtitle">Don't keep a backup on Bookish</div>
-          <div class="account-security-desc">When on, your account key isn't stored on our servers. You'll need your saved key to recover your account if you forget your password. More private, less safe if you lose both.</div>
-          <label class="account-friends-toggle" for="accountCustodyToggle">
-            <span class="account-friends-toggle-label" id="accountCustodyToggleLabel"></span>
-            <input type="checkbox" id="accountCustodyToggle" />
-          </label>
-          <div class="account-security-error" id="accountCustodyError" style="display:none;"></div>
-        </div>
-
         <div class="account-security-block" id="accountPasskeysBlock">
           <!-- Phase 3: passkey list. Populated by wirePasskeysSection() once
                isSupported() resolves: either the full block (subtitle, desc,
@@ -1000,7 +990,7 @@ function renderAccountPanel(content) {
     });
   }
 
-  // Account & Security section — View / Replace / custody toggle (recovery v2 phase 2).
+  // Account & Security section — View / Replace + Passkeys (#144 removed the custody toggle).
   wireAccountSecuritySection(content);
 
   // Friends section (#118 → #122). The "+ Add a friend" entry now lives in
@@ -1207,9 +1197,14 @@ function escapeHtml(s) {
 
 /**
  * Wire the Account & Security section: View account key, Replace account
- * key, and the manual-custody toggle. Called once after the panel HTML is
+ * key, and the passkeys list. Called once after the panel HTML is
  * rendered. The section is statically present in the panel markup; this
- * just attaches handlers and hydrates the toggle's initial state.
+ * just attaches handlers and hydrates child blocks.
+ *
+ * #144: the manual-custody toggle is no longer surfaced in the UI. The
+ * SDK wrappers `tarn_service.accountKey.enableKeyStorage` /
+ * `disableKeyStorage` remain available for potential future re-exposure
+ * as a power-user setting.
  *
  * @param {HTMLElement} content
  */
@@ -1222,138 +1217,11 @@ function wireAccountSecuritySection(content) {
   if (replaceBtn) {
     replaceBtn.addEventListener('click', () => startReplaceAccountKeyFlow());
   }
-  hydrateCustodyToggle(content);
-  // Phase 3: registered passkeys block. Sits under the custody toggle.
-  // Async because the support probe + initial list() both touch the SDK.
+  // Registered passkeys block. Async because the support probe + initial
+  // list() both touch the SDK.
   hydratePasskeysSection(content).catch(err =>
     console.warn('[AccountUI] passkeys hydrate failed:', err?.message || err)
   );
-}
-
-/**
- * Reflect the SDK's `accountKey.isStored()` state on the custody toggle.
- *
- * - `true`  (Model B, server-stored) → toggle UNCHECKED (manual custody off)
- * - `false` (Model A, not stored)    → toggle CHECKED (manual custody on)
- * - `null`  (no auth round trip yet) → defer: schedule a 100ms retry
- *                                       silently (no "Loading…" yet). If
- *                                       the retry also returns null, NOW
- *                                       show "Loading…" and keep retrying
- *                                       on a 200ms cadence. This avoids a
- *                                       ~100ms flicker on fast networks
- *                                       where the SDK resolves quickly.
- */
-function hydrateCustodyToggle(content) {
-  const toggle = content.querySelector('#accountCustodyToggle');
-  const label = content.querySelector('#accountCustodyToggleLabel');
-  const errorEl = content.querySelector('#accountCustodyError');
-  if (!toggle || !label) return;
-
-  // Apply a resolved state to the DOM. Used by every code path that
-  // actually has a true/false answer — keeps the rendering logic in
-  // one spot regardless of how many retries were needed to get there.
-  const applyState = (stored) => {
-    toggle.disabled = false;
-    // Once we've resolved, no live state label — the toggle's checked
-    // state speaks for itself, and the section subtitle conveys meaning.
-    label.textContent = '';
-    // checked = Model A (not stored). unchecked = Model B (stored).
-    toggle.checked = stored === false;
-    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
-
-    if (!toggle.dataset.bound) {
-      toggle.dataset.bound = '1';
-      toggle.addEventListener('change', async () => {
-        const wantsManualCustody = toggle.checked;
-        // Disable while the flow runs to prevent a double-click landing two
-        // step-up calls in flight at once.
-        toggle.disabled = true;
-        try {
-          if (wantsManualCustody) {
-            // OFF → ON (B → A): disable storage. Confirmation + password.
-            await runDisableStorageFlow();
-          } else {
-            // ON → OFF (A → B): enable storage. Password + 24-word phrase.
-            await runEnableStorageFlow();
-          }
-        } finally {
-          // Always re-hydrate from authoritative state — handles success
-          // (toggle reflects new state), cancel (toggle reverts), and error
-          // (toggle reverts; inline error already shown by the flow).
-          hydrateCustodyToggle(content);
-        }
-      });
-    }
-  };
-
-  const stored = tarnService.accountKey.isStored();
-  if (stored !== null) {
-    applyState(stored);
-    return;
-  }
-
-  // Disable the toggle while we wait — but don't reveal "Loading…" yet.
-  // On a fast network the next probe will resolve in ~100ms and the
-  // user never sees a flicker.
-  toggle.disabled = true;
-  toggle.checked = false;
-
-  setTimeout(() => {
-    if (!document.body.contains(toggle)) return;
-    const stored2 = tarnService.accountKey.isStored();
-    if (stored2 !== null) {
-      applyState(stored2);
-      return;
-    }
-    // Genuinely slow — surface the loading affordance and re-hydrate
-    // on a slower cadence. The recursive call handles further retries.
-    label.textContent = 'Loading…';
-    setTimeout(() => {
-      if (!document.body.contains(toggle)) return;
-      hydrateCustodyToggle(content);
-    }, 200);
-  }, 100);
-}
-
-/**
- * Off → On (B → A) flow: confirmation dialog, then password prompt with
- * inline-error retry, calls `disableKeyStorage` on submit. The dialog
- * stays open across wrong-password attempts; cancel/backdrop dismiss
- * aborts the flow.
- */
-async function runDisableStorageFlow() {
-  const errorEl = document.getElementById('accountCustodyError');
-  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
-
-  const confirmed = await confirmDialog({
-    title: 'Stop storing your account key?',
-    body: "Stop storing the wrapped account key on our servers? Make sure you've saved your 24 words first — we won't be able to give them to you again.",
-    confirmLabel: 'Continue',
-  });
-  if (!confirmed) return;
-
-  await requestPasswordConfirmation({
-    title: 'Confirm your password',
-    body: 'Re-enter your password to turn off server-side storage of your account key.',
-    confirmLabel: 'Turn on manual custody',
-    submit: async (password) => {
-      await tarnService.accountKey.disableKeyStorage({ password });
-    },
-  });
-}
-
-/**
- * On → Off (A → B) flow: dialog with password + 24-word phrase, then
- * `enableKeyStorage`. AccountKeyPinningError surfaces a dedicated message
- * inside the dialog and keeps it open for retry; other errors do the same.
- */
-async function runEnableStorageFlow() {
-  const errorEl = document.getElementById('accountCustodyError');
-  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
-
-  await openEnableStorageDialog(async ({ password, accountKey: phrase }) => {
-    await tarnService.accountKey.enableKeyStorage({ password, accountKey: phrase });
-  });
 }
 
 // ----------------------------------------------------------------------------
@@ -1820,7 +1688,7 @@ function humanizeAccountKeyError(err, { phraseFlow }) {
       : 'Account-key check failed. Please try again.';
   }
   if (/no_account_key_stored/i.test(msg)) {
-    return 'No account key is stored on our servers right now. Toggle manual custody off to start storing one.';
+    return "No account key is stored on our servers right now. Contact support if you need to restore access.";
   }
   if (/step-up|challenge|wrong password|invalid password|credential/i.test(msg)) {
     return 'Wrong password. Please try again.';
@@ -2101,101 +1969,6 @@ function confirmDialog({ title, body, confirmLabel = 'Continue', cancelLabel = '
     overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
     card.addEventListener('click', (e) => e.stopPropagation());
     requestAnimationFrame(() => confirmBtn.focus({ preventScroll: true }));
-  });
-}
-
-/**
- * Open the enable-storage dialog (password + 24-word phrase). The dialog
- * stays open across submit failures — `submit({password, accountKey})` is
- * awaited; if it throws, an inline error is shown inside the dialog and
- * the user can edit and try again. The dialog only closes on a successful
- * submit (resolves), or cancel / backdrop dismiss.
- *
- * The pasted phrase is normalized client-side (strip leading numbers like
- * "1." or "1)", collapse whitespace, lowercase) before being passed to
- * `submit`. The SDK normalizes again internally — this is purely a
- * friendliness layer for password-manager paste UX.
- *
- * @param {(args: { password: string, accountKey: string }) => Promise<void>} submit
- * @returns {Promise<void>} resolves when the dialog closes
- */
-function openEnableStorageDialog(submit) {
-  return new Promise((resolve) => {
-    const overlay = createOverlay();
-    overlay.innerHTML = `
-      <div class="security-overlay-card" role="dialog" aria-modal="true">
-        <h2 class="security-overlay-title">Turn off manual custody</h2>
-        <p class="security-overlay-body">To start storing your account key, enter your password and paste your saved 24 words.</p>
-        <div class="form-group">
-          <label for="securityEnablePassword">Password</label>
-          <div class="password-field">
-            <input type="password" id="securityEnablePassword" autocomplete="current-password" placeholder="Your password" />
-            <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="securityEnablePhrase">Account key</label>
-          <textarea id="securityEnablePhrase" rows="4" placeholder="Paste your saved 24 words"></textarea>
-        </div>
-        <div class="security-overlay-error" data-error style="display:none;"></div>
-        <div class="security-overlay-actions">
-          <button type="button" class="btn secondary" data-cancel>Cancel</button>
-          <button type="button" class="btn primary" data-confirm disabled>Turn off manual custody</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    const card = overlay.querySelector('.security-overlay-card');
-    const passwordInput = overlay.querySelector('#securityEnablePassword');
-    const phraseInput = overlay.querySelector('#securityEnablePhrase');
-    const confirmBtn = overlay.querySelector('[data-confirm]');
-    const cancelBtn = overlay.querySelector('[data-cancel]');
-    const toggleBtn = overlay.querySelector('.password-toggle');
-    const errorEl = overlay.querySelector('[data-error]');
-
-    const closeAndResolve = () => {
-      // Clear sensitive values from the DOM before tearing down.
-      if (passwordInput) passwordInput.value = '';
-      if (phraseInput) phraseInput.value = '';
-      overlay.remove();
-      resolve();
-    };
-
-    const validate = () => {
-      const pwOk = passwordInput.value.length > 0;
-      const phraseOk = normalizePastedPhrase(phraseInput.value).split(' ').filter(Boolean).length === 24;
-      confirmBtn.disabled = !(pwOk && phraseOk);
-    };
-
-    passwordInput.addEventListener('input', validate);
-    phraseInput.addEventListener('input', validate);
-
-    confirmBtn.addEventListener('click', async () => {
-      const password = passwordInput.value;
-      const accountKey = normalizePastedPhrase(phraseInput.value);
-      confirmBtn.disabled = true;
-      errorEl.style.display = 'none';
-      errorEl.textContent = '';
-      try {
-        await submit({ password, accountKey });
-        closeAndResolve();
-      } catch (err) {
-        console.warn('[AccountUI] enableKeyStorage submit failed:', err?.message || err);
-        errorEl.textContent = humanizeAccountKeyError(err, { phraseFlow: true });
-        errorEl.style.display = 'block';
-        // Re-enable based on current input validity — keep dialog open.
-        validate();
-      }
-    });
-    cancelBtn.addEventListener('click', () => closeAndResolve());
-    toggleBtn.addEventListener('click', () => {
-      const showing = passwordInput.type === 'text';
-      passwordInput.type = showing ? 'password' : 'text';
-      toggleBtn.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
-    });
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeAndResolve(); });
-    card.addEventListener('click', (e) => e.stopPropagation());
-    requestAnimationFrame(() => passwordInput.focus({ preventScroll: true }));
   });
 }
 
