@@ -2441,6 +2441,13 @@ omniboxDropdown?.addEventListener('click', (ev)=>{
       const meta = JSON.parse(decodeURIComponent(addRow.dataset.addJson));
       completeOmniboxSelection();
       openModal(null, READING_STATUS.WANT_TO_READ);
+      // Reserve the cover tile space immediately so the modal opens at its final
+      // size — selectItunes runs in a setTimeout below and would otherwise leave
+      // the modal in the compact (.no-cover) state for ~50ms before expanding.
+      const _inner = modal.querySelector('.modal-inner');
+      if(_inner) _inner.classList.remove('no-cover');
+      const _ph = document.getElementById('coverPlaceholder');
+      if(_ph){ _ph.style.display='flex'; _ph.innerHTML=''; _ph.classList.add('cover-skeleton-pulse'); }
       // Directly select the book via book_search module (no search dropdown)
       setTimeout(()=>{
         // Pre-fill search input so it's ready if user wants to search later
