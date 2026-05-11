@@ -168,7 +168,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.254</div>
+  <div class="footer-meta">Alpha &bull; v0.2.255</div>
 </footer>
 </div>
 
@@ -199,12 +199,20 @@
             <button type="button" class="cover-nav-arrow cover-nav-next" id="nextEdition" style="display:none" aria-label="Next cover">›</button>
             <div class="cover-nav-counter" id="editionInfo" style="display:none"></div>
             <button type="button" class="cover-remove-btn" id="coverRemoveBtn" title="Remove cover" style="display:none">×</button>
+            <button type="button" class="cover-adjust-btn" id="coverAdjustBtn" title="Adjust cover (zoom &amp; pan)" aria-label="Adjust cover (zoom and pan)" style="display:none"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M21 3l-7 7"/><path d="M9 21H3v-6"/><path d="M3 21l7-7"/></svg></button>
             <input type="file" name="coverFile" accept="image/*" style="display:none" id="hiddenCoverInput"/>
           </div>
           <button type="button" class="cover-edit-link" id="changeCoverLink" aria-expanded="false">Change cover <span class="cover-edit-caret" aria-hidden="true">▾</span></button>
           <div class="cover-actions" id="coverActions" style="display:none">
             <button type="button" class="cover-action-btn" id="findCoversBtn" style="display:none">Browse covers</button>
             <button type="button" class="cover-action-btn" id="uploadCoverBtn" style="display:none">Upload my own</button>
+          </div>
+          <div class="cover-adjust-controls" id="coverAdjustControls" style="display:none">
+            <input type="range" min="100" max="300" value="100" step="1" id="coverAdjustZoom" class="cover-adjust-zoom" aria-label="Cover zoom"/>
+            <div class="cover-adjust-buttons">
+              <button type="button" class="cover-adjust-cancel" id="coverAdjustCancel" aria-label="Cancel cover adjustment" title="Cancel"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4L12 12M12 4L4 12"/></svg></button>
+              <button type="button" class="cover-adjust-apply" id="coverAdjustApply" aria-label="Apply cover adjustment" title="Apply"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg></button>
+            </div>
           </div>
         </div>
         <div class="book-detail-placards">

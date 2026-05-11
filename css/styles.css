@@ -2168,6 +2168,122 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 }
 .tile-cover:hover .cover-remove-btn[style*="inline"]{opacity:1}
 .cover-remove-btn:hover{background:rgba(239,68,68,.8)!important}
+/* Cover Adjust button — top-right overlay (mirrors cover-remove-btn but on the
+   opposite hover-set since both can be visible). Visible only when a cover is
+   actually loaded; book_search.js toggles display:inline-flex / none. */
+.cover-adjust-btn{
+  position:absolute;
+  top:6px;
+  left:6px;
+  width:26px;height:26px;
+  min-height:auto!important;
+  background:rgba(0,0,0,.6)!important;
+  border:1px solid rgba(255,255,255,.15)!important;
+  border-radius:50%!important;
+  color:#fff!important;
+  padding:0!important;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  z-index:3;
+  opacity:0;
+  transition:opacity .2s ease,background .2s ease;
+  box-shadow:0 2px 6px rgba(0,0,0,.3)!important;
+  line-height:1;
+}
+.tile-cover:hover .cover-adjust-btn[style*="inline"]{opacity:1}
+/* On touch devices there's no hover — keep the affordance visible at low
+   opacity so it's reachable but not visually loud. */
+@media (pointer: coarse){
+  .tile-cover .cover-adjust-btn[style*="inline"]{opacity:.7}
+}
+.cover-adjust-btn:hover{background:rgba(0,0,0,.85)!important;opacity:1!important}
+.cover-adjust-btn:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px;opacity:1!important}
+
+/* Adjust mode: drag-to-pan + scale on the preview image. The image already has
+   width/height:100% + object-fit:contain, so transform anchors at the tile center.
+   When adjusting, suppress the blur backdrop's hover transition (so the backdrop
+   doesn't repaint while dragging) and disable native image touch gestures so
+   our pointer handlers receive every move. */
+.modal-inner.adjusting-cover .tile-cover{cursor:grab;user-select:none}
+.modal-inner.adjusting-cover .tile-cover:active{cursor:grabbing}
+.modal-inner.adjusting-cover .tile-cover img{
+  touch-action:none;
+  -webkit-user-drag:none;
+  user-drag:none;
+  will-change:transform;
+  transition:none;
+}
+.modal-inner.adjusting-cover .tile-cover img.preview{transform-origin:center center}
+/* Hide every cover-tile affordance + outer chrome while adjusting; only the
+   image, the slider, and the Apply/Cancel buttons should be visible. */
+.modal-inner.adjusting-cover .cover-nav-arrow,
+.modal-inner.adjusting-cover .cover-nav-counter,
+.modal-inner.adjusting-cover .cover-remove-btn,
+.modal-inner.adjusting-cover .cover-adjust-btn,
+.modal-inner.adjusting-cover #changeCoverLink,
+.modal-inner.adjusting-cover #coverActions,
+.modal-inner.adjusting-cover #coverPlaceholder{display:none!important}
+
+/* Slider + Apply/Cancel cluster — sits inside .tile-cover-wrap below the tile. */
+.cover-adjust-controls{
+  display:flex;flex-direction:column;align-items:stretch;gap:10px;
+  width:100%;
+  padding:8px 4px 2px;
+  box-sizing:border-box;
+}
+.cover-adjust-zoom{
+  -webkit-appearance:none;appearance:none;
+  width:100%;
+  height:4px;
+  background:var(--color-border-subtle);
+  border-radius:2px;
+  outline:none;
+  cursor:pointer;
+}
+.cover-adjust-zoom::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:18px;height:18px;border-radius:50%;
+  background:var(--color-primary);
+  border:2px solid var(--color-bg-surface);
+  cursor:grab;
+  box-shadow:0 1px 3px rgba(0,0,0,.4);
+}
+.cover-adjust-zoom::-moz-range-thumb{
+  width:18px;height:18px;border-radius:50%;
+  background:var(--color-primary);
+  border:2px solid var(--color-bg-surface);
+  cursor:grab;
+  box-shadow:0 1px 3px rgba(0,0,0,.4);
+}
+.cover-adjust-zoom:focus-visible{outline:2px solid var(--color-primary);outline-offset:4px}
+.cover-adjust-buttons{display:flex;justify-content:center;gap:12px}
+.cover-adjust-cancel,
+.cover-adjust-apply{
+  width:36px;height:36px;
+  min-height:auto!important;
+  border-radius:50%!important;
+  padding:0!important;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition:background .15s,border-color .15s,transform .1s;
+  box-shadow:0 2px 6px rgba(0,0,0,.25)!important;
+}
+.cover-adjust-cancel{
+  background:transparent!important;
+  border:1px solid var(--color-border-default)!important;
+  color:var(--color-text-secondary)!important;
+}
+.cover-adjust-cancel:hover{background:var(--color-bg-surface)!important;color:var(--color-text-primary)!important}
+.cover-adjust-apply{
+  background:var(--color-primary)!important;
+  border:1px solid var(--color-primary)!important;
+  color:#fff!important;
+}
+.cover-adjust-apply:hover{filter:brightness(1.1)}
+.cover-adjust-apply:active,
+.cover-adjust-cancel:active{transform:scale(.95)}
+.cover-adjust-apply:focus-visible,
+.cover-adjust-cancel:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
 .placeholder-loading{font-size:.6rem;opacity:.4;animation:pulse-opacity 1.5s ease-in-out infinite}
 .cover-skeleton-pulse{background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite}
 @keyframes pulse-opacity{0%,100%{opacity:.3}50%{opacity:.7}}

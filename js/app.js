@@ -391,7 +391,7 @@ optFieldsZone?.addEventListener('click',e=>{
   updateDirty();
 });
 
-if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn,.cover-nav-arrow')) return; coverFileInput.click(); }); }
+if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn,.cover-nav-arrow,.cover-adjust-btn')) return; if(modal.querySelector('.modal-inner')?.classList.contains('adjusting-cover')) return; coverFileInput.click(); }); }
 if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.add('no-cover'); updateDirty(); if(form.priorTxid.value) _autoSaveIfDirty(); }); }
 // #147 item B: collapsed "+ Add cover" CTA expands the cover slot. Removes
 // the .no-cover class on .modal-inner (so the full tile + dashed-border
@@ -416,7 +416,7 @@ if(addCoverCtaEl){
 // components/book-card.js (#123) so the friend's-shelf view can reuse the
 // same builders verbatim. Local aliases preserve the rest of app.js.
 const escapeHtml = sharedEscapeHtml;
-function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Add cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); }
+function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Add cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn(); }
 function showCoverLoaded(){
   if(coverRemoveBtn) coverRemoveBtn.style.display='inline-flex';
   // Round 2 (#147) introduced the .no-cover collapsed state and a small
@@ -1085,6 +1085,7 @@ coverFileInput.addEventListener('change', async ()=>{ const f=coverFileInput.fil
     coverPreview.dataset.mime = mime;
     tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`);
     showCoverLoaded();
+    if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn();
     const inner = modal.querySelector('.modal-inner');
     if(inner) inner.classList.remove('no-cover');
     updateDirty();

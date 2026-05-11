@@ -1,7 +1,7 @@
 // book_search.js
 // Lightweight module to search OpenLibrary and populate the entry form
 import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeBookResults as coreMerge, enrichWithYear, enrichItunesWithYear, scoreDocument as coreScoreDocument, filterAndSort as coreFilterAndSort, deduplicateByDisplay as coreDedup, deduplicateItunesByDisplay as coreDedupItunes, filterBooksSupersededByItunes as coreBooksMinusItunes, detectISBN, parseAuthorTitle, cleanTitle, filterCoverMatches, extractISBN10s, amazonCoverUrl, olCoverByISBN, rankCover, coverFitMode, coverSortComparator, convertISBN13to10 } from './core/search_core.js';
-import { resizeImageToBase64 } from './core/image_utils.js';
+import { resizeImageToBase64, cropAndResizeImageToBase64 } from './core/image_utils.js';
 import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions, insertByRank, buildCoverEdition, fetchAndValidateCover, MIN_COVER_BYTES } from './core/cover_pipeline.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
@@ -387,7 +387,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     if(!coverOnlyMode){ let changed=false; if(ed.title){ form.title.value=cleanTitle(ed.title); changed=true; } if(ed.author_name&&ed.author_name.length){ form.author.value=ed.author_name.join(', '); changed=true; } if(changed) markDirty(); }
     if(ed._coverData) {
       const cd=ed._coverData;
-      coverPreview.src=cd.dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=cd.base64; coverPreview.dataset.mime=cd.mime; coverPreview.dataset.fit=coverFitMode(cd.width, cd.height); if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${cd.dataUrl}')`); const ph=document.getElementById('coverPlaceholder'); if(ph) ph.style.display='none'; if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded(); markDirty();
+      coverPreview.src=cd.dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=cd.base64; coverPreview.dataset.mime=cd.mime; coverPreview.dataset.fit=coverFitMode(cd.width, cd.height); if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${cd.dataUrl}')`); const ph=document.getElementById('coverPlaceholder'); if(ph) ph.style.display='none'; if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded(); if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn(); markDirty();
     } else if(ed.cover_url) {
       loadCoverByUrl(ed.cover_url);
     } else {
@@ -399,6 +399,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       delete coverPreview.dataset.mime;
       delete coverPreview.dataset.fit;
       if(tileCoverClick) tileCoverClick.style.removeProperty('--cover-url');
+      if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn();
     }
     if(coverOnlyMode){ editionInfo.textContent=`Cover ${editionIndex+1} of ${editions.length}`; } else { editionInfo.textContent=editions.length>1?`Edition ${editionIndex+1} of ${editions.length} — use arrows to browse`:`1 edition`; }
     prevBtn.disabled=editionIndex===0; nextBtn.disabled=editionIndex===editions.length-1; }
@@ -428,6 +429,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`);
       if(ph) ph.style.display = 'none';
       if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded();
+      if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn();
       markDirty();
     } catch(e) {
       setCoverPlaceholder(ph,'no-cover');
@@ -600,6 +602,180 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       browseCoversForEntry(currentWorkKey);
     });
   }
+
+  // ---------------------------------------------------------------
+  // Per-cover Adjust (zoom + pan) — issue #148
+  // ---------------------------------------------------------------
+  // State scoped to a single Adjust session. Reset on Apply/Cancel/modal-close.
+  const adjustBtn=document.getElementById('coverAdjustBtn');
+  const adjustControls=document.getElementById('coverAdjustControls');
+  const adjustZoom=document.getElementById('coverAdjustZoom');
+  const adjustApplyBtn=document.getElementById('coverAdjustApply');
+  const adjustCancelBtn=document.getElementById('coverAdjustCancel');
+  let adjustState=null; // { zoom, panX, panY, original{Src,B64,Mime,Fit}, dragging, lastX, lastY }
+  function isAdjusting(){ return !!adjustState; }
+  function refreshAdjustBtnVisibility(){
+    if(!adjustBtn) return;
+    // Mirror cover-remove-btn's visibility rule: visible whenever a cover is loaded.
+    const hasCover=coverPreview.style.display==='block' && !!coverPreview.dataset.b64;
+    adjustBtn.style.display=hasCover?'inline-flex':'none';
+  }
+  function applyTransform(){
+    if(!adjustState) return;
+    const { zoom, panX, panY } = adjustState;
+    coverPreview.style.transform=`translate(${panX}px, ${panY}px) scale(${zoom})`;
+  }
+  function clampPan(){
+    if(!adjustState) return;
+    const tile=document.getElementById('tileCoverClick');
+    if(!tile) return;
+    const r=tile.getBoundingClientRect();
+    const maxX=Math.max(0,(adjustState.zoom-1)*r.width/2);
+    const maxY=Math.max(0,(adjustState.zoom-1)*r.height/2);
+    if(adjustState.panX> maxX) adjustState.panX= maxX;
+    if(adjustState.panX<-maxX) adjustState.panX=-maxX;
+    if(adjustState.panY> maxY) adjustState.panY= maxY;
+    if(adjustState.panY<-maxY) adjustState.panY=-maxY;
+  }
+  function onPointerDown(ev){
+    if(!isAdjusting() || ev.button===2) return;
+    if(adjustState.zoom<=1.0) return; // nothing to pan
+    adjustState.dragging=true;
+    adjustState.lastX=ev.clientX;
+    adjustState.lastY=ev.clientY;
+    try{ ev.target.setPointerCapture?.(ev.pointerId); }catch{}
+    ev.preventDefault();
+  }
+  function onPointerMove(ev){
+    if(!isAdjusting() || !adjustState.dragging) return;
+    const dx=ev.clientX-adjustState.lastX;
+    const dy=ev.clientY-adjustState.lastY;
+    adjustState.lastX=ev.clientX;
+    adjustState.lastY=ev.clientY;
+    adjustState.panX+=dx;
+    adjustState.panY+=dy;
+    clampPan();
+    applyTransform();
+  }
+  function onPointerUp(ev){
+    if(!isAdjusting()) return;
+    adjustState.dragging=false;
+    try{ ev.target.releasePointerCapture?.(ev.pointerId); }catch{}
+  }
+  function bindPointerHandlers(){
+    coverPreview.addEventListener('pointerdown', onPointerDown);
+    coverPreview.addEventListener('pointermove', onPointerMove);
+    coverPreview.addEventListener('pointerup', onPointerUp);
+    coverPreview.addEventListener('pointercancel', onPointerUp);
+    coverPreview.addEventListener('pointerleave', onPointerUp);
+  }
+  function unbindPointerHandlers(){
+    coverPreview.removeEventListener('pointerdown', onPointerDown);
+    coverPreview.removeEventListener('pointermove', onPointerMove);
+    coverPreview.removeEventListener('pointerup', onPointerUp);
+    coverPreview.removeEventListener('pointercancel', onPointerUp);
+    coverPreview.removeEventListener('pointerleave', onPointerUp);
+  }
+  function enterAdjust(){
+    if(isAdjusting()) return;
+    if(!(coverPreview.style.display==='block' && coverPreview.dataset.b64)) return;
+    adjustState={
+      zoom:1.0, panX:0, panY:0,
+      originalSrc: coverPreview.src,
+      originalB64: coverPreview.dataset.b64,
+      originalMime: coverPreview.dataset.mime || '',
+      originalFit: coverPreview.dataset.fit || '',
+      dragging:false, lastX:0, lastY:0
+    };
+    const inner=document.querySelector('.modal-inner');
+    if(inner) inner.classList.add('adjusting-cover');
+    if(adjustControls) adjustControls.style.display='flex';
+    if(adjustZoom) adjustZoom.value='100';
+    applyTransform();
+    bindPointerHandlers();
+  }
+  function exitAdjust(){
+    unbindPointerHandlers();
+    adjustState=null;
+    coverPreview.style.transform='';
+    const inner=document.querySelector('.modal-inner');
+    if(inner) inner.classList.remove('adjusting-cover');
+    if(adjustControls) adjustControls.style.display='none';
+  }
+  async function applyAdjust(){
+    if(!isAdjusting()) return;
+    const tile=document.getElementById('tileCoverClick');
+    if(!tile){ exitAdjust(); return; }
+    const r=tile.getBoundingClientRect();
+    const { zoom, panX, panY, originalSrc } = adjustState;
+    try{
+      // Disable controls briefly to avoid double-Apply.
+      if(adjustApplyBtn) adjustApplyBtn.disabled=true;
+      if(adjustCancelBtn) adjustCancelBtn.disabled=true;
+      const { base64, mime, dataUrl } = await cropAndResizeImageToBase64(
+        originalSrc,
+        { tileW: r.width, tileH: r.height, zoom, panX, panY },
+        { outWidth: 600, outHeight: 900, quality: 0.85 }
+      );
+      coverPreview.src = dataUrl;
+      coverPreview.dataset.b64 = base64;
+      coverPreview.dataset.mime = mime;
+      coverPreview.dataset.fit = 'cover';
+      if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`);
+      // The new image becomes the new baseline — discard saved-source dataset
+      // entries that the "Cancel cover-browse" path uses, since they refer to
+      // a stale image now.
+      coverPreview.dataset._savedSrc = dataUrl;
+      coverPreview.dataset._savedB64 = base64;
+      coverPreview.dataset._savedMime = mime;
+      markDirty();
+    }catch(err){
+      console.warn('[Bookish:Adjust] Apply failed:', err?.message||err);
+    }finally{
+      if(adjustApplyBtn) adjustApplyBtn.disabled=false;
+      if(adjustCancelBtn) adjustCancelBtn.disabled=false;
+      exitAdjust();
+      refreshAdjustBtnVisibility();
+    }
+  }
+  function cancelAdjust(){
+    if(!isAdjusting()) return;
+    // Restore the original — coverPreview.src + dataset already match what we
+    // captured (we never mutated them during a session), so just exit.
+    exitAdjust();
+    refreshAdjustBtnVisibility();
+  }
+  if(adjustBtn){
+    adjustBtn.addEventListener('click',(e)=>{ e.stopPropagation(); enterAdjust(); });
+  }
+  if(adjustZoom){
+    adjustZoom.addEventListener('input',()=>{
+      if(!isAdjusting()) return;
+      const pct=Math.max(100, Math.min(300, parseInt(adjustZoom.value,10)||100));
+      adjustState.zoom=pct/100;
+      // When zooming back to 1, force pan to 0 (per spec).
+      if(adjustState.zoom<=1.0){ adjustState.panX=0; adjustState.panY=0; }
+      else { clampPan(); }
+      applyTransform();
+    });
+  }
+  if(adjustApplyBtn){
+    adjustApplyBtn.addEventListener('click',(e)=>{ e.stopPropagation(); applyAdjust(); });
+  }
+  if(adjustCancelBtn){
+    adjustCancelBtn.addEventListener('click',(e)=>{ e.stopPropagation(); cancelAdjust(); });
+  }
+  // The cover-preview img sits inside #tileCoverClick which has a click handler
+  // that opens the file picker. Block that while adjusting and also during a
+  // drag, so a click that ends a drag doesn't accidentally trigger upload.
+  if(tileCoverClick){
+    tileCoverClick.addEventListener('click',(e)=>{
+      if(isAdjusting()){ e.stopPropagation(); e.stopImmediatePropagation?.(); }
+    }, true);
+  }
+  // Expose for external callers (e.g. app.js after upload/remove) to refresh
+  // the Adjust button's visibility based on current cover state.
+  window.__bookishRefreshAdjustBtn = refreshAdjustBtnVisibility;
   if(uploadCoverBtn && coverFileInput){
     uploadCoverBtn.addEventListener('click',(e)=>{ e.stopPropagation(); coverFileInput.click(); });
   }
@@ -657,6 +833,9 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       clearSearchState();
       currentWorkKey = workKey || '';
       hideCoverNav();
+      // Always exit any leftover adjust state from a previous modal session.
+      if(isAdjusting()) exitAdjust();
+      refreshAdjustBtnVisibility();
       if(uploadCoverBtn) uploadCoverBtn.style.display='block';
       if(changeCoverLink){ changeCoverLink.style.display='block'; changeCoverLink.setAttribute('aria-expanded','false'); }
       if(coverActionsEl) coverActionsEl.style.display='none';
@@ -672,7 +851,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
         }
       }
     },
-    handleModalClose(){ clearSearchState(); },
+    handleModalClose(){ if(isAdjusting()) exitAdjust(); clearSearchState(); },
     /** New decoupled entry point (#114). */
     browseCoversForEntry(workKey){ return browseCoversForEntry(workKey); },
     /**
