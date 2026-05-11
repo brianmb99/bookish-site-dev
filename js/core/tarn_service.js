@@ -195,17 +195,35 @@ export async function authenticateWithPasskey(opts = {}) {
  * @returns {Promise<void>}
  */
 export async function logout() {
+  // Drop singletons FIRST so any callback the SDK fires during clear()
+  // can't write back through this module. This re-orders the prior version
+  // where the singleton was nulled after the await — the prior order let
+  // a re-entry between clearLocalMetadata() and `await client.session.clear()`
+  // re-populate the bookish.* metadata in rare cases (see bug from
+  // 2026-05-11 UAT walk).
   const client = _client;
-  clearLocalMetadata();
+  _client = null;
+  _initPromise = null;
   _dataLookupKey = null;
+
   if (client) {
     try { await client.session.clear(); } catch (err) {
       console.warn('[TarnService] session.clear failed:', err.message);
     }
   }
-  // Drop the singleton so subsequent operations re-init from a clean slate.
-  _client = null;
-  _initPromise = null;
+
+  // Belt-and-suspenders: explicitly clear the Tarn SDK's session blob in
+  // localStorage. `session.clear()` is supposed to handle this, but it
+  // failed to in the UAT walk; we observed `tarn:session:v1` surviving the
+  // logout. If the SDK reliably clears its key in the future, this becomes
+  // a no-op. If the SDK ever changes its key, this stale literal becomes
+  // dead-code (harmless) — worth re-validating periodically.
+  try { localStorage.removeItem('tarn:session:v1'); } catch {}
+
+  // Clear bookish-side metadata LAST so any race with session.clear() that
+  // might have re-set keys (observed once during UAT) is overridden by the
+  // final clean state.
+  clearLocalMetadata();
 }
 
 /**

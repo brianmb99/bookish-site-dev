@@ -1073,7 +1073,19 @@ function renderAccountPanel(content) {
     input.select();
 
     const save = () => {
-      const newName = input.value.trim() || current;
+      // Guard against persisting an empty display name. Three-tier fallback:
+      // 1. The trimmed input (user's intent)
+      // 2. The current value if non-empty (revert to existing)
+      // 3. The email prefix or 'User' (last-resort default)
+      // Without this guard, a user who clears the field after their name was
+      // already accidentally cleared (or paste-deletes everything) would
+      // persist an empty display name. The render path has its own fallback
+      // chain (tarn_service.js line ~824) but the SAVE path was bypassing it
+      // by writing "" directly to localStorage. (Bug from 2026-05-11 UAT.)
+      let newName = input.value.trim();
+      if (!newName) {
+        newName = (current && current.trim()) || (tarnService.getEmail() || '').split('@')[0] || 'User';
+      }
       tarnService.displayName(newName);
       valueEl.textContent = newName;
       editBtn.innerHTML = SVG_EDIT;
