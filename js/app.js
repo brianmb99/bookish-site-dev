@@ -417,7 +417,18 @@ if(addCoverCtaEl){
 // same builders verbatim. Local aliases preserve the rest of app.js.
 const escapeHtml = sharedEscapeHtml;
 function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Add cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); }
-function showCoverLoaded(){ if(coverRemoveBtn) coverRemoveBtn.style.display='inline-flex'; }
+function showCoverLoaded(){
+  if(coverRemoveBtn) coverRemoveBtn.style.display='inline-flex';
+  // Round 2 (#147) introduced the .no-cover collapsed state and a small
+  // "+ Add cover" CTA that shows when .no-cover is set on .modal-inner.
+  // Every successful cover-attach path calls showCoverLoaded() — central
+  // place to also clear .no-cover so the actual cover image renders
+  // instead of the CTA. Without this, covers from search prefill (and
+  // upload, and browse-covers) get attached but stay hidden behind the
+  // collapsed-state CTA.
+  const inner=modal.querySelector('.modal-inner');
+  if(inner) inner.classList.remove('no-cover');
+}
 
 // --- State ---
 let entries=[];

@@ -3606,7 +3606,7 @@ body.modal-open{overscroll-behavior-y:contain}
    #143: capped max-width so the placards read as centered "labels" rather than
    edge-to-edge form fields, and so the focus border doesn't stretch under the
    close-X. Cap is responsive — narrower modals just fill the available width. */
-.book-detail-placards{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;max-width:480px;margin:0 auto;text-align:center}
+.book-detail-placards{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;max-width:min(480px,calc(100% - 48px));margin:0 auto;text-align:center}
 .placard{
   font-family:inherit;
   background:transparent!important;
