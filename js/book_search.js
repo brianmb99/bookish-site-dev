@@ -183,11 +183,21 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     }catch(err){ console.warn('[Bookish:Covers] OL workkey lookup failed:', err?.message||err); return ''; }
   }
   async function loadCoversFromGoogleBooks(title, author){
+    const ph=document.getElementById('coverPlaceholder');
+    function paintItunesFallback(){
+      if(itunesCoverState && itunesCoverState.width){
+        editions=[buildCoverEdition(itunesCoverState, { title })];
+        editionIndex=0;
+        showCoverNav();
+        applyEdition();
+        editionInfo.textContent=`Cover 1 of ${editions.length}`;
+        prevBtn.disabled=true; nextBtn.disabled=true;
+      } else if(ph){ setCoverPlaceholder(ph,'no-cover'); }
+    }
     // Try OL ISBN search first (no key required, more reliable); fall back to Google Books.
     let isbn10s=await fetchOLISBNs(title, author);
     if(!isbn10s.length){ isbn10s=await fetchGoogleBooksISBNs(title, author); }
-    if(!isbn10s.length) return;
-    const ph=document.getElementById('coverPlaceholder');
+    if(!isbn10s.length){ paintItunesFallback(); return; }
     const seenFingerprints=new Set();
     const coverPromises=isbn10s.map(isbn=>
       fetchAndValidateCoverLocal(amazonCoverUrl(isbn),'amazon').then(result=>{
@@ -199,7 +209,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       })
     );
     await Promise.allSettled(coverPromises);
-    if(!editions.length) return;
+    if(!editions.length){ paintItunesFallback(); return; }
     editions.sort(coverSortComparator);
     // Include iTunes cover if available
     if(itunesCoverState && itunesCoverState.width){
@@ -226,16 +236,27 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     if(ph){ ph.style.display='flex'; ph.innerHTML=''; ph.classList.add('cover-skeleton-pulse'); }
     coverPreview.style.display='none';
     if(editionInfo) editionInfo.textContent='Finding covers\u2026';
+    function paintItunesFallback(){
+      if(ph) ph.classList.remove('cover-skeleton-pulse');
+      if(itunesCoverState && itunesCoverState.width){
+        editions=[buildCoverEdition(itunesCoverState, { title: meta.title })];
+        editionIndex=0;
+        showCoverNav();
+        applyEdition();
+        editionInfo.textContent=`Cover 1 of ${editions.length}`;
+        prevBtn.disabled=true; nextBtn.disabled=true;
+      } else if(ph){ setCoverPlaceholder(ph,'no-cover'); }
+    }
     let rawEntries=[];
     try{
       const edController=new AbortController();
       const edTimeout=setTimeout(()=>edController.abort(),8000);
       const r=await fetch(`https://openlibrary.org${workKey}/editions.json?limit=50`,{signal:edController.signal});
       clearTimeout(edTimeout);
-      if(!r.ok){ if(ph) ph.classList.remove('cover-skeleton-pulse'); return; }
+      if(!r.ok){ paintItunesFallback(); return; }
       const j=await r.json();
       rawEntries=j.entries||[];
-    }catch(err){ console.warn('[Bookish:Covers] OL editions fetch failed:', err?.message||err); if(ph) ph.classList.remove('cover-skeleton-pulse'); return; }
+    }catch(err){ console.warn('[Bookish:Covers] OL editions fetch failed:', err?.message||err); paintItunesFallback(); return; }
     // Build OL cover editions (non-Amazon)
     const { editions: baseEditions, seenCovers } = buildOLEditions(rawEntries);
     // Extract ISBN-10s and fetch Amazon covers progressively
@@ -302,8 +323,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       const best=editions[0];
       console.info('[Bookish:Covers] Best cover: rank=%d, source=%s, %dx%d', best?._rank||0, best?._coverData?.source||'n/a', best?._coverData?.width||0, best?._coverData?.height||0);
     } else {
-      // No covers at all
-      setCoverPlaceholder(ph,'no-cover');
+      paintItunesFallback();
     }
   }
   // isEnglishBook and editionCoverSort imported from cover_pipeline.js
@@ -334,19 +354,14 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       });
     }
     if(payload.artwork){ const hi=payload.artwork.replace(/100x100/,'600x600');
-      const ph = document.getElementById('coverPlaceholder');
-      setCoverPlaceholder(ph,'loading');
-      coverPreview.style.display = 'none';
+      // Fetch the iTunes artwork into itunesCoverState but DON'T paint it yet.
+      // loadEditionsFromSearch / loadCoversFromGoogleBooks will include it as a
+      // candidate in the editions array and applyEdition will pick the best one
+      // (Amazon-portrait typically outranks iTunes-square). This avoids the
+      // flash of low-res iTunes thumbnail before the higher-quality cover lands.
       try{ const result=await fetchAndValidateCoverLocal(hi,'itunes');
-        if(result){
-          coverPreview.src=result.dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=result.base64; coverPreview.dataset.mime=result.mime; coverPreview.dataset.fit=coverFitMode(result.width, result.height); if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${result.dataUrl}')`); if(ph) ph.style.display='none'; if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded(); itunesCoverState=result; markDirty();
-        } else {
-          setCoverPlaceholder(ph,'no-cover');
-        } }catch(e){
-        setCoverPlaceholder(ph,'no-cover');
-      } } else {
-      const ph = document.getElementById('coverPlaceholder');
-      setCoverPlaceholder(ph,'no-cover');
+        if(result){ itunesCoverState=result; }
+      }catch(e){ /* swallow — pipeline still runs without iTunes fallback */ }
     } }
   function populateFromBasic(meta){ if(!meta) return;
     form.title.value = cleanTitle(meta.title || '');
