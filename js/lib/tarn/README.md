@@ -13,10 +13,10 @@ alternatives because:
 - One file to ship, one file to invalidate via the SW version bump.
 - Bookish already has `esbuild` as a devDependency — no new toolchain.
 
-The trade-off is that the bundle includes the sharing / share-log primitives
-plus their HPKE + X25519 dependencies even though Bookish doesn't use them
-yet. That's roughly an extra ~80 KB minified — acceptable as a one-time cost
-that disappears the moment Bookish ships its sharing UX.
+The bundle includes the sharing / share-log primitives plus their HPKE +
+X25519 dependencies. Bookish now uses those paths for Friends: invite links,
+connections, shared shelves, pips, recent finishes, mute/remove, and per-book
+privacy all route through the Tarn SDK wrapper.
 
 Current sizes (minified): ~188 KB on disk, ~62 KB gzipped over the wire.
 
@@ -31,7 +31,7 @@ npm run build:tarn
 This runs:
 
 ```bash
-esbuild ../tarn/client/src/tarn.js --bundle --format=esm \
+esbuild ../tarn/client/dist/esm/index.js --bundle --format=esm \
   --outfile=public/js/lib/tarn/tarn-client.bundle.js \
   --target=es2022 --legal-comments=none --minify
 ```
@@ -44,7 +44,8 @@ After rebuilding:
 1. Verify nothing in `tarn_service.js` needs to change for the new SDK.
 2. Bump the SW version (the publish-dev.sh deploy does this automatically,
    but rebuild + commit on its own should still bump if shipping).
-3. Smoke-test register / login / CRUD against `api.tarn.dev` before merging.
+3. Smoke-test register / login / CRUD and a Friends invite/share read path
+   against `api.tarn.dev` before merging.
 
 ## Dependencies
 
@@ -55,8 +56,8 @@ bundle time, not at app runtime:
 |---|---|
 | `hash-wasm` | Argon2id KDF (WASM, lazy-loaded by the SDK at runtime). |
 | `@scure/bip39` | 24-word recovery phrase generation + validation. |
-| `@hpke/core` | HPKE primitives for the connection-request handshake. Pulled in by `sharing.js` even though Bookish doesn't use sharing yet. |
-| `@noble/curves` | X25519 keypair derivation for the sharing protocol. Same caveat. |
+| `@hpke/core` | HPKE primitives for the connection-request and share-log handshake used by Friends. |
+| `@noble/curves` | X25519 keypair derivation for the Friends sharing protocol. |
 
 If a future tarn-client release drops or replaces any of these, update
 `package.json` and rebuild.
