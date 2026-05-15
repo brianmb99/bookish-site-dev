@@ -263,6 +263,9 @@ button.secondary:hover, .btn.secondary:hover{
 #accountBtn{display:none}
 html.is-signed-in #accountBtn{display:inline-block}
 html.is-signed-in #signInHeaderBtn{display:none}
+/* #150: Friends glyph is meaningless to signed-out users. JS refresh still owns
+   the hide-from-header preference for signed-in users. */
+html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 /* #149: signed-out header chip. Matches `.account-link` visual weight so
    the header doesn't shift when auth state changes. */
 .signin-link{
