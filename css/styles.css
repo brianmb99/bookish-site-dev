@@ -256,6 +256,16 @@ button.secondary:hover, .btn.secondary:hover{
 .account-link:hover{
   color:var(--color-text-primary)!important;
 }
+/* #149: signed-out header chip. Matches `.account-link` visual weight so
+   the header doesn't shift when auth state changes. */
+.signin-link{
+  color:var(--color-text-secondary)!important;
+  font-weight:500!important;
+  text-decoration:none!important;
+}
+.signin-link:hover{
+  color:var(--color-text-primary)!important;
+}
 .cards{display:flex;flex-direction:column;gap:14px;margin-top:8px;position:relative}
 .card{
   position:relative;
@@ -602,64 +612,12 @@ button.secondary:hover, .btn.secondary:hover{
   margin:0 auto;
   max-width:440px;
 }
-.empty-search-examples{
-  font-family:var(--font-body);
-  font-size:.8rem;
-  color:var(--color-text-muted);
-  margin:14px auto 0 auto;
-  line-height:1.5;
-  max-width:380px;
-  text-align:center;
-}
-.empty-search-example{font-style:italic;color:var(--color-text-secondary);opacity:.85}
-.empty-add-manual-link{
-  background:none;
-  border:none;
-  color:var(--color-text-muted);
-  font-family:var(--font-body);
-  font-size:.85rem;
-  padding:8px 4px;
-  margin-top:18px;
-  cursor:pointer;
-  text-decoration:underline;
-  text-underline-offset:3px;
-  text-decoration-color:rgba(255,255,255,.15);
-  transition:color .15s ease,text-decoration-color .15s ease;
-}
-.empty-add-manual-link:hover,
-.empty-add-manual-link:focus-visible{
-  color:var(--color-text-secondary);
-  text-decoration-color:rgba(255,255,255,.4);
-}
-/* #146: suppress the browser-default focus outline that shows on click /
-   programmatic focus (`:focus` matches both keyboard and pointer focus).
-   The themed `:focus-visible` rule below still styles keyboard focus.
-   `:focus-visible{outline:none}` alone was not enough because a click
-   triggers `:focus` (not `:focus-visible`), so the native ring leaked
-   through on these link-styled elements. */
-.empty-add-manual-link:focus,
-.empty-signin .link-btn:focus,
-.empty-links a:focus{
-  outline:none;
-}
-.empty-add-manual-link:focus-visible{
-  outline:none;
-  text-decoration-color:var(--color-primary);
-  color:var(--color-text-primary);
-}
-
-/* Sign-in link on empty state */
-.empty-signin{margin-top:20px;font-size:.85rem;color:var(--color-text-muted)}
-.empty-signin .link-btn{background:none;border:none;color:var(--color-text-secondary);font-size:inherit;font-family:inherit;cursor:pointer;padding:0;text-decoration:none;transition:color .2s}
-.empty-signin .link-btn:hover,
-.empty-signin .link-btn:focus-visible{color:var(--color-text-primary);text-decoration:underline;text-underline-offset:2px}
-.empty-signin .link-btn:focus-visible{outline:none;text-decoration-color:var(--color-primary)}
-.empty-links{margin-top:16px;font-size:.8rem;color:var(--color-text-muted)}
-.empty-links span{opacity:.4;margin:0 2px}
-.empty-links a{color:var(--color-text-muted);text-decoration:none;transition:color .2s}
-.empty-links a:hover,
-.empty-links a:focus-visible{color:var(--color-text-primary);text-decoration:underline;text-underline-offset:2px}
-.empty-links a:focus-visible{outline:none;text-decoration-color:var(--color-primary)}
+/* #149: Empty-state declutter — removed `.empty-search-examples`,
+   `.empty-add-manual-link`, `.empty-signin`, and `.empty-links` blocks.
+   The "Try:" line is replaced by a rotating placeholder inside the
+   omnibox itself; the manual-add affordance lives in the omnibox
+   dropdown; the sign-in entry point is now a header chip; and the
+   footer covers the explainer surface. */
 
 /* Shelf-empty state (has WTR books but no shelf books) */
 .shelf-empty{

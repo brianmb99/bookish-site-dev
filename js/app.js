@@ -19,6 +19,7 @@ import * as subscription from './core/subscription.js';
 import * as friendsRouter from './core/friends_router.js';
 import * as accountKeyReminder from './core/account_key_reminder.js';
 import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend-glyph-trigger.js';
+import { pickRandomPlaceholder } from './core/omnibox_placeholders.js';
 import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCardDetails, generatedCoverColor as sharedGeneratedCoverColor, escapeHtml as sharedEscapeHtml } from './components/book-card.js';
 import { renderPipOverlay } from './components/friend-pip.js';
 import { getMatchingFriendBookEntries as friendsGetMatchingFriendBookEntries, primeFriendLibraryCache as friendsPrimeFriendLibraryCache, invalidateFriendLibraryCache as friendsInvalidateLibraryCache } from './core/friends.js';
@@ -65,7 +66,7 @@ const saveBtn = document.getElementById('saveBtn');
 const deleteBtn = document.getElementById('deleteBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 // Phase 2: First-run experience refs
-const emptyAddBookBtn = document.getElementById('emptyAddBookBtn');
+// #149: emptyAddBookBtn removed — manual-add lives in the omnibox dropdown.
 const celebrationToast = document.getElementById('celebrationToast');
 const accountNudgeBanner = document.getElementById('accountNudgeBanner');
 const nudgeDismissBtn = document.getElementById('nudgeDismissBtn');
@@ -847,7 +848,9 @@ function _finalizeCloseModal(fromPopstate){
   if(changeCoverLink) changeCoverLink.setAttribute('aria-expanded','false');
   // Decoupled cover-search reset (#114)
   if(window.bookSearch?.handleModalClose) window.bookSearch.handleModalClose();
-  if(omniboxInput && omniboxInput.value){ clearOmnibox(); }
+  // #149: clear without refocus — modal close shouldn't yank focus back
+  // into the header omnibox (it's behind the modal that's animating out).
+  if(omniboxInput && omniboxInput.value){ clearOmnibox({ refocus: false }); }
   closeOmniboxDropdown();
   if(!fromPopstate) popOverlayState();
 }
@@ -1157,10 +1160,51 @@ let closeAccountModalFn;
         }
       }, 100);
     }
+
+    // #149: signed-out header chip. Opens the sign-in pane of the same
+    // account modal that the (now-deleted) empty-state "Sign in" line
+    // used to open. Visibility is toggled by `refreshHeaderAuthState()`
+    // alongside the Account gear. The first paint of the header auth
+    // state happens at module-load time (below this IIFE) so the button
+    // shows immediately without waiting for the dynamic import.
+    const signInBtn = document.getElementById('signInHeaderBtn');
+    if(signInBtn){
+      signInBtn.onclick = () => {
+        try {
+          if (window.accountUI?.handleSignIn) window.accountUI.handleSignIn();
+          else if (openAccountModal) openAccountModal('signin');
+        } catch (err) {
+          console.error('[Bookish] signInHeaderBtn click failed:', err?.message || err);
+        }
+      };
+    }
   } catch (error) {
     console.error('[Bookish] Failed to load account_ui.js:', error);
   }
 })();
+
+/**
+ * #149: toggle header chip visibility based on auth state. Signed-out
+ * shows the "Sign in" text button; signed-in shows the Account gear.
+ * Both elements live in `#mainHeader .header-actions`. Called from the
+ * render() cycle so it stays in sync with login/logout transitions
+ * (clearBooks() on logout triggers render(); updateBookDots() after
+ * sign-in triggers render() via the BookRepository change event).
+ */
+function refreshHeaderAuthState(){
+  const accountEl = document.getElementById('accountBtn');
+  const signInEl = document.getElementById('signInHeaderBtn');
+  if(!accountEl || !signInEl) return;
+  const signedIn = tarnService.isLoggedIn();
+  accountEl.style.display = signedIn ? '' : 'none';
+  signInEl.style.display = signedIn ? 'none' : '';
+}
+
+// First paint — before tarnService.init() resolves this returns false, so
+// the "Sign in" chip is shown by default. Once init() restores a session
+// and render() fires, the Account gear takes its place. Both default to
+// `display:none` in index.html so we never show both at once.
+refreshHeaderAuthState();
 
 // No settings UI anymore; defaults used
 
@@ -1368,6 +1412,11 @@ function clearShelfSkeletons(){
 }
 
 function render(){
+  // #149: keep header auth chips (Account gear vs Sign in) in sync with
+  // tarnService.isLoggedIn(). render() is called on every login/logout
+  // transition (clearBooks → render; bookRepo.on('change') → render).
+  refreshHeaderAuthState();
+
   const visible = entries.filter(e => e.status !== 'tombstoned');
 
   // Split by reading status
@@ -1408,22 +1457,19 @@ function render(){
     const headline = emptyEl.querySelector('.empty-headline');
     const subtext = emptyEl.querySelector('.empty-subtext');
     // #144: search affordance in empty state is the relocated `#omniboxWrap`
-    // (moved into `#emptyOmniboxSlot`). Example queries + manual fallback
-    // link remain below it. While syncing, hide the slot + helper text so
-    // the loading message reads cleanly.
+    // (moved into `#emptyOmniboxSlot`). While syncing, hide the slot so the
+    // loading message reads cleanly.
+    // #149: declutter \u2014 `.empty-search-examples`, `.empty-add-manual-link`,
+    // `#emptySignIn`, and `.empty-links` are gone. The rotating placeholder
+    // on the omnibox itself replaces the example line; the sign-in entry
+    // point is the new header chip.
     const emptySlot = emptyEl.querySelector('#emptyOmniboxSlot');
-    const examples = emptyEl.querySelector('.empty-search-examples');
-    const manualLink = emptyEl.querySelector('.empty-add-manual-link');
-    const signInDiv = document.getElementById('emptySignIn');
     const illustration = emptyEl.querySelector('.empty-illustration');
 
     if(isLoading){
       if(headline) headline.textContent = 'Syncing your books\u2026';
       if(subtext) subtext.textContent = 'Fetching your library from the cloud.';
       if(emptySlot) emptySlot.style.display = 'none';
-      if(examples) examples.style.display = 'none';
-      if(manualLink) manualLink.style.display = 'none';
-      if(signInDiv) signInDiv.style.display = 'none';
       if(illustration) illustration.textContent = '\u23F3';
       showShelfSkeletons(6);
       emptyEl.style.display='none';
@@ -1435,9 +1481,6 @@ function render(){
       if(headline) headline.textContent = 'Your reading journey starts here';
       if(subtext) subtext.textContent = 'Track what you read. Keep it forever. Access it anywhere.';
       if(emptySlot) emptySlot.style.display = '';
-      if(examples) examples.style.display = '';
-      if(manualLink) manualLink.style.display = '';
-      if(signInDiv) signInDiv.style.display = tarnService.isLoggedIn() ? 'none' : '';
       if(illustration) illustration.textContent = '\uD83D\uDCDA';
       if(cardsEl.children.length > 0) cardsEl.replaceChildren();
       emptyEl.style.display='block';
@@ -2093,7 +2136,11 @@ function showOmniboxDropdown(){
   if(!omniboxBackdrop){
     omniboxBackdrop = document.createElement('div');
     omniboxBackdrop.className = 'omnibox-backdrop';
-    omniboxBackdrop.addEventListener('click', closeOmniboxDropdown);
+    // #149: tapping the backdrop is a "dismiss" gesture — clear input,
+    // close dropdown, and refocus. Was just close-only, which left a
+    // typed-but-want-to-abandon query stranded in the input. Wrapped in
+    // an arrow so the MouseEvent isn't passed as the opts arg.
+    omniboxBackdrop.addEventListener('click', ()=> clearOmnibox());
   }
   if(!omniboxBackdrop.parentNode) document.body.appendChild(omniboxBackdrop);
 }
@@ -2114,7 +2161,7 @@ function completeOmniboxSelection(){
   if(searchTakeoverActive) closeSearchTakeover();
 }
 
-function clearOmnibox(){
+function clearOmnibox(opts){
   if(omniboxInput) omniboxInput.value = '';
   searchQuery = '';
   if(omniboxClear) omniboxClear.style.display = 'none';
@@ -2124,6 +2171,11 @@ function clearOmnibox(){
   if(omniboxAddSection) omniboxAddSection.style.display = 'none';
   if(omniboxManualAdd) omniboxManualAdd.style.display = 'none';
   render();
+  // #149: keep focus in the input after a dismiss so the user can keep
+  // typing without an extra click. Backdrop/X/Escape all funnel here.
+  // Skipped when closing the mobile search takeover (Cancel button) —
+  // that path explicitly wants to blur to drop the on-screen keyboard.
+  if(opts?.refocus !== false) omniboxInput?.focus();
 }
 
 function renderOmniboxShelfResults(query){
@@ -2395,7 +2447,18 @@ omniboxInput?.addEventListener('input', ()=>{
   }
 });
 
-omniboxClear?.addEventListener('click', clearOmnibox);
+// #149: wrap to avoid passing the MouseEvent as the `opts` arg.
+omniboxClear?.addEventListener('click', ()=> clearOmnibox());
+
+// #149: rotating placeholder. Pick a random title from a small pool on
+// page load and set it as the omnibox placeholder. The omnibox input is
+// a single DOM element relocated between the header and the empty-state
+// slot, so setting the placeholder once reaches both contexts. Done once
+// at module-load — no re-roll on re-render (`per-page-load` cadence).
+if(omniboxInput){
+  try { omniboxInput.placeholder = pickRandomPlaceholder(); }
+  catch (err) { console.warn('[Bookish] omnibox placeholder rotation failed:', err?.message || err); }
+}
 
 // Clear selection guard when user explicitly re-engages with omnibox
 omniboxInput?.addEventListener('mousedown', ()=>{ _omniboxSelectionMade = false; });
@@ -2404,9 +2467,14 @@ omniboxInput?.addEventListener('focus', ()=>{ _omniboxSelectionMade = false; });
 omniboxInput?.addEventListener('keydown', (ev)=>{
   if(ev.key === 'Escape'){
     ev.preventDefault();
-    if(omniboxDropdown && omniboxDropdown.style.display !== 'none'){
-      closeOmniboxDropdown();
-    } else if(searchTakeoverActive){
+    // #149: unified dismiss — clear input, close dropdown, refocus, in a
+    // single gesture (matches backdrop click and X click). Was a tiered
+    // close-dropdown-only-first behavior that left typed queries stranded
+    // and required a second Escape to actually reset.
+    if(searchTakeoverActive){
+      // On the mobile search-takeover surface Escape mirrors the Cancel
+      // button: close the takeover (which calls clearOmnibox internally
+      // with refocus:false to drop the on-screen keyboard).
       closeSearchTakeover();
     } else {
       clearOmnibox();
@@ -2521,8 +2589,9 @@ function closeSearchTakeover(fromPopstate){
   // Blur input first to close keyboard
   omniboxInput?.blur();
   mainHeader.classList.remove('search-takeover');
-  // Clear and close dropdown
-  clearOmnibox();
+  // Clear and close dropdown. `refocus:false` so we don't re-open the
+  // mobile keyboard we just dismissed via blur() above (#149).
+  clearOmnibox({ refocus: false });
   if(!fromPopstate) popOverlayState();
 }
 
@@ -2992,18 +3061,12 @@ deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value
 // newBtn removed (omnibox replaces "+ Add a Book")
 
 // Phase 2: First-run experience event handlers
-emptyAddBookBtn?.addEventListener('click', ()=>openModal(null));
-
 // #144: empty-state search affordance is now the relocated `#omniboxWrap`
 // itself (moved into `#emptyOmniboxSlot` by `setOmniboxLocation('empty')`).
 // No separate CTA button — the user taps/clicks the real input directly.
-
-// Empty state sign-in link
-const emptySignInBtn = document.getElementById('emptySignInBtn');
-emptySignInBtn?.addEventListener('click', ()=>{
-  if(window.accountUI?.handleSignIn) window.accountUI.handleSignIn();
-  else if(openAccountModal) openAccountModal();
-});
+// #149: removed the `emptyAddBookBtn` and `emptySignInBtn` handlers — the
+// manual-add affordance lives in the omnibox dropdown, and the sign-in
+// entry point is the header `#signInHeaderBtn` chip (wired below).
 
 nudgeDismissBtn?.addEventListener('click', ()=>{
   hideAccountNudge();

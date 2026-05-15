@@ -77,7 +77,13 @@
       <span class="friends-header-arrow" aria-hidden="true">↗</span>
     </button>
     <button id="installBtn" class="refresh-link" style="display:none" title="Install">Install</button>
-    <button id="accountBtn" class="refresh-link account-link" title="Account">Account</button>
+    <!-- #149: Signed-out shows "Sign in" chip; signed-in shows Account gear.
+         Both start hidden — `refreshHeaderAuthState()` in app.js reveals the
+         correct one based on `tarnService.isLoggedIn()`. It runs once at
+         account_ui module load and again on every render() to stay in sync
+         with login/logout. -->
+    <button id="signInHeaderBtn" class="refresh-link signin-link" type="button" title="Sign in" style="display:none">Sign in</button>
+    <button id="accountBtn" class="refresh-link account-link" title="Account" style="display:none">Account</button>
   </div>
 </header>
 <div id="accountNudgeBanner" class="nudge-banner" style="display:none;">
@@ -157,10 +163,6 @@
        The slot starts empty; app.js detaches #omniboxWrap from the header
        and appends it here when the shelf is empty. -->
   <div id="emptyOmniboxSlot" class="empty-omnibox-slot"></div>
-  <p class="empty-search-examples">Try: <span class="empty-search-example">Project Hail Mary</span>, <span class="empty-search-example">Tomorrow and Tomorrow and Tomorrow</span></p>
-  <button type="button" id="emptyAddBookBtn" class="empty-add-manual-link">Can't find it? Add manually</button>
-  <div id="emptySignIn" class="empty-signin">Already have an account? <button class="link-btn" id="emptySignInBtn">Sign in</button></div>
-  <div class="empty-links"><a href="/about.html">What is Bookish?</a> <span>&bull;</span> <a href="/faq.html">FAQ</a></div>
 </div>
 <div id="celebrationToast" class="toast celebration-toast" style="display:none;">
   <span class="toast-icon">🎉</span>
@@ -168,7 +170,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.260</div>
+  <div class="footer-meta">Alpha &bull; v0.2.262</div>
 </footer>
 </div>
 
