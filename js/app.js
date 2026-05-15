@@ -25,6 +25,7 @@ import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCa
 import { renderPipOverlay } from './components/friend-pip.js';
 import { getMatchingFriendBookEntries as friendsGetMatchingFriendBookEntries, primeFriendLibraryCache as friendsPrimeFriendLibraryCache, invalidateFriendLibraryCache as friendsInvalidateLibraryCache } from './core/friends.js';
 import { openFriendBookDetail } from './components/friend-book-detail.js';
+import { setStatusLine, showMarkAsReadUndoToast, showStatusToast, showSubscriptionSuccessToast } from './components/status_helpers.js';
 
 // Friends invite-link routing (#118). Capture the invite parameters from
 // /invite/:token_id#:payload_key BEFORE anything else touches window.location
@@ -141,71 +142,11 @@ let _searchDebounce = null;
 let _lastYearGroups = null; // cached for spine nav interactions
 let spineOpen = false; // spine panel expanded?
 
-function showStatusToast(msg) {
-  const existing = document.getElementById('bookishStatusToast');
-  if (existing) existing.remove();
-  const toast = document.createElement('div');
-  toast.id = 'bookishStatusToast';
-  toast.className = 'toast status-toast';
-  toast.innerHTML = `<span class="toast-message">${escapeHtml(msg)}</span>`;
-  toast.style.cssText = 'position:fixed;top:calc(var(--header-height) + env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:9001;';
-  document.body.appendChild(toast);
-  setTimeout(() => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 300); }, 2000);
-}
-
-/**
- * Dedicated subscription-success toast (#74). Longer dwell than showStatusToast
- * because a purchase completion deserves a proper acknowledgement, and a checkmark
- * icon so it reads as a confirmation rather than a status update.
- */
-function showSubscriptionSuccessToast(msg) {
-  const existing = document.getElementById('bookishStatusToast');
-  if (existing) existing.remove();
-  const toast = document.createElement('div');
-  toast.id = 'bookishStatusToast';
-  toast.className = 'toast status-toast celebration-toast';
-  toast.setAttribute('role', 'status');
-  toast.innerHTML = `
-    <span class="toast-icon" aria-hidden="true">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-    </span>
-    <span class="toast-message">${escapeHtml(msg)}</span>
-  `;
-  toast.style.cssText = 'position:fixed;top:calc(var(--header-height) + env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:9001;';
-  document.body.appendChild(toast);
-  setTimeout(() => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 300); }, 4500);
-}
-
-const MARK_READ_UNDO_MS = 5500;
-
 /** Toast after marking a currently-reading book as read; Undo restores prior fields via BookRepository. */
 function showMarkAsReadToastWithUndo(key, snapshot) {
-  const existing = document.getElementById('bookishStatusToast');
-  if (existing) existing.remove();
-  const toast = document.createElement('div');
-  toast.id = 'bookishStatusToast';
-  toast.className = 'toast status-toast status-toast-with-action';
-  toast.setAttribute('role', 'status');
-  toast.innerHTML = `<span class="toast-message">Marked as read</span><button type="button" class="toast-undo-btn">Undo</button>`;
-  toast.style.cssText = 'position:fixed;top:calc(var(--header-height) + env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:9001;';
-  document.body.appendChild(toast);
-
-  let cleared = false;
-  const remove = () => {
-    if (cleared) return;
-    cleared = true;
-    toast.classList.add('hiding');
-    setTimeout(() => toast.remove(), 300);
-  };
-  const timer = setTimeout(remove, MARK_READ_UNDO_MS);
-
-  toast.querySelector('.toast-undo-btn')?.addEventListener('click', async () => {
-    if (cleared || !bookRepo) return;
-    cleared = true;
-    clearTimeout(timer);
-    await bookRepo.applyReadingSnapshot(key, snapshot);
-    toast.classList.add('hiding');
-    setTimeout(() => toast.remove(), 300);
+  return showMarkAsReadUndoToast({
+    canUndo: () => Boolean(bookRepo),
+    onUndo: () => bookRepo.applyReadingSnapshot(key, snapshot),
   });
 }
 
@@ -453,7 +394,7 @@ function getAppErrorStatus() {
 }
 
 // --- Utility / ordering ---
-function setStatus(m){ statusEl.textContent=m; statusEl.classList.remove('warning'); debugLog('[Bookish] status:', m); }
+function setStatus(m){ setStatusLine(statusEl, m); }
 function orderEntries(){
   const statusOrder = { reading: 0, read: 1, want_to_read: 2 };
   entries.sort((a,b)=>{
