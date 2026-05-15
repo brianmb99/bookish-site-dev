@@ -26,6 +26,7 @@ import { renderPipOverlay } from './components/friend-pip.js';
 import { getMatchingFriendBookEntries as friendsGetMatchingFriendBookEntries, primeFriendLibraryCache as friendsPrimeFriendLibraryCache, invalidateFriendLibraryCache as friendsInvalidateLibraryCache } from './core/friends.js';
 import { openFriendBookDetail } from './components/friend-book-detail.js';
 import { setStatusLine, showMarkAsReadUndoToast, showStatusToast, showSubscriptionSuccessToast } from './components/status_helpers.js';
+import { createWtrDrawerController, sortWtrList } from './components/wtr_drawer.js';
 
 // Friends invite-link routing (#118). Capture the invite parameters from
 // /invite/:token_id#:payload_key BEFORE anything else touches window.location
@@ -1370,23 +1371,10 @@ function render(){
   // Main grid shows: reading first, then read
   const shelfEntries = [...readingList, ...readList];
 
-  // Update WTR header badge
-  if(wtrHeaderBtn){
-    if(wantList.length > 0 || shelfEntries.length > 0){
-      wtrHeaderBtn.style.display = '';
-    }
-    if(wtrBadge){
-      if(wantList.length > 0){
-        wtrBadge.textContent = wantList.length;
-        wtrBadge.style.display = '';
-      } else {
-        wtrBadge.style.display = 'none';
-      }
-    }
-  }
+  wtrDrawerController.updateHeader(wantList, { hasShelfEntries: shelfEntries.length > 0 });
 
   // Update WTR drawer if open
-  if(wtrOverlay && wtrOverlay.style.display !== 'none') renderWtrDrawer(wantList);
+  if(wtrDrawerController.isOpen()) renderWtrDrawer(wantList);
 
   if(!shelfEntries.length && !wantList.length){
     const syncStatus = getSyncStatusForUI();
@@ -1626,247 +1614,42 @@ function render(){
 }
 
 // --- WTR drawer logic ---
-function sortWtrList(wantList) {
-  const hasPositions = wantList.some(e => e.wtrPosition != null);
-  if (hasPositions) {
-    wantList.sort((a, b) => {
-      const pa = a.wtrPosition != null ? a.wtrPosition : Infinity;
-      const pb = b.wtrPosition != null ? b.wtrPosition : Infinity;
-      if (pa !== pb) return pa - pb;
-      return (b.createdAt || 0) - (a.createdAt || 0);
-    });
-  } else {
-    wantList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  }
-  return wantList;
-}
+const wtrDrawerController = createWtrDrawerController({
+  refs: {
+    headerBtn: wtrHeaderBtn,
+    badge: wtrBadge,
+    overlay: wtrOverlay,
+    backdrop: wtrBackdrop,
+    drawer: wtrDrawer,
+    closeBtn: wtrClose,
+    listEl: wtrListEl,
+    emptyEl: wtrEmptyEl,
+    addBtn: wtrAddBtn,
+    footerAddBtn: wtrFooterAdd,
+    shelfEmptyBrowseBtn: document.getElementById('shelfEmptyBrowse'),
+  },
+  getEntries: () => entries,
+  getBookRepo: () => bookRepo,
+  normalizeReadingStatus,
+  wantToReadStatus: READING_STATUS.WANT_TO_READ,
+  pushOverlayState,
+  popOverlayState,
+  attachSwipeDismiss,
+  haptic,
+  isTouchDevice,
+  onStartReading: (key) => changeReadingStatus(key, READING_STATUS.READING),
+  onOpenEntry: (entry) => openModal(entry),
+  onAddBook: () => openModal(null, READING_STATUS.WANT_TO_READ),
+  documentRef: document,
+});
 
-function openWtrDrawer(){
-  const wantList = entries.filter(e => e.status !== 'tombstoned' && normalizeReadingStatus(e) === READING_STATUS.WANT_TO_READ);
-  sortWtrList(wantList);
-  renderWtrDrawer(wantList);
-  if(wtrOverlay) wtrOverlay.style.display = 'block';
-  document.body.classList.add('modal-open');
-  pushOverlayState('wtr');
-}
-function closeWtrDrawer(fromPopstate = false){
-  if(resetWtrSwipe) resetWtrSwipe();
-  if(wtrOverlay) wtrOverlay.style.display = 'none';
-  document.body.classList.remove('modal-open');
-  if(!fromPopstate) popOverlayState();
-}
-function renderWtrDrawer(wantList){
-  if(!wtrListEl) return;
-  if(!wantList.length){
-    wtrListEl.innerHTML = '';
-    if(wtrEmptyEl) wtrEmptyEl.style.display = 'block';
-    return;
-  }
-  if(wtrEmptyEl) wtrEmptyEl.style.display = 'none';
-  const showHandle = wantList.length > 1;
-  wtrListEl.innerHTML = wantList.map(e => {
-    const key = e.txid || e.id || '';
-    const coverDataUrl = e.coverImage ? `data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}` : '';
-    const coverHtml = coverDataUrl
-      ? `<img src="${coverDataUrl}">`
-      : `<div class="wtr-mini-cover" style="background:${generatedCoverColor(e.title||'')}"><span class="wtr-mini-title">${escapeHtml(e.title||'')}</span></div>`;
-    return `<div class="wtr-item" data-key="${escapeHtml(key)}" draggable="${showHandle}">
-      <div class="wtr-item-cover">${coverHtml}</div>
-      <div class="wtr-item-info">
-        <div class="wtr-item-title">${escapeHtml(e.title||'Untitled')}</div>
-        <div class="wtr-item-author">${escapeHtml(e.author||'')}</div>
-      </div>
-      <button type="button" class="wtr-start-btn" data-key="${escapeHtml(key)}">Start Reading</button>
-    </div>`;
-  }).join('');
-}
-
-// --- WTR drag-to-reorder ---
-(function initWtrDragReorder() {
-  if (!wtrListEl) return;
-  let dragItem = null;
-  let touchStartY = 0;
-  let touchCurrentY = 0;
-  let placeholder = null;
-  let dragClone = null;
-  let isDragging = false;
-  let startedFromHandle = false;
-  let longPressTimer = null;
-  let longPressReady = false;
-
-  // --- Mouse drag (uses native HTML5 drag API) ---
-  wtrListEl.addEventListener('dragstart', (e) => {
-    const item = e.target.closest('.wtr-item');
-    if (!item) { e.preventDefault(); return; }
-    dragItem = item;
-    item.classList.add('wtr-dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', '');
-  });
-
-  wtrListEl.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (!dragItem) return;
-    const target = getDragTarget(e.clientY);
-    if (target && target !== dragItem) {
-      const rect = target.getBoundingClientRect();
-      const mid = rect.top + rect.height / 2;
-      if (e.clientY < mid) {
-        wtrListEl.insertBefore(dragItem, target);
-      } else {
-        wtrListEl.insertBefore(dragItem, target.nextSibling);
-      }
-    }
-  });
-
-  wtrListEl.addEventListener('dragend', (e) => {
-    if (dragItem) {
-      dragItem.classList.remove('wtr-dragging');
-      commitReorder();
-      dragItem = null;
-    }
-  });
-
-  // --- Touch drag (custom implementation with long-press) ---
-  wtrListEl.addEventListener('touchstart', (e) => {
-    const item = e.target.closest('.wtr-item');
-    if (!item || e.target.closest('.wtr-start-btn')) { startedFromHandle = false; return; }
-    startedFromHandle = true;
-    longPressReady = false;
-    dragItem = item;
-    touchStartY = e.touches[0].clientY;
-    touchCurrentY = touchStartY;
-    // Require 300ms hold before drag activates — allows normal scrolling
-    longPressTimer = setTimeout(() => {
-      longPressReady = true;
-      if (dragItem) dragItem.classList.add('wtr-long-press');
-    }, 300);
-  }, { passive: true });
-
-  wtrListEl.addEventListener('touchmove', (e) => {
-    if (!startedFromHandle || !dragItem) return;
-    touchCurrentY = e.touches[0].clientY;
-
-    // If long-press hasn't fired yet, cancel on movement (it's a scroll)
-    if (!longPressReady) {
-      if (Math.abs(touchCurrentY - touchStartY) > 4) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-        startedFromHandle = false;
-        dragItem.classList.remove('wtr-long-press');
-        dragItem = null;
-      }
-      return;
-    }
-
-    e.preventDefault();
-
-    if (!isDragging) {
-      if (Math.abs(touchCurrentY - touchStartY) < 8) return;
-      dragItem.classList.remove('wtr-long-press');
-      isDragging = true;
-      const rect = dragItem.getBoundingClientRect();
-      // Create placeholder
-      placeholder = document.createElement('div');
-      placeholder.className = 'wtr-drag-placeholder';
-      placeholder.style.height = rect.height + 'px';
-      dragItem.parentNode.insertBefore(placeholder, dragItem);
-      // Create floating clone
-      dragClone = dragItem.cloneNode(true);
-      dragClone.className = 'wtr-item wtr-drag-clone';
-      dragClone.style.width = rect.width + 'px';
-      document.body.appendChild(dragClone);
-      dragItem.classList.add('wtr-dragging');
-    }
-
-    // Position clone at touch point
-    if (dragClone) {
-      const rect = dragClone.getBoundingClientRect();
-      dragClone.style.top = (touchCurrentY - rect.height / 2) + 'px';
-      dragClone.style.left = dragItem.getBoundingClientRect().left + 'px';
-    }
-
-    // Move placeholder to drop position
-    const target = getDragTarget(touchCurrentY);
-    if (target && target !== dragItem && target !== placeholder) {
-      const targetRect = target.getBoundingClientRect();
-      const mid = targetRect.top + targetRect.height / 2;
-      if (touchCurrentY < mid) {
-        wtrListEl.insertBefore(placeholder, target);
-      } else {
-        wtrListEl.insertBefore(placeholder, target.nextSibling);
-      }
-    }
-  }, { passive: false });
-
-  function finishTouchDrag() {
-    clearTimeout(longPressTimer);
-    longPressTimer = null;
-    longPressReady = false;
-    if (!isDragging || !dragItem) {
-      if (dragItem) dragItem.classList.remove('wtr-long-press');
-      isDragging = false;
-      startedFromHandle = false;
-      dragItem = null;
-      return;
-    }
-    // Move actual item to placeholder position
-    if (placeholder && placeholder.parentNode) {
-      placeholder.parentNode.insertBefore(dragItem, placeholder);
-      placeholder.remove();
-    }
-    if (dragClone) { dragClone.remove(); dragClone = null; }
-    dragItem.classList.remove('wtr-dragging');
-    commitReorder();
-    isDragging = false;
-    startedFromHandle = false;
-    placeholder = null;
-    dragItem = null;
-  }
-
-  wtrListEl.addEventListener('touchend', finishTouchDrag);
-  wtrListEl.addEventListener('touchcancel', finishTouchDrag);
-
-  function getDragTarget(clientY) {
-    const items = [...wtrListEl.querySelectorAll('.wtr-item:not(.wtr-dragging):not(.wtr-drag-clone)')];
-    for (const item of items) {
-      const rect = item.getBoundingClientRect();
-      if (clientY >= rect.top && clientY <= rect.bottom) return item;
-    }
-    return null;
-  }
-
-  function commitReorder() {
-    if (!bookRepo) return;
-    const items = wtrListEl.querySelectorAll('.wtr-item');
-    const keys = [];
-    items.forEach(item => {
-      if (item.dataset.key) keys.push(item.dataset.key);
-    });
-    if (keys.length > 1) { haptic(); bookRepo.reorderWtr(keys); }
-  }
-})();
-
-wtrHeaderBtn?.addEventListener('click', openWtrDrawer);
-wtrBackdrop?.addEventListener('click', closeWtrDrawer);
-wtrClose?.addEventListener('click', closeWtrDrawer);
-wtrAddBtn?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
-wtrFooterAdd?.addEventListener('click', ()=>{ closeWtrDrawer(); openModal(null, READING_STATUS.WANT_TO_READ); });
-document.getElementById('shelfEmptyBrowse')?.addEventListener('click', openWtrDrawer);
+function openWtrDrawer(){ wtrDrawerController.open(); }
+function closeWtrDrawer(fromPopstate = false){ wtrDrawerController.close(fromPopstate); }
+function renderWtrDrawer(wantList){ wtrDrawerController.render(wantList); }
 
 // --- Swipe-to-dismiss on bottom sheets (#87) ---
-let resetWtrSwipe = null;
 let resetModalSwipe = null;
 let detachKeyboard = null;
-if (isTouchDevice && wtrDrawer) {
-  const wtrHandle = wtrDrawer.querySelector('.wtr-drawer-handle');
-  const wtrHeader = wtrDrawer.querySelector('.wtr-header');
-  const swipeHandles = [wtrHandle, wtrHeader].filter(Boolean);
-  if (swipeHandles.length) {
-    resetWtrSwipe = attachSwipeDismiss({ sheet: wtrDrawer, handles: swipeHandles, onDismiss: () => closeWtrDrawer() });
-  }
-}
 
 // --- Omnibox visibility helper (#80) ---
 // On desktop: show/hide the inline omnibox input normally.
@@ -2807,24 +2590,6 @@ spineStrip?.addEventListener('keydown', (ev)=>{
   if(next !== current){
     spines[next].focus();
     navigateYear(getYearList(_lastYearGroups)[next]?.year);
-  }
-});
-
-
-// WTR drawer event delegation: "Start Reading" + row tap
-wtrListEl?.addEventListener('click', (ev)=>{
-  const startBtn = ev.target.closest('.wtr-start-btn');
-  if(startBtn){
-    ev.stopPropagation();
-    const key = startBtn.dataset.key;
-    changeReadingStatus(key, READING_STATUS.READING);
-    return;
-  }
-  const row = ev.target.closest('.wtr-item');
-  if(row){
-    const key = row.dataset.key;
-    const entry = entries.find(e => (e.txid||e.id) === key);
-    if(entry){ closeWtrDrawer(); openModal(entry); }
   }
 });
 
