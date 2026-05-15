@@ -3,6 +3,7 @@
 // No longer manages: balance checking, wallet info, auto-persistence.
 
 import * as tarnService from './core/tarn_service.js';
+import { debugLog } from './core/debug_log.js';
 
 // Sync state
 let syncInterval = null;
@@ -55,12 +56,12 @@ function computeSyncInterval() {
 export function initSyncManager(config) {
   statusCallback = config.onStatusChange;
   bookSyncCallback = config.onBookSync;
-  console.log('[Bookish:SyncManager] Initialized');
+  debugLog('[Bookish:SyncManager] Initialized');
 }
 
 export function startSync() {
   if (syncInterval) return;
-  console.log('[Bookish:SyncManager] Starting sync loop');
+  debugLog('[Bookish:SyncManager] Starting sync loop');
   lastWriteAt = Date.now();
 
   async function syncLoop() {
@@ -77,7 +78,7 @@ export function stopSync() {
   if (syncInterval) {
     clearTimeout(syncInterval);
     syncInterval = null;
-    console.log('[Bookish:SyncManager] Sync stopped');
+    debugLog('[Bookish:SyncManager] Sync stopped');
   }
   initialSynced = false;
 }
@@ -88,7 +89,7 @@ export function markDirty() {
 }
 
 export async function triggerSyncNow() {
-  console.log('[Bookish:SyncManager] Sync Now triggered');
+  debugLog('[Bookish:SyncManager] Sync Now triggered');
   lastWriteAt = Date.now();
   dirtyFlag = true;
 

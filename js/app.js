@@ -18,6 +18,7 @@ import { getFieldPref, setFieldPref } from './core/field_prefs.js';
 import * as subscription from './core/subscription.js';
 import * as friendsRouter from './core/friends_router.js';
 import * as accountKeyReminder from './core/account_key_reminder.js';
+import { debugLog } from './core/debug_log.js';
 import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend-glyph-trigger.js';
 import { pickRandomPlaceholder } from './core/omnibox_placeholders.js';
 import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCardDetails, generatedCoverColor as sharedGeneratedCoverColor, escapeHtml as sharedEscapeHtml } from './components/book-card.js';
@@ -441,7 +442,7 @@ export function resetKeyState() {
   tarnService.logout();
 }
 let appError = null; // Track errors for UI status manager
-window.BOOKISH_DEBUG=true; function dbg(...a){ if(window.BOOKISH_DEBUG) console.debug('[Bookish]',...a); }
+function dbg(...a){ debugLog('[Bookish]', ...a); }
 
 /**
  * Get app error status for UI status manager
@@ -452,7 +453,7 @@ function getAppErrorStatus() {
 }
 
 // --- Utility / ordering ---
-function setStatus(m){ statusEl.textContent=m; statusEl.classList.remove('warning'); if(window.BOOKISH_DEBUG) console.debug('[Bookish] status:', m); }
+function setStatus(m){ statusEl.textContent=m; statusEl.classList.remove('warning'); debugLog('[Bookish] status:', m); }
 function orderEntries(){
   const statusOrder = { reading: 0, read: 1, want_to_read: 2 };
   entries.sort((a,b)=>{
@@ -1134,7 +1135,7 @@ let closeAccountModalFn;
     const btn = document.getElementById('accountBtn');
     if(btn) {
       const clickHandler = async () => {
-        console.log('[Bookish] Account button clicked');
+        debugLog('[Bookish] Account button clicked');
         if(openAccountModal) {
           try {
             await openAccountModal();
@@ -1146,7 +1147,7 @@ let closeAccountModalFn;
         }
       };
       btn.onclick = clickHandler;
-      console.log('[Bookish] Account button wired up successfully');
+      debugLog('[Bookish] Account button wired up successfully');
     } else {
       console.warn('[Bookish] accountBtn not found in DOM, retrying...');
       // Retry after a short delay in case DOM isn't ready yet
@@ -1154,7 +1155,7 @@ let closeAccountModalFn;
         const retryBtn = document.getElementById('accountBtn');
         if (retryBtn && openAccountModal) {
           retryBtn.onclick = () => openAccountModal();
-          console.log('[Bookish] Account button wired up on retry');
+          debugLog('[Bookish] Account button wired up on retry');
         } else {
           console.error('[Bookish] Failed to wire up account button after retry');
         }
@@ -3047,7 +3048,7 @@ async function initCacheLayer(){
     // Restore Tarn session from localStorage
     const sessionRestored = await tarnService.init();
     if (sessionRestored) {
-      console.log('[Bookish] Tarn session restored');
+      debugLog('[Bookish] Tarn session restored');
       setStatus('Signed in');
     }
 
@@ -3097,7 +3098,7 @@ async function initCacheLayer(){
 
     // Load cached books immediately for instant display
     await bookRepo.loadFromCache();
-    console.log('[Bookish] Loaded', entries.length, 'books from cache');
+    debugLog('[Bookish] Loaded', entries.length, 'books from cache');
     showAccountNudge();
 
     // Initialize sync manager
@@ -3108,7 +3109,7 @@ async function initCacheLayer(){
 
     // Only start sync loop if user is logged in
     if (tarnService.isLoggedIn()) {
-      console.log('[Bookish] User logged in, starting sync loop');
+      debugLog('[Bookish] User logged in, starting sync loop');
       startSync();
       // Fetch subscription status for free/subscribed/lapsed gating (#74).
       // Fire-and-forget; omnibox UI reads whatever's cached at interaction time.
@@ -3131,7 +3132,7 @@ async function initCacheLayer(){
         console.warn('[Bookish] accountKeyReminder.init failed:', err?.message || err);
       }
     } else {
-      console.log('[Bookish] User not logged in, sync loop will not start');
+      debugLog('[Bookish] User not logged in, sync loop will not start');
       // Friends invite redemption (#118) — if they landed via /invite/... and
       // are logged out, prompt for signup/sign-in so the post-auth hook can
       // fire the accept modal.

@@ -19,6 +19,7 @@
 
 import { pickWinner } from './cache_core.js';
 import * as friends from './friends.js';
+import { debugLog } from './debug_log.js';
 
 export const READING_STATUS = {
   WANT_TO_READ: 'want_to_read',
@@ -430,11 +431,11 @@ export class BookRepository {
       return;
     }
 
-    console.log('[BookRepository] Syncing from Tarn...');
+    debugLog('[BookRepository] Syncing from Tarn...');
     try {
       const client = await this._tarnService.getClient();
       const remoteRecords = await client.books.list();
-      console.log('[BookRepository] Fetched', remoteRecords.length, 'records from Tarn');
+      debugLog('[BookRepository] Fetched', remoteRecords.length, 'records from Tarn');
 
       // The SDK returns fully-decoded records validated against the schema.
       // No normalization needed — every record carries the canonical shape.
@@ -508,7 +509,7 @@ export class BookRepository {
       const ops = await this._cache.listOps();
       if (!ops.length) return;
 
-      console.log('[BookRepository] Replaying', ops.length, 'pending operations...');
+      debugLog('[BookRepository] Replaying', ops.length, 'pending operations...');
       const client = await this._tarnService.getClient();
 
       for (const op of ops) {

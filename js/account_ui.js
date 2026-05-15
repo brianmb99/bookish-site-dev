@@ -11,6 +11,7 @@ import { msToDateInputUtc } from './core/id_core.js';
 import * as friends from './core/friends.js';
 import * as friendsRouter from './core/friends_router.js';
 import * as accountKeyReminder from './core/account_key_reminder.js';
+import { debugLog } from './core/debug_log.js';
 import {
   isFriendsHiddenFromHeader,
   setHideFriendsFromHeader,
@@ -77,7 +78,7 @@ export function getAccountStatus() {
 }
 
 export async function initAccountUI() {
-  console.log('[Bookish:AccountUI] Initializing...');
+  debugLog('[Bookish:AccountUI] Initializing...');
   if (tarnService.isLoggedIn()) {
     localStorage.setItem('bookish.hasHadAccount', 'true');
   }

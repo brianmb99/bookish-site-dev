@@ -1,6 +1,8 @@
 // cache_core.js - Pure cache logic extracted from cache.js
 // Testable functions for content hashing, duplicate detection, and remote merge
 
+import { debugLog } from './debug_log.js';
+
 /**
  * Compute SHA-256 based content hash for an entry
  * @param {Object} entry - Entry object with title, author, format, dateRead
@@ -130,23 +132,23 @@ export async function applyRemote(remoteList, tombstones, localEntries) {
       };
 
       if (supersededLocal) {
-        console.log('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), '→ replace-prev');
+        debugLog('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), '→ replace-prev');
         toReplace.push({ prevId: supersededLocal.id, entry: newEntry });
       } else {
         const provisionalMatch = localPendingByHash.get(contentHash);
         if (provisionalMatch) {
-          console.log('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), '→ replace-provisional');
+          debugLog('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), '→ replace-provisional');
           toReplace.push({ prevId: provisionalMatch.id, entry: newEntry });
           localPendingByHash.delete(contentHash);
         } else if (r.bookId && localByBookId.has(r.bookId)) {
           const localMatch = localByBookId.get(r.bookId);
           const wins = pickWinner(localMatch, newEntry) === newEntry;
-          console.log('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), 'bookId-match remote:', (newEntry.modifiedAt || 0), 'local:', (localMatch.modifiedAt || 0), '→', wins ? 'REPLACE' : 'skip');
+          debugLog('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), 'bookId-match remote:', (newEntry.modifiedAt || 0), 'local:', (localMatch.modifiedAt || 0), '→', wins ? 'REPLACE' : 'skip');
           if (wins) {
             toReplace.push({ prevId: localMatch.id, entry: newEntry });
           }
         } else {
-          console.log('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), '→ add-new (bookId:', (r.bookId?.slice(0,8) || 'NONE'), ')');
+          debugLog('[Bookish:Cache] applyRemote', r.txid?.slice(0,8), '→ add-new (bookId:', (r.bookId?.slice(0,8) || 'NONE'), ')');
           toAdd.push(newEntry);
         }
       }
@@ -239,7 +241,7 @@ export function compactDuplicates(entries) {
       byBookId.set(e.bookId, keep);
       if (!toDelete.includes(drop.id)) {
         toDelete.push(drop.id);
-        console.log('[Bookish:Cache] Compacting duplicate bookId:', drop.bookId?.slice(0,8), 'dropping', drop.txid?.slice(0,8), 'keeping', keep.txid?.slice(0,8));
+        debugLog('[Bookish:Cache] Compacting duplicate bookId:', drop.bookId?.slice(0,8), 'dropping', drop.txid?.slice(0,8), 'keeping', keep.txid?.slice(0,8));
       }
     }
   }

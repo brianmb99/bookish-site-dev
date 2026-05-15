@@ -1,5 +1,6 @@
 // cache.js - IndexedDB based local cache & sync layer
 import { computeContentHash as coreComputeContentHash, detectDuplicate as coreDetectDuplicate, applyRemote as coreApplyRemote, compactDuplicates as coreCompactDuplicates } from './core/cache_core.js';
+import { debugLog } from './core/debug_log.js';
 
 (function(){
   const DB_NAME='bookish';
@@ -61,9 +62,9 @@ import { computeContentHash as coreComputeContentHash, detectDuplicate as coreDe
 
   async function applyRemote(remoteList, tombstones){
     const localAll = await listAllRaw();
-    console.log('[Bookish:Cache] applyRemote: local entries:', localAll.length, 'remote:', remoteList.length, 'tombstones:', tombstones.length);
+    debugLog('[Bookish:Cache] applyRemote: local entries:', localAll.length, 'remote:', remoteList.length, 'tombstones:', tombstones.length);
     const result = await coreApplyRemote(remoteList, tombstones, localAll);
-    console.log('[Bookish:Cache] applyRemote result: add:', result.toAdd.length, 'replace:', result.toReplace.length, 'update:', result.toUpdate.length, 'tombstone:', result.toTombstone.length);
+    debugLog('[Bookish:Cache] applyRemote result: add:', result.toAdd.length, 'replace:', result.toReplace.length, 'update:', result.toUpdate.length, 'tombstone:', result.toTombstone.length);
 
     // Apply changes to IndexedDB
     for(const entry of result.toUpdate){

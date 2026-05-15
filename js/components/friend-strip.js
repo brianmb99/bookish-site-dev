@@ -13,9 +13,10 @@
 //   onAddClick()                — open the existing invite modal
 //
 // All callbacks are optional; if omitted, the corresponding interaction is
-// a no-op (with a console.log breadcrumb so dev work can confirm wiring).
+// a no-op (with a debug breadcrumb so dev work can confirm wiring).
 
 import { renderFriendAvatar } from './friend-avatar.js';
+import { debugLog } from '../core/debug_log.js';
 
 const LONG_PRESS_MS = 500;
 
@@ -193,7 +194,7 @@ export function renderFriendStrip(container, connections, opts = {}) {
         opts.onAvatarTap(conn);
       } else {
         // Stub breadcrumb for dev — handler arrives in issue 4.
-        console.log('[Bookish:FriendStrip] tap (no handler):', name);
+        debugLog('[Bookish:FriendStrip] tap (no handler):', name);
       }
     });
 
@@ -208,7 +209,7 @@ export function renderFriendStrip(container, connections, opts = {}) {
         if (typeof opts.onAvatarLongPress === 'function') {
           opts.onAvatarLongPress(conn, cell);
         } else {
-          console.log('[Bookish:FriendStrip] long-press (no handler):', name);
+          debugLog('[Bookish:FriendStrip] long-press (no handler):', name);
         }
       }, LONG_PRESS_MS);
     };
@@ -230,7 +231,7 @@ export function renderFriendStrip(container, connections, opts = {}) {
       if (typeof opts.onAvatarLongPress === 'function') {
         opts.onAvatarLongPress(conn, cell);
       } else {
-        console.log('[Bookish:FriendStrip] context menu (no handler):', name);
+        debugLog('[Bookish:FriendStrip] context menu (no handler):', name);
       }
     });
     // If long-press fired, suppress the click-tap that would otherwise follow.
