@@ -256,6 +256,13 @@ button.secondary:hover, .btn.secondary:hover{
 .account-link:hover{
   color:var(--color-text-primary)!important;
 }
+/* #149: header auth-chip visibility. Driven by `html.is-signed-in` stamped
+   synchronously in <head> from localStorage, so returning users see the right
+   chip on first paint. JS refreshHeaderAuthState() toggles the class on
+   login/logout. */
+#accountBtn{display:none}
+html.is-signed-in #accountBtn{display:inline-block}
+html.is-signed-in #signInHeaderBtn{display:none}
 /* #149: signed-out header chip. Matches `.account-link` visual weight so
    the header doesn't shift when auth state changes. */
 .signin-link{

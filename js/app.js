@@ -1192,18 +1192,14 @@ let closeAccountModalFn;
  * sign-in triggers render() via the BookRepository change event).
  */
 function refreshHeaderAuthState(){
-  const accountEl = document.getElementById('accountBtn');
-  const signInEl = document.getElementById('signInHeaderBtn');
-  if(!accountEl || !signInEl) return;
-  const signedIn = tarnService.isLoggedIn();
-  accountEl.style.display = signedIn ? '' : 'none';
-  signInEl.style.display = signedIn ? 'none' : '';
+  // Visibility is driven by CSS keyed on `html.is-signed-in`. We toggle the
+  // class here so the header reacts to login/logout without a page reload.
+  // The initial state is stamped synchronously by an inline <script> in
+  // <head> reading tarn:session:v1 — that's what prevents the first-paint
+  // flash for returning signed-in users.
+  document.documentElement.classList.toggle('is-signed-in', tarnService.isLoggedIn());
 }
 
-// First paint — before tarnService.init() resolves this returns false, so
-// the "Sign in" chip is shown by default. Once init() restores a session
-// and render() fires, the Account gear takes its place. Both default to
-// `display:none` in index.html so we never show both at once.
 refreshHeaderAuthState();
 
 // No settings UI anymore; defaults used

@@ -1,4 +1,10 @@
 <!doctype html><html><head><meta charset="utf-8"/><title>Bookish</title><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<!-- Synchronously stamp auth state on <html> before first paint. Avoids
+     a flash of the "Sign in" chip for returning signed-in users while
+     tarnService.init() catches up. CSS selectors below pick the right
+     header button based on this class; refreshHeaderAuthState() keeps
+     it in sync on login/logout. -->
+<script>try{var s=localStorage.getItem('tarn:session:v1');if(s&&s.length>2)document.documentElement.classList.add('is-signed-in');}catch(e){}</script>
 <base href="/"/>
 <link rel="manifest" href="manifest.json"/>
 <meta name="theme-color" content="#2563eb"/>
@@ -82,8 +88,8 @@
          correct one based on `tarnService.isLoggedIn()`. It runs once at
          account_ui module load and again on every render() to stay in sync
          with login/logout. -->
-    <button id="signInHeaderBtn" class="refresh-link signin-link" type="button" title="Sign in" style="display:none">Sign in</button>
-    <button id="accountBtn" class="refresh-link account-link" title="Account" style="display:none">Account</button>
+    <button id="signInHeaderBtn" class="refresh-link signin-link" type="button" title="Sign in">Sign in</button>
+    <button id="accountBtn" class="refresh-link account-link" title="Account">Account</button>
   </div>
 </header>
 <div id="accountNudgeBanner" class="nudge-banner" style="display:none;">
@@ -170,7 +176,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.262</div>
+  <div class="footer-meta">Alpha &bull; v0.2.264</div>
 </footer>
 </div>
 
