@@ -7,7 +7,7 @@ import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
 import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
-import { stripNoise } from './core/search_core.js';
+import { normalizeOLDoc, normalizeItunesItem, mergeOmniboxResults } from './core/omnibox_merge.js';
 import { deriveBookId, dateStringToMsNoonUtc, msToDateInputUtc, formatDateReadDisplay, formatMonthYearDisplay } from './core/id_core.js';
 import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
 import { haptic } from './core/haptic.js';
@@ -2350,54 +2350,19 @@ function searchOmniboxApis(query){
 
   function mergeAndShow(){
     if(isStale()) return;
-    // Deduplicate: combine OL + iTunes, transfer OL metadata to surviving entry
-    const combined = [];
-    const seen = new Map();
-    for(const r of [...itResults, ...olResults]){
-      const cleanTitle = stripNoise(r.title || '');
-      const k = cleanTitle.toLowerCase().replace(/[^a-z0-9]/g,'') + '|' + (r.author||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-      if(seen.has(k)){
-        const existing = seen.get(k);
-        if(r.work_key && !existing.work_key) existing.work_key = r.work_key;
-        if(r.isbn && !existing.isbn) existing.isbn = r.isbn;
-        continue;
-      }
-      const entry = {...r, title: cleanTitle};
-      seen.set(k, entry);
-      combined.push(entry);
-    }
-    renderOmniboxApiResults(combined);
+    renderOmniboxApiResults(mergeOmniboxResults({ itunesResults: itResults, olResults }));
   }
 
   fetch(olUrl, {signal}).then(r => r.json()).then(j => {
     if(isStale()) return;
-    olResults = (j.docs || []).slice(0, 10).map(d => ({
-      title: d.title || '',
-      author: d.author_name?.[0] || '',
-      year: d.first_publish_year ? String(d.first_publish_year) : '',
-      coverUrl: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : '',
-      publisher: '',
-      duration: '',
-      source: 'ol',
-      work_key: d.key || '',
-      isbn: (d.isbn || [])[0] || ''
-    }));
+    olResults = (j.docs || []).slice(0, 10).map(normalizeOLDoc);
     olDone = true;
     mergeAndShow();
   }).catch(e => { if(e.name !== 'AbortError'){ olDone = true; mergeAndShow(); } });
 
   fetch(itUrl, {signal}).then(r => r.json()).then(j => {
     if(isStale()) return;
-    itResults = (j.results || []).slice(0, 6).map(i => ({
-      title: stripNoise(i.collectionName || i.trackName || ''),
-      author: i.artistName || '',
-      year: '',
-      coverUrl: i.artworkUrl100 || '',
-      publisher: '',
-      duration: '',
-      source: 'itunes',
-      artwork: i.artworkUrl100 || ''
-    }));
+    itResults = (j.results || []).slice(0, 6).map(normalizeItunesItem);
     itDone = true;
     mergeAndShow();
   }).catch(e => { if(e.name !== 'AbortError'){ itDone = true; mergeAndShow(); } });
