@@ -6,8 +6,7 @@ import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
-import { buildDisplayList, getYearList, getNearestPopulatedYear, filterBySearch } from './core/shelf_filter.js';
-import { normalizeOLDoc, normalizeItunesItem, mergeOmniboxResults } from './core/omnibox_merge.js';
+import { buildDisplayList, getYearList, getNearestPopulatedYear } from './core/shelf_filter.js';
 import { deriveBookId, dateStringToMsNoonUtc, msToDateInputUtc, formatDateReadDisplay, formatMonthYearDisplay } from './core/id_core.js';
 import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
 import { haptic } from './core/haptic.js';
@@ -20,13 +19,13 @@ import * as friendsRouter from './core/friends_router.js';
 import * as accountKeyReminder from './core/account_key_reminder.js';
 import { debugLog } from './core/debug_log.js';
 import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend-glyph-trigger.js';
-import { pickRandomPlaceholder } from './core/omnibox_placeholders.js';
 import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCardDetails, generatedCoverColor as sharedGeneratedCoverColor, escapeHtml as sharedEscapeHtml } from './components/book-card.js';
 import { renderPipOverlay } from './components/friend-pip.js';
 import { getMatchingFriendBookEntries as friendsGetMatchingFriendBookEntries, primeFriendLibraryCache as friendsPrimeFriendLibraryCache, invalidateFriendLibraryCache as friendsInvalidateLibraryCache } from './core/friends.js';
 import { openFriendBookDetail } from './components/friend-book-detail.js';
 import { setStatusLine, showMarkAsReadUndoToast, showStatusToast, showSubscriptionSuccessToast } from './components/status_helpers.js';
 import { createWtrDrawerController, sortWtrList } from './components/wtr_drawer.js';
+import { activeEntryCount as countActiveEntries, createOmniboxController } from './components/omnibox_controller.js';
 
 // Friends invite-link routing (#118). Capture the invite parameters from
 // /invite/:token_id#:payload_key BEFORE anything else touches window.location
@@ -125,13 +124,11 @@ const omniboxShelfResults = document.getElementById('omniboxShelfResults');
 const omniboxAddSection = document.getElementById('omniboxAddSection');
 const omniboxAddResults = document.getElementById('omniboxAddResults');
 const omniboxManualAdd = document.getElementById('omniboxManualAdd');
-let omniboxBackdrop = null; // created dynamically
 // Fixed header & mobile search takeover (#80)
 const mainHeader = document.getElementById('mainHeader');
 const headerSearchBtn = document.getElementById('headerSearchBtn');
 const headerSearchCancel = document.getElementById('headerSearchCancel');
 const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
-let searchTakeoverActive = false;
 const yearHeader = document.getElementById('yearHeader');
 const yearLabelEl = document.getElementById('yearLabel');
 const spinePanel = document.getElementById('spinePanel');
@@ -139,7 +136,6 @@ const spinePanelInner = spinePanel?.querySelector('.spine-panel-inner');
 const spineStrip = document.getElementById('spineStrip');
 let selectedYear = null; // null = default (current year or most recent)
 let searchQuery = '';
-let _searchDebounce = null;
 let _lastYearGroups = null; // cached for spine nav interactions
 let spineOpen = false; // spine panel expanded?
 
@@ -1152,7 +1148,7 @@ window.addEventListener('popstate', () => {
   if (!isStandalone) return;
   if (consumeSuppressFlag()) return;
   // Close topmost visible overlay (search takeover > notes > modal > account > friends > wtr)
-  if (searchTakeoverActive) {
+  if (omniboxController.isSearchTakeoverActive()) {
     closeSearchTakeover(true);
   } else if (notesOverlay && notesOverlay.style.display === 'flex') {
     closeNotesOverlay(true);
@@ -1651,147 +1647,11 @@ function renderWtrDrawer(wantList){ wtrDrawerController.render(wantList); }
 let resetModalSwipe = null;
 let detachKeyboard = null;
 
-// --- Omnibox visibility helper (#80) ---
-// On desktop: show/hide the inline omnibox input normally.
-// On mobile: show/hide the search icon button; omnibox itself is controlled by search takeover.
-function setOmniboxVisible(visible){
-  if(isTouchDevice){
-    // Mobile: toggle search icon button visibility
-    if(headerSearchBtn) headerSearchBtn.style.display = visible ? '' : 'none';
-    // Don't touch omniboxWrap on mobile — CSS handles it via .search-takeover class
-  } else {
-    // Desktop: toggle omnibox input directly
-    if(omniboxWrap) omniboxWrap.style.display = visible ? '' : 'none';
-  }
-}
-
-// --- Omnibox relocation between header and empty-state slot (#144) ---
-// In empty state we physically move the real `#omniboxWrap` element into a
-// slot inside the empty-state container so the user sees a prominent search
-// input in the center of the page instead of the cramped top-left header
-// version. All event handlers are bound to the element (not its location),
-// so moving it is safe.
-//
-// The function is idempotent: it checks the wrap's current parent before
-// moving it, so calling render() repeatedly does NOT re-append on every
-// call. The mobile search-icon button is hidden in empty state too — the
-// relocated omnibox is the search affordance and the header icon is
-// redundant.
-function setOmniboxLocation(location){
-  if(!omniboxWrap) return;
-  const headerContainer = mainHeader;
-  const emptySlot = document.getElementById('emptyOmniboxSlot');
-  if(location === 'empty'){
-    if(emptySlot && omniboxWrap.parentElement !== emptySlot){
-      emptySlot.appendChild(omniboxWrap);
-    }
-    omniboxWrap.classList.add('omnibox-in-empty');
-    // Always reveal — `style.display` may have been set 'none' by a prior
-    // setOmniboxVisible(false) elsewhere.
-    omniboxWrap.style.display = '';
-    // Hide the mobile header search icon — the centered omnibox replaces it.
-    if(headerSearchBtn) headerSearchBtn.style.display = 'none';
-  } else {
-    if(headerContainer && omniboxWrap.parentElement !== headerContainer){
-      // Re-insert into the header in the original position (before .header-actions).
-      const headerActions = headerContainer.querySelector('.header-actions');
-      if(headerActions){
-        headerContainer.insertBefore(omniboxWrap, headerActions);
-      } else {
-        headerContainer.appendChild(omniboxWrap);
-      }
-    }
-    omniboxWrap.classList.remove('omnibox-in-empty');
-  }
-  // Re-anchor the dropdown after relocating the wrap. The dropdown uses
-  // `position: fixed` and its CSS-driven top/left target the header position;
-  // when the wrap moves into the empty-state slot, we need to override those
-  // coordinates inline so the dropdown sits directly under the wrap.
-  positionOmniboxDropdown();
-}
-
-/**
- * Position the omnibox dropdown relative to the omnibox wrap. The dropdown
- * is `position: fixed` (so it floats above siblings), so we set its
- * top/left/width inline when the wrap is in the empty-state slot, and clear
- * the overrides when the wrap is back in the header (CSS rules take over).
- *
- * Called from `setOmniboxLocation`, on window resize, and whenever the
- * dropdown is shown (so a layout shift between hide-and-show doesn't leave
- * the dropdown stale).
- */
-function positionOmniboxDropdown(){
-  if(!omniboxDropdown || !omniboxWrap) return;
-  if(omniboxWrap.classList.contains('omnibox-in-empty')){
-    const r = omniboxWrap.getBoundingClientRect();
-    omniboxDropdown.style.top = (r.bottom + 4) + 'px';
-    omniboxDropdown.style.left = r.left + 'px';
-    omniboxDropdown.style.right = 'auto';
-    omniboxDropdown.style.width = r.width + 'px';
-    omniboxDropdown.style.maxWidth = 'none';
-  } else {
-    // Clear overrides so the CSS `top/left/right/max-width` rules apply.
-    omniboxDropdown.style.top = '';
-    omniboxDropdown.style.left = '';
-    omniboxDropdown.style.right = '';
-    omniboxDropdown.style.width = '';
-    omniboxDropdown.style.maxWidth = '';
-  }
-}
-
-// Keep the dropdown anchored to the wrap on resize while in empty state.
-window.addEventListener('resize', () => {
-  if(omniboxWrap && omniboxWrap.classList.contains('omnibox-in-empty')){
-    positionOmniboxDropdown();
-  }
-});
-
 // --- Subscription helpers (#74) ---
 
-/** Non-tombstoned entry count — what counts against the free tier. */
+/** Non-tombstoned entry count - what counts against the free tier. */
 function activeEntryCount(){
-  return entries.filter(e => e.status !== 'tombstoned').length;
-}
-
-/**
- * Render the subscribe/lapsed prompt in place of add-book search results.
- * Free-at-limit → subscribe copy; lapsed → renew copy.
- */
-function renderOmniboxSubscribePrompt(){
-  if(!omniboxAddResults) return;
-  const lapsed = subscription.isLapsed();
-  const title = lapsed
-    ? "Your subscription lapsed"
-    : "Ready to add more?";
-  const body = lapsed
-    ? "Renew to keep adding books \u2014 $10/year, cancel anytime."
-    : "Add unlimited books for $10/year \u2014 less than a paperback. Cancel anytime.";
-  const btnLabel = lapsed ? "Renew \u2014 $10/year" : "Subscribe \u2014 $10/year";
-  omniboxAddResults.innerHTML = `
-    <div class="omnibox-subscribe-prompt${lapsed ? ' omnibox-lapsed-prompt' : ''}" role="status">
-      <div class="omnibox-subscribe-title">${escapeHtml(title)}</div>
-      <div class="omnibox-subscribe-body">${escapeHtml(body)}</div>
-      <button type="button" class="omnibox-subscribe-btn" data-subscribe-action="${lapsed ? 'renew' : 'subscribe'}">${escapeHtml(btnLabel)}</button>
-      <div class="omnibox-subscribe-dismiss">Or keep browsing your library</div>
-    </div>
-  `;
-}
-
-/** Show/hide the small "N of 5 free books" line at the top of the add section. */
-function renderOmniboxCount(){
-  if(!omniboxAddSection) return;
-  const count = activeEntryCount();
-  let el = omniboxAddSection.querySelector('.omnibox-count');
-  if(!subscription.shouldShowCount(count)){
-    if(el) el.remove();
-    return;
-  }
-  if(!el){
-    el = document.createElement('div');
-    el.className = 'omnibox-count';
-    omniboxAddSection.insertBefore(el, omniboxAddSection.firstChild);
-  }
-  el.textContent = `${count} of ${subscription.FREE_LIMIT} free books`;
+  return countActiveEntries(entries);
 }
 
 /** Kick off Stripe Checkout via bookish-api. */
@@ -1841,453 +1701,109 @@ async function handleStripeReturn(){
   // will pick up the new status from the next fetch cycle.
 }
 
-// --- Omnibox event handlers ---
-let _omniboxApiDebounce = null;
-let _omniboxApiAbort = null;
-let _omniboxApiCounter = 0;
-let _omniboxSelectionMade = false;
-
-function showOmniboxDropdown(){
-  if(!omniboxDropdown) return;
-  omniboxDropdown.style.display = '';
-  // Re-anchor each time we open — the wrap's position may have shifted since
-  // the last setOmniboxLocation call (resize, layout reflow, etc.).
-  positionOmniboxDropdown();
-  omniboxInput?.setAttribute('aria-expanded', 'true');
-  if(!omniboxBackdrop){
-    omniboxBackdrop = document.createElement('div');
-    omniboxBackdrop.className = 'omnibox-backdrop';
-    // #149: tapping the backdrop is a "dismiss" gesture — clear input,
-    // close dropdown, and refocus. Was just close-only, which left a
-    // typed-but-want-to-abandon query stranded in the input. Wrapped in
-    // an arrow so the MouseEvent isn't passed as the opts arg.
-    omniboxBackdrop.addEventListener('click', ()=> clearOmnibox());
-  }
-  if(!omniboxBackdrop.parentNode) document.body.appendChild(omniboxBackdrop);
-}
-
-function closeOmniboxDropdown(){
-  if(omniboxDropdown) omniboxDropdown.style.display = 'none';
-  omniboxInput?.setAttribute('aria-expanded', 'false');
-  if(omniboxBackdrop?.parentNode) omniboxBackdrop.remove();
-}
-
-function completeOmniboxSelection(){
-  _omniboxSelectionMade = true;
-  if(omniboxInput) omniboxInput.value = '';
-  searchQuery = '';
-  if(omniboxClear) omniboxClear.style.display = 'none';
-  closeOmniboxDropdown();
-  if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
-  if(searchTakeoverActive) closeSearchTakeover();
-}
-
-function clearOmnibox(opts){
-  if(omniboxInput) omniboxInput.value = '';
-  searchQuery = '';
-  if(omniboxClear) omniboxClear.style.display = 'none';
-  closeOmniboxDropdown();
-  if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
-  if(omniboxShelfSection) omniboxShelfSection.style.display = 'none';
-  if(omniboxAddSection) omniboxAddSection.style.display = 'none';
-  if(omniboxManualAdd) omniboxManualAdd.style.display = 'none';
-  render();
-  // #149: keep focus in the input after a dismiss so the user can keep
-  // typing without an extra click. Backdrop/X/Escape all funnel here.
-  // Skipped when closing the mobile search takeover (Cancel button) —
-  // that path explicitly wants to blur to drop the on-screen keyboard.
-  if(opts?.refocus !== false) omniboxInput?.focus();
-}
-
-function renderOmniboxShelfResults(query){
-  if(!omniboxShelfResults) return;
-  const visible = entries.filter(e => e.status !== 'tombstoned');
-  const allBooks = visible;
-  const matches = filterBySearch(allBooks, query).slice(0, 5);
-  if(!matches.length){
-    if(omniboxShelfSection) omniboxShelfSection.style.display = 'none';
-    return;
-  }
-  if(omniboxShelfSection) omniboxShelfSection.style.display = '';
-  omniboxShelfResults.innerHTML = matches.map(e => {
-    const key = e.txid || e.id || '';
-    const coverDataUrl = e.coverImage ? `data:${e.mimeType||'image/jpeg'};base64,${e.coverImage}` : '';
-    const rs = normalizeReadingStatus(e);
-    let statusLabel = '', statusClass = '';
-    if(rs === READING_STATUS.READ){ statusLabel = 'Read'; statusClass = 'status-read'; }
-    else if(rs === READING_STATUS.READING){ statusLabel = 'Reading'; statusClass = 'status-reading'; }
-    else if(rs === READING_STATUS.WANT_TO_READ){ statusLabel = 'Want to Read'; statusClass = 'status-wtr'; }
-    const coverHtml = coverDataUrl
-      ? `<img src="${coverDataUrl}">`
-      : `<div class="omnibox-result-mini" style="background:${generatedCoverColor(e.title||'')}">${escapeHtml((e.title||'').slice(0,20))}</div>`;
-    return `<div class="omnibox-result" data-shelf-key="${escapeHtml(key)}">
-      <div class="omnibox-result-cover">${coverHtml}</div>
-      <div class="omnibox-result-info">
-        <div class="omnibox-result-title">${escapeHtml(e.title||'Untitled')}</div>
-        <div class="omnibox-result-author">${escapeHtml(e.author||'')}</div>
-      </div>
-      <span class="omnibox-result-status ${statusClass}">${statusLabel}</span>
-    </div>`;
-  }).join('');
-}
-
-function renderOmniboxApiSkeletons(){
-  if(!omniboxAddResults) return;
-  if(omniboxAddSection) omniboxAddSection.style.display = '';
-  omniboxAddResults.innerHTML = Array(3).fill(`<div class="omnibox-skeleton">
-    <div class="omnibox-skeleton-cover"></div>
-    <div class="omnibox-skeleton-text"><div class="omnibox-skeleton-line"></div><div class="omnibox-skeleton-line"></div></div>
-  </div>`).join('');
-}
-
-function renderOmniboxApiResults(results){
-  if(!omniboxAddResults) return;
-  if(!results.length){
-    omniboxAddResults.innerHTML = '';
-    return;
-  }
-  omniboxAddResults.innerHTML = results.slice(0, 8).map(r => {
-    const coverHtml = r.coverUrl
-      ? `<img src="${r.coverUrl}">`
-      : `<div class="omnibox-result-mini" style="background:${generatedCoverColor(r.title||'')}">${escapeHtml((r.title||'').slice(0,20))}</div>`;
-    const meta = [r.year, r.publisher, r.duration].filter(Boolean).join(' \u00B7 ');
-    // Friend-pip work_key attribution (#7 / FRIENDS.md Surface 4): both
-    // OL-source and iTunes-source results carry `work_key` directly on the
-    // merged result object - for OL it's the original `key`, for iTunes it's
-    // the cross-lookup transfer the merger applies when an OL row dedupes
-    // into the iTunes row. Stash it on the row so the post-render attach
-    // pass below can resolve matches via the friend-library cache. Empty /
-    // missing -> no attribute -> no pips (the spec's "quiet absence").
-    const workKey = (r.work_key && typeof r.work_key === 'string') ? r.work_key : '';
-    const wkAttr = workKey ? ` data-work-key='${escapeHtml(workKey)}'` : '';
-    return `<div class="omnibox-result" data-add-json='${encodeURIComponent(JSON.stringify(r))}'${wkAttr}>
-      <div class="omnibox-result-cover">${coverHtml}</div>
-      <div class="omnibox-result-info">
-        <div class="omnibox-result-title">${escapeHtml(r.title||'')}</div>
-        <div class="omnibox-result-author">${escapeHtml(r.author||'')}</div>
-        ${meta ? `<div class="omnibox-result-meta">${escapeHtml(meta)}</div>` : ''}
-      </div>
-      <button type="button" class="omnibox-result-add">+ Add</button>
-    </div>`;
-  }).join('');
-  // Attach friend pips per row (#7). Done as a post-render pass so the row
-  // markup stays a pure template string and the pip wiring (handler closure
-  // over the friend-book-detail modal) lives in JS, not in HTML attributes.
-  attachOmniboxResultPips();
-}
-
-/**
- * Attach (or refresh) the friend-pip overlay on each omnibox API result row
- * (#7 / FRIENDS.md Surface 4). Mirrors the Library-card `attachFriendPips`
- * pattern: idempotent, reads from the already-warm match cache, drops any
- * stale overlay before painting the next one.
- *
- * Why a separate post-render step rather than baking pip markup into the
- * template: the pip click handler needs a real function reference (to open
- * the friend-book-detail modal with the captured connection + book), not a
- * serialized JSON payload. Keeping pip wiring in JS also means the omnibox
- * template stays a pure string operation that the existing dedup / cross-
- * lookup / routing tests can reason about untouched.
- *
- * Modal-over-dropdown contract: tapping a pip opens the friend-book-detail
- * modal at z-index 5800. The omnibox dropdown sits at z-index 1001 and stays
- * mounted underneath - we deliberately do NOT call `closeOmniboxDropdown()`
- * on pip tap. When the user closes the modal, the dropdown is still open in
- * its prior state (input value + scroll position both preserved by virtue
- * of never having been touched). The pip's `stopPropagation` (in
- * friend-pip.js) prevents the row-level click from triggering the row's
- * "+ Add" navigation behind the modal.
- */
-function attachOmniboxResultPips(){
-  if(!omniboxAddResults) return;
-  const rows = omniboxAddResults.querySelectorAll('.omnibox-result[data-work-key]');
-  for(const row of rows){
-    // Drop stale overlay so a friend who removed the book / muted the
-    // connection between repaints sees their pip vanish on the next pass.
-    const existing = row.querySelector('.friend-pip-overlay');
-    if(existing) existing.remove();
-
-    const wk = row.dataset.workKey;
-    if(!wk) continue;
-    const matchEntries = friendsGetMatchingFriendBookEntries(wk);
-    if(!matchEntries.length) continue;
-
-    // Side map keyed by share_pub so the tap handler hands the friend's own
-    // book record (not the search result) to the friend-book-detail modal -
-    // matching the Library-card pip behavior in attachFriendPips. The friend's
-    // record carries their dateRead / readingStatus, which is the whole point
-    // of the modal.
-    const bookByShare = new Map();
-    for(const me of matchEntries){
-      bookByShare.set(me.connection.share_pub, me.book);
-    }
-    const connections = matchEntries.map(me => me.connection);
-
-    const overlay = renderPipOverlay(connections, {
-      onTapPip: (connection) => {
-        const friendBook = bookByShare.get(connection.share_pub);
-        if(!friendBook) return;
-        try {
-          openFriendBookDetail({ book: friendBook, connection });
-        } catch (err) {
-          console.warn('[Bookish] omnibox friend-pip tap failed to open modal:', err.message);
-        }
-      },
-    });
-    if(overlay){
-      // Mark the overlay so per-row CSS can switch from the Library card's
-      // edge-straddle position to a right-aligned inline layout (the omnibox
-      // row is a flex row with cover + info + Add button, not a card with a
-      // cover). The pip component itself is unchanged.
-      overlay.classList.add('friend-pip-overlay--inline');
-      // Insert BEFORE the "+ Add" button so the pips read as part of the
-      // row content, not after the call-to-action.
-      const addBtn = row.querySelector('.omnibox-result-add');
-      if(addBtn) row.insertBefore(overlay, addBtn);
-      else row.appendChild(overlay);
-    }
-  }
-}
-
-function searchOmniboxApis(query){
-  // #74: never fire external add-book searches while blocked.
-  if(subscription.isAddBlocked(activeEntryCount())){
-    renderOmniboxSubscribePrompt();
-    return;
-  }
-  if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
-  const controller = new AbortController();
-  _omniboxApiAbort = controller;
-  const signal = controller.signal;
-  const mySearch = ++_omniboxApiCounter;
-  const isStale = () => mySearch !== _omniboxApiCounter || signal.aborted;
-  const term = encodeURIComponent(query);
-  const fields = 'key,title,author_name,cover_i,first_publish_year,isbn,subtitle';
-  const olUrl = `https://openlibrary.org/search.json?q=${term}&limit=15&fields=${fields}`;
-  const itUrl = `https://itunes.apple.com/search?media=audiobook&term=${term}&limit=8`;
-
-  renderOmniboxApiSkeletons();
-
-  let olResults = [];
-  let itResults = [];
-  let olDone = false;
-  let itDone = false;
-
-  function mergeAndShow(){
-    if(isStale()) return;
-    renderOmniboxApiResults(mergeOmniboxResults({ itunesResults: itResults, olResults }));
-  }
-
-  fetch(olUrl, {signal}).then(r => r.json()).then(j => {
-    if(isStale()) return;
-    olResults = (j.docs || []).slice(0, 10).map(normalizeOLDoc);
-    olDone = true;
-    mergeAndShow();
-  }).catch(e => { if(e.name !== 'AbortError'){ olDone = true; mergeAndShow(); } });
-
-  fetch(itUrl, {signal}).then(r => r.json()).then(j => {
-    if(isStale()) return;
-    itResults = (j.results || []).slice(0, 6).map(normalizeItunesItem);
-    itDone = true;
-    mergeAndShow();
-  }).catch(e => { if(e.name !== 'AbortError'){ itDone = true; mergeAndShow(); } });
-}
-
-omniboxInput?.addEventListener('input', ()=>{
-  // If a selection was just made and the input fires because we cleared it, suppress
-  if(_omniboxSelectionMade) return;
-
-  const q = (omniboxInput.value || '').trim();
-  if(omniboxClear) omniboxClear.style.display = q ? '' : 'none';
-
-  // Always update shelf filter for card grid
-  clearTimeout(_searchDebounce);
-  _searchDebounce = setTimeout(()=>{
-    searchQuery = q;
-    render();
-  }, 150);
-
-  // Dropdown: show immediately with shelf results, debounce API
-  if(q.length > 0){
-    showOmniboxDropdown();
-    renderOmniboxShelfResults(q);
-    if(omniboxAddSection) omniboxAddSection.style.display = '';
-
-    // Subscription gate (#74): when at free limit or lapsed, replace API
-    // results with a subscribe/renew prompt and hide the manual-add path.
-    if(subscription.isAddBlocked(activeEntryCount())){
-      if(omniboxManualAdd) omniboxManualAdd.style.display = 'none';
-      if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
-      clearTimeout(_omniboxApiDebounce);
-      renderOmniboxCount(); // clears count when blocked state doesn't need it
-      renderOmniboxSubscribePrompt();
-    } else {
-      if(omniboxManualAdd) omniboxManualAdd.style.display = '';
-      renderOmniboxCount();
-      clearTimeout(_omniboxApiDebounce);
-      _omniboxApiDebounce = setTimeout(()=> searchOmniboxApis(q), 350);
-    }
-  } else {
-    closeOmniboxDropdown();
-    if(_omniboxApiAbort){ _omniboxApiAbort.abort(); _omniboxApiAbort = null; }
-  }
-});
-
-// #149: wrap to avoid passing the MouseEvent as the `opts` arg.
-omniboxClear?.addEventListener('click', ()=> clearOmnibox());
-
-// #149: rotating placeholder. Pick a random title from a small pool on
-// page load and set it as the omnibox placeholder. The omnibox input is
-// a single DOM element relocated between the header and the empty-state
-// slot, so setting the placeholder once reaches both contexts. Done once
-// at module-load — no re-roll on re-render (`per-page-load` cadence).
-if(omniboxInput){
-  try { omniboxInput.placeholder = pickRandomPlaceholder(); }
-  catch (err) { console.warn('[Bookish] omnibox placeholder rotation failed:', err?.message || err); }
-}
-
-// Clear selection guard when user explicitly re-engages with omnibox
-omniboxInput?.addEventListener('mousedown', ()=>{ _omniboxSelectionMade = false; });
-omniboxInput?.addEventListener('focus', ()=>{ _omniboxSelectionMade = false; });
-
-omniboxInput?.addEventListener('keydown', (ev)=>{
-  if(ev.key === 'Escape'){
-    ev.preventDefault();
-    // #149: unified dismiss — clear input, close dropdown, refocus, in a
-    // single gesture (matches backdrop click and X click). Was a tiered
-    // close-dropdown-only-first behavior that left typed queries stranded
-    // and required a second Escape to actually reset.
-    if(searchTakeoverActive){
-      // On the mobile search-takeover surface Escape mirrors the Cancel
-      // button: close the takeover (which calls clearOmnibox internally
-      // with refocus:false to drop the on-screen keyboard).
-      closeSearchTakeover();
-    } else {
-      clearOmnibox();
-    }
-  }
-});
-
-// Omnibox dropdown click delegation
-omniboxDropdown?.addEventListener('click', (ev)=>{
-  // Subscribe/Renew button inside the subscribe prompt (#74)
-  const subscribeBtn = ev.target.closest('[data-subscribe-action]');
-  if(subscribeBtn){
-    ev.preventDefault();
-    ev.stopPropagation();
-    startSubscribeCheckout();
-    return;
-  }
-  // Shelf result clicked — open edit modal
-  const shelfRow = ev.target.closest('[data-shelf-key]');
-  if(shelfRow){
-    const key = shelfRow.dataset.shelfKey;
-    const entry = entries.find(e => (e.txid||e.id) === key);
-    if(entry){
-      completeOmniboxSelection();
-      openModal(entry);
-    }
-    return;
-  }
-  // API result clicked — open add modal with pre-filled data
-  const addRow = ev.target.closest('[data-add-json]');
-  if(addRow){
-    try{
-      const meta = JSON.parse(decodeURIComponent(addRow.dataset.addJson));
-      completeOmniboxSelection();
-      openModal(null, READING_STATUS.WANT_TO_READ);
-      // Reserve the cover tile space immediately so the modal opens at its final
-      // size — selectItunes runs in a setTimeout below and would otherwise leave
-      // the modal in the compact (.no-cover) state for ~50ms before expanding.
-      // Also pre-hide changeCoverLink (which the cover pipeline will hide via
-      // showCoverNav() once the cover lands) so the layout doesn't shrink later.
-      const _inner = modal.querySelector('.modal-inner');
-      if(_inner) _inner.classList.remove('no-cover');
-      const _ph = document.getElementById('coverPlaceholder');
-      if(_ph){ _ph.style.display='flex'; _ph.innerHTML=''; _ph.classList.add('cover-skeleton-pulse'); }
-      const _changeLink = document.getElementById('changeCoverLink');
-      if(_changeLink) _changeLink.style.display='none';
-      const _coverActions = document.getElementById('coverActions');
-      if(_coverActions) _coverActions.style.display='none';
-      const _editionInfo = document.getElementById('editionInfo');
-      if(_editionInfo){ _editionInfo.style.display='block'; _editionInfo.textContent='Finding covers…'; }
-      // Directly select the book via book_search module (no search dropdown)
-      setTimeout(()=>{
-        // Pre-fill search input so it's ready if user wants to search later
-        const bsInput = document.getElementById('bookSearchInput');
-        if(bsInput){
-          bsInput.value = meta.title + (meta.author ? ' ' + meta.author : '');
-        }
-        if(meta.source === 'itunes' && window.bookSearch?.selectItunes){
-          window.bookSearch.selectItunes({
-            title: meta.title || '',
-            author: meta.author || '',
-            artwork: meta.artwork || meta.coverUrl || '',
-            olWorkKeys: meta.work_key ? [meta.work_key] : []
-          });
-        } else if(meta.source === 'ol' && window.bookSearch?.selectWork){
-          window.bookSearch.selectWork({
-            title: meta.title || '',
-            author: meta.author || '',
-            cover_url: meta.coverUrl || '',
-            key: meta.work_key || ''
-          });
-        } else {
-          // Fallback: populate form fields directly
-          if(form.title) form.title.value = meta.title || '';
-          if(form.author) form.author.value = meta.author || '';
-          if(meta.source === 'itunes') form.format.value = 'audio';
-          form.dispatchEvent(new Event('input', {bubbles:true}));
-        }
-      }, 50);
-    }catch(e){}
-    return;
-  }
-});
-
-omniboxManualAdd?.addEventListener('click', ()=>{
-  const q = (omniboxInput?.value || '').trim();
-  completeOmniboxSelection();
+function openOmniboxApiResult(meta){
   openModal(null, READING_STATUS.WANT_TO_READ);
-  // Pre-fill title with search query
+
+  // Reserve the cover tile space immediately so the modal opens at its final
+  // size. selectItunes/selectWork runs below and would otherwise leave the
+  // modal in the compact (.no-cover) state briefly.
+  const inner = modal.querySelector('.modal-inner');
+  if(inner) inner.classList.remove('no-cover');
+  const placeholder = document.getElementById('coverPlaceholder');
+  if(placeholder){ placeholder.style.display='flex'; placeholder.innerHTML=''; placeholder.classList.add('cover-skeleton-pulse'); }
+  const changeLink = document.getElementById('changeCoverLink');
+  if(changeLink) changeLink.style.display='none';
+  const coverActions = document.getElementById('coverActions');
+  if(coverActions) coverActions.style.display='none';
+  const editionInfo = document.getElementById('editionInfo');
+  if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers\u2026'; }
+
   setTimeout(()=>{
-    if(form.title && q) form.title.value = q;
+    const bsInput = document.getElementById('bookSearchInput');
+    if(bsInput){
+      bsInput.value = meta.title + (meta.author ? ' ' + meta.author : '');
+    }
+    if(meta.source === 'itunes' && window.bookSearch?.selectItunes){
+      window.bookSearch.selectItunes({
+        title: meta.title || '',
+        author: meta.author || '',
+        artwork: meta.artwork || meta.coverUrl || '',
+        olWorkKeys: meta.work_key ? [meta.work_key] : []
+      });
+    } else if(meta.source === 'ol' && window.bookSearch?.selectWork){
+      window.bookSearch.selectWork({
+        title: meta.title || '',
+        author: meta.author || '',
+        cover_url: meta.coverUrl || '',
+        key: meta.work_key || ''
+      });
+    } else {
+      if(form.title) form.title.value = meta.title || '';
+      if(form.author) form.author.value = meta.author || '';
+      if(meta.source === 'itunes') form.format.value = 'audio';
+      form.dispatchEvent(new Event('input', {bubbles:true}));
+    }
+  }, 50);
+}
+
+function openOmniboxManualAdd(query){
+  openModal(null, READING_STATUS.WANT_TO_READ);
+  setTimeout(()=>{
+    if(form.title && query) form.title.value = query;
     form.dispatchEvent(new Event('input', {bubbles:true}));
   }, 50);
-});
-
-// --- Mobile search takeover (#80) ---
-function openSearchTakeover(){
-  if(!mainHeader || !isTouchDevice || searchTakeoverActive) return;
-  searchTakeoverActive = true;
-  mainHeader.classList.add('search-takeover');
-  if(omniboxWrap) omniboxWrap.style.display = '';
-  pushOverlayState('search');
-  // Focus input after transition
-  setTimeout(()=>{
-    omniboxInput?.focus();
-  }, 50);
 }
 
-function closeSearchTakeover(fromPopstate){
-  if(!mainHeader || !searchTakeoverActive) return;
-  searchTakeoverActive = false;
-  // Blur input first to close keyboard
-  omniboxInput?.blur();
-  mainHeader.classList.remove('search-takeover');
-  // Clear and close dropdown. `refocus:false` so we don't re-open the
-  // mobile keyboard we just dismissed via blur() above (#149).
-  clearOmnibox({ refocus: false });
-  if(!fromPopstate) popOverlayState();
-}
-
-headerSearchBtn?.addEventListener('click', ()=>{
-  openSearchTakeover();
+// --- Omnibox controller (#157) ---
+const omniboxController = createOmniboxController({
+  refs: {
+    wrap: omniboxWrap,
+    input: omniboxInput,
+    clearBtn: omniboxClear,
+    dropdown: omniboxDropdown,
+    shelfSection: omniboxShelfSection,
+    shelfResults: omniboxShelfResults,
+    addSection: omniboxAddSection,
+    addResults: omniboxAddResults,
+    manualAdd: omniboxManualAdd,
+    mainHeader,
+    headerSearchBtn,
+    headerSearchCancel,
+  },
+  getEntries: () => entries,
+  setSearchQuery: (query) => { searchQuery = query; },
+  onSearchQueryChange: (query) => {
+    searchQuery = query;
+    render();
+  },
+  onRender: () => render(),
+  normalizeReadingStatus,
+  readingStatus: READING_STATUS,
+  subscription,
+  getActiveEntryCount: () => activeEntryCount(),
+  onSubscribeAction: () => startSubscribeCheckout(),
+  onOpenShelfEntry: (entry) => openModal(entry),
+  onOpenApiResult: openOmniboxApiResult,
+  onManualAdd: openOmniboxManualAdd,
+  getMatchingFriendBookEntries: friendsGetMatchingFriendBookEntries,
+  openFriendBookDetail,
+  pushOverlayState,
+  popOverlayState,
+  isTouchDevice,
+  documentRef: document,
+  windowRef: window,
+  onWarn: (...args) => console.warn(...args),
 });
 
-headerSearchCancel?.addEventListener('click', ()=>{
-  closeSearchTakeover();
-});
+function setOmniboxVisible(visible){ omniboxController.setVisible(visible); }
+function setOmniboxLocation(location){ omniboxController.setLocation(location); }
+function positionOmniboxDropdown(){ omniboxController.positionDropdown(); }
+function closeOmniboxDropdown(){ omniboxController.closeDropdown(); }
+function completeOmniboxSelection(){ omniboxController.completeSelection(); }
+function clearOmnibox(opts){ omniboxController.clear(opts); }
+function attachOmniboxResultPips(){ omniboxController.attachResultPips(); }
+function openSearchTakeover(){ omniboxController.openSearchTakeover(); }
+function closeSearchTakeover(fromPopstate){ omniboxController.closeSearchTakeover(fromPopstate); }
 
 // --- View Transition helpers ---
 function prefersReducedMotion(){
@@ -3035,7 +2551,7 @@ if (isStandalone && isTouchDevice) {
       onRefresh: () => triggerSyncNow(),
       isOverlayOpen: () =>
         document.body.classList.contains('modal-open') ||
-        searchTakeoverActive ||
+        omniboxController.isSearchTakeoverActive() ||
         (notesOverlay && notesOverlay.style.display === 'flex') ||
         (wtrOverlay && wtrOverlay.style.display === 'block'),
     });
