@@ -28,6 +28,14 @@ import {
   startReplaceAccountKeyFlow as startReplaceAccountKeyFlowModule,
   startViewAccountKeyFlow as startViewAccountKeyFlowModule,
 } from './components/account_key_flows.js';
+import {
+  createPasskeySupportProbe,
+  humanizePasskeyDate,
+  hydratePasskeysSection as hydratePasskeySettingsSection,
+  showPasskeyAddedAffirmation,
+  suggestDeviceLabel,
+  truncateCredentialId,
+} from './components/account_passkey_settings.js';
 
 // Track the swipe-dismiss cleanup so we can detach on close.
 let _accountResetSwipe = null;
@@ -37,6 +45,11 @@ const SVG_EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" str
 const SVG_EYE_OFF = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 const SVG_EDIT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 const SVG_DOWNLOAD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+
+const passkeySupportProbe = createPasskeySupportProbe({
+  isSupported: () => tarnService.passkeys.isSupported(),
+  onWarn: (...args) => console.warn(...args),
+});
 
 /**
  * Full logout: stop sync, clear Tarn session, clear IndexedDB cache,
@@ -742,408 +755,24 @@ function wireAccountSecuritySection(content) {
 // Passkeys (recovery v2 — phase 3)
 // ----------------------------------------------------------------------------
 
-/**
- * Module-level cache for `tarnService.passkeys.isSupported()`. The probe
- * is cheap but not free (it walks `PublicKeyCredential` and platform-
- * authenticator availability), and the answer is stable for the page
- * lifetime — so cache it the first time the panel mounts and reuse on
- * subsequent renders.
- *
- * `null` means "not yet probed". `true` / `false` are settled values.
- *
- * @type {boolean | null}
- */
-let _passkeysSupportedCache = null;
-/** @type {Promise<boolean> | null} — in-flight probe, deduped */
-let _passkeysSupportedProbe = null;
-
 async function getPasskeysSupported() {
-  if (_passkeysSupportedCache !== null) return _passkeysSupportedCache;
-  if (!_passkeysSupportedProbe) {
-    _passkeysSupportedProbe = (async () => {
-      try {
-        const ok = await tarnService.passkeys.isSupported();
-        _passkeysSupportedCache = !!ok;
-        return _passkeysSupportedCache;
-      } catch (err) {
-        console.warn('[AccountUI] passkeys.isSupported probe failed:', err?.message || err);
-        _passkeysSupportedCache = false;
-        return false;
-      }
-    })();
-  }
-  return _passkeysSupportedProbe;
+  return passkeySupportProbe.getPasskeysSupported();
 }
 
-/**
- * Render the Registered passkeys block. Two paths:
- *   - `isSupported()` resolves false → render a single muted line.
- *   - `isSupported()` resolves true  → render subtitle + desc + list
- *     placeholder + Add button, then asynchronously fetch and render the
- *     list.
- *
- * Idempotent: safe to call multiple times against the same panel; later
- * calls re-render the block in place.
- */
+function passkeySettingsDeps() {
+  return {
+    passkeys: tarnService.passkeys,
+    getPasskeysSupported,
+    createOverlay,
+    confirmDialog,
+    requestPasswordConfirmation,
+    humanizeAccountKeyError,
+    onWarn: (...args) => console.warn(...args),
+  };
+}
+
 async function hydratePasskeysSection(content) {
-  const block = content.querySelector('#accountPasskeysBlock');
-  if (!block) return;
-
-  const supported = await getPasskeysSupported();
-  if (!supported) {
-    // #146: keep the subtitle so the block reads as a sibling of Account
-    // key / Username & password, not as an orphaned muted line. Without
-    // it, the block visually "floats" between two clearly-titled blocks.
-    block.innerHTML = `
-      <div class="account-security-subtitle">Passkeys</div>
-      <div class="account-security-desc account-passkeys-unsupported">Passkeys aren't supported on this browser. Try a recent Chrome, Safari, or Edge.</div>
-    `;
-    return;
-  }
-
-  block.innerHTML = `
-    <div class="account-security-subtitle">Registered passkeys</div>
-    <div class="account-security-desc">Sign in with Touch ID, Face ID, or Windows Hello instead of typing your password. Each device you register here can sign in independently.</div>
-    <ul class="account-passkeys-list" id="accountPasskeysList" aria-live="polite">
-      <li class="account-passkeys-loading">Loading passkeys&hellip;</li>
-    </ul>
-    <div class="account-security-error" id="accountPasskeysError" style="display:none;"></div>
-    <div class="account-security-actions">
-      <button type="button" id="addPasskeyBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Add passkey</button>
-    </div>
-  `;
-
-  const addBtn = block.querySelector('#addPasskeyBtn');
-  if (addBtn) {
-    addBtn.addEventListener('click', () => startAddPasskeyFlow(content));
-  }
-
-  // Initial fetch + render. Errors are surfaced inline via the error slot.
-  await refreshPasskeysList(content);
-}
-
-/**
- * Fetch the latest passkey list from the SDK and re-render the list rows.
- * Keeps the loading placeholder up while the request is in flight. On
- * error, replaces the list with an empty-state and surfaces the message
- * in the inline error slot so retries are visible.
- */
-async function refreshPasskeysList(content) {
-  const listEl = content.querySelector('#accountPasskeysList');
-  const errorEl = content.querySelector('#accountPasskeysError');
-  if (!listEl) return;
-  // Don't blow away the placeholder if we already have rows — show a
-  // minimal "Refreshing…" hint instead so the list doesn't visibly flash
-  // empty between fetches.
-  const hasRows = !!listEl.querySelector('[data-credential-id]');
-  if (!hasRows) {
-    listEl.innerHTML = `<li class="account-passkeys-loading">Loading passkeys&hellip;</li>`;
-  }
-
-  let entries;
-  try {
-    entries = await tarnService.passkeys.list();
-  } catch (err) {
-    console.warn('[AccountUI] passkeys.list failed:', err?.message || err);
-    listEl.innerHTML = '';
-    if (errorEl) {
-      errorEl.textContent = humanizeAccountKeyError(err, { phraseFlow: false });
-      errorEl.style.display = 'block';
-    }
-    return;
-  }
-  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
-
-  if (!Array.isArray(entries) || entries.length === 0) {
-    listEl.innerHTML = `<li class="account-passkeys-empty">No passkeys yet. Add one for faster sign-in.</li>`;
-    return;
-  }
-
-  // Per ACCOUNT_SECURITY_PLAN.md: deliberately do NOT surface the `stale`
-  // flag. Just-in-time repair handles staleness transparently at sign-in.
-  // The flag is read off the entry but never used to decorate the row.
-  listEl.innerHTML = entries.map(entry => {
-    const labelText = entry.deviceLabel
-      ? entry.deviceLabel
-      : truncateCredentialId(entry.credentialId);
-    // Build a single-line metadata string from whichever of the two
-    // pieces are present. Both, one, or neither — the joiner only
-    // appears when both halves exist. "Never used" is a sentinel that
-    // shouldn't be prefixed with "Last used "; pass it through verbatim.
-    const lastUsed = humanizePasskeyDate(entry.lastUsedAt, { neverText: 'Never used' });
-    const created = humanizePasskeyDate(entry.createdAt, { neverText: '' });
-    const lastUsedText = !lastUsed
-      ? ''
-      : lastUsed === 'Never used'
-        ? 'Never used'
-        : `Last used ${lastUsed.charAt(0).toLowerCase() + lastUsed.slice(1)}`;
-    const createdText = created ? `Added ${created}` : '';
-    const metaLine = [createdText, lastUsedText].filter(Boolean).join(' · ');
-    return `
-      <li class="account-passkeys-row" data-credential-id="${escapeHtml(entry.credentialId)}">
-        <div class="account-passkeys-row-main">
-          <div class="account-passkeys-row-label">${escapeHtml(labelText)}</div>
-          ${metaLine ? `<div class="account-passkeys-row-meta">${escapeHtml(metaLine)}</div>` : ''}
-        </div>
-        <button type="button" class="account-panel-sub-btn account-panel-sub-btn-secondary account-passkeys-remove" data-action="remove-passkey">Remove</button>
-      </li>
-    `;
-  }).join('');
-
-  // Wire Remove buttons. Each row owns its credentialId via data-attr so
-  // we don't need a closure per row.
-  listEl.querySelectorAll('[data-action="remove-passkey"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const row = btn.closest('[data-credential-id]');
-      if (!row) return;
-      const credentialId = row.getAttribute('data-credential-id');
-      const labelEl = row.querySelector('.account-passkeys-row-label');
-      const deviceLabel = labelEl ? labelEl.textContent : credentialId;
-      startRemovePasskeyFlow(content, { credentialId, deviceLabel });
-    });
-  });
-}
-
-function truncateCredentialId(id) {
-  if (!id || typeof id !== 'string') return 'Unnamed passkey';
-  return id.slice(0, 8) + '…';
-}
-
-/**
- * Humanize a millisecond timestamp into a relative or short-date string.
- *
- * Buckets:
- *   - null / 0 / falsy → opts.neverText (default 'Never')
- *   - < 1 minute       → 'Just now'
- *   - < 1 hour         → 'N min ago'
- *   - < 1 day          → 'N hour(s) ago'
- *   - < 2 days         → 'Yesterday'
- *   - < 1 year         → short month-day, e.g. 'May 4'
- *   - older            → short month-day-year, e.g. 'May 4, 2025'
- *
- * Exported via the testing seam in tests/passkeys_settings.test.js (see
- * the helper export at the bottom of this file).
- *
- * @param {number | null | undefined} ts
- * @param {{ neverText?: string, now?: number }} [opts]
- * @returns {string}
- */
-function humanizePasskeyDate(ts, opts = {}) {
-  const neverText = opts.neverText !== undefined ? opts.neverText : 'Never';
-  if (ts == null || ts === 0) return neverText;
-  const now = opts.now != null ? opts.now : Date.now();
-  const delta = now - ts;
-  if (delta < 60 * 1000) return 'Just now';
-  if (delta < 60 * 60 * 1000) {
-    const m = Math.floor(delta / (60 * 1000));
-    return `${m} min ago`;
-  }
-  if (delta < 24 * 60 * 60 * 1000) {
-    const h = Math.floor(delta / (60 * 60 * 1000));
-    return `${h} ${h === 1 ? 'hour' : 'hours'} ago`;
-  }
-  if (delta < 2 * 24 * 60 * 60 * 1000) return 'Yesterday';
-  const d = new Date(ts);
-  const sameYear = new Date(now).getFullYear() === d.getFullYear();
-  const monthDay = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  if (sameYear && delta < 365 * 24 * 60 * 60 * 1000) return monthDay;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-/**
- * Suggest a default device label based on platform hints. Prefers
- * `navigator.userAgentData.platform` (modern UA Client Hints), falls back
- * to a small UA-string parse. Intentionally short — no UA-parser
- * dependency. Returns one of: "iPhone", "iPad", "Mac", "Windows PC",
- * "Android", "This device".
- */
-function suggestDeviceLabel() {
-  try {
-    const uad = typeof navigator !== 'undefined' && navigator.userAgentData;
-    const platform = (uad && typeof uad.platform === 'string' ? uad.platform : '') || '';
-    if (/^macOS$/i.test(platform)) return 'Mac';
-    if (/^Windows$/i.test(platform)) return 'Windows PC';
-    if (/^Android$/i.test(platform)) return 'Android';
-    const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-    if (/iPad/i.test(ua)) return 'iPad';
-    if (/iPhone|iPod/i.test(ua)) return 'iPhone';
-    if (/Android/i.test(ua)) return 'Android';
-    if (/Mac OS X|Macintosh/i.test(ua)) return 'Mac';
-    if (/Windows/i.test(ua)) return 'Windows PC';
-    return 'This device';
-  } catch {
-    return 'This device';
-  }
-}
-
-/**
- * Start the Add-passkey flow. Opens the dialog with a UA-suggested
- * device-label pre-fill; on submit calls `passkeys.register` (which
- * triggers the WebAuthn prompt). On success, re-renders the list. On
- * failure (user-cancel, hardware unavailable, etc.) closes the dialog
- * and shows an inline error in the section.
- */
-async function startAddPasskeyFlow(content) {
-  const errorEl = content.querySelector('#accountPasskeysError');
-  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
-
-  const result = await openAddPasskeyDialog({
-    suggestion: suggestDeviceLabel(),
-  });
-  if (!result || !result.deviceLabel) return; // cancelled
-
-  try {
-    await tarnService.passkeys.register({ deviceLabel: result.deviceLabel });
-  } catch (err) {
-    console.warn('[AccountUI] passkeys.register failed:', err?.message || err);
-    if (errorEl) {
-      errorEl.textContent = humanizePasskeyError(err);
-      errorEl.style.display = 'block';
-    }
-    return;
-  }
-  await refreshPasskeysList(content);
-  showPasskeyAddedAffirmation(content);
-}
-
-/**
- * Show a transient success affirmation after a passkey is registered.
- * Appears as a sibling above the list; auto-dismisses after 3s. Idempotent —
- * re-uses the same element if called repeatedly so we don't leak nodes.
- */
-function showPasskeyAddedAffirmation(content) {
-  const listEl = content.querySelector('#accountPasskeysList');
-  if (!listEl || !listEl.parentNode) return;
-
-  let el = content.querySelector('.account-passkeys-success');
-  if (!el) {
-    el = document.createElement('div');
-    el.className = 'account-passkeys-success';
-    el.setAttribute('role', 'status');
-    listEl.parentNode.insertBefore(el, listEl);
-  }
-  el.textContent = '✓ Passkey added — sign in faster next time.';
-  el.style.display = 'block';
-
-  // Reset any pending dismiss timer so the affirmation stays visible for
-  // a full 3s after the most recent add.
-  if (el._dismissTimer) clearTimeout(el._dismissTimer);
-  el._dismissTimer = setTimeout(() => {
-    el.style.display = 'none';
-    el._dismissTimer = null;
-  }, 3000);
-}
-
-/**
- * Start the Remove-passkey flow. Confirmation dialog → password prompt
- * (reuses `requestPasswordConfirmation` from Phase 2) → SDK call →
- * re-render. Wrong-password / step-up errors stay in the password
- * dialog (per the existing helper); other errors surface inline in the
- * section.
- */
-async function startRemovePasskeyFlow(content, { credentialId, deviceLabel }) {
-  const errorEl = content.querySelector('#accountPasskeysError');
-  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
-
-  const confirmed = await confirmDialog({
-    title: 'Remove this passkey?',
-    body: `Remove "${deviceLabel}"? You won't be able to sign in with this passkey on this device anymore.`,
-    confirmLabel: 'Remove',
-  });
-  if (!confirmed) return;
-
-  const ok = await requestPasswordConfirmation({
-    title: 'Confirm your password',
-    body: 'Re-enter your password to remove this passkey.',
-    confirmLabel: 'Remove passkey',
-    submit: async (password) => {
-      await tarnService.passkeys.remove({ credentialId, password });
-      return true;
-    },
-  });
-  if (!ok) return;
-  await refreshPasskeysList(content);
-}
-
-/**
- * Translate a passkey-side error into a user-facing string. Reuses the
- * step-up / wrong-password / network mappings from
- * `humanizeAccountKeyError` and adds passkey-specific cases (user
- * cancelled the WebAuthn prompt, no platform authenticator available).
- */
-function humanizePasskeyError(err) {
-  const msg = err?.message || '';
-  const name = err?.name || '';
-  // WebAuthn user-cancel: NotAllowedError on most browsers.
-  if (name === 'NotAllowedError' || /not allowed|user cancelled|user canceled|cancelled by user/i.test(msg)) {
-    return 'The passkey prompt was cancelled. Try again when ready.';
-  }
-  if (name === 'InvalidStateError' || /already registered|excluded/i.test(msg)) {
-    return 'This device already has a passkey registered. Try a different label or remove the existing one first.';
-  }
-  if (name === 'NotSupportedError' || /not supported|no authenticator|prf/i.test(msg)) {
-    return "This device can't register a passkey right now. Make sure your platform authenticator (Touch ID / Windows Hello / security key) is set up.";
-  }
-  // Fall through to the shared mapping for step-up / network / generic.
-  return humanizeAccountKeyError(err, { phraseFlow: false });
-}
-
-/**
- * Open the Add-passkey dialog. Resolves with `{ deviceLabel }` on
- * confirm, `null` on cancel/backdrop dismiss. The returned label is
- * trimmed; an empty trimmed value blocks the confirm button.
- *
- * @param {{ suggestion: string }} opts
- * @returns {Promise<{ deviceLabel: string } | null>}
- */
-function openAddPasskeyDialog({ suggestion }) {
-  return new Promise((resolve) => {
-    const overlay = createOverlay();
-    overlay.innerHTML = `
-      <div class="security-overlay-card" role="dialog" aria-modal="true">
-        <h2 class="security-overlay-title">Add a passkey</h2>
-        <p class="security-overlay-body">You'll see a system prompt next — Touch ID, Face ID, or Windows Hello — to confirm.</p>
-        <div class="form-group">
-          <label for="addPasskeyLabel">Name this device</label>
-          <input type="text" id="addPasskeyLabel" autocomplete="off" maxlength="64" />
-        </div>
-        <div class="security-overlay-actions">
-          <button type="button" class="btn secondary" data-cancel>Cancel</button>
-          <button type="button" class="btn primary" data-confirm>Add</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    const card = overlay.querySelector('.security-overlay-card');
-    const input = overlay.querySelector('#addPasskeyLabel');
-    const confirmBtn = overlay.querySelector('[data-confirm]');
-    const cancelBtn = overlay.querySelector('[data-cancel]');
-    input.value = suggestion || '';
-    const validate = () => {
-      confirmBtn.disabled = input.value.trim().length === 0;
-    };
-    validate();
-    const cleanup = (val) => { overlay.remove(); resolve(val); };
-    input.addEventListener('input', validate);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !confirmBtn.disabled) {
-        e.preventDefault();
-        confirmBtn.click();
-      }
-    });
-    confirmBtn.addEventListener('click', () => {
-      const label = input.value.trim();
-      if (!label) return;
-      cleanup({ deviceLabel: label });
-    });
-    cancelBtn.addEventListener('click', () => cleanup(null));
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(null); });
-    card.addEventListener('click', (e) => e.stopPropagation());
-    requestAnimationFrame(() => {
-      input.focus({ preventScroll: true });
-      input.select();
-    });
-  });
+  return hydratePasskeySettingsSection(content, passkeySettingsDeps());
 }
 
 /**
@@ -1810,8 +1439,5 @@ export const __test__ = {
   humanizeCredentialChangeError,
   promptStalePasskeyRepair,
   showPasskeyAddedAffirmation,
-  resetPasskeysSupportedCache: () => {
-    _passkeysSupportedCache = null;
-    _passkeysSupportedProbe = null;
-  },
+  resetPasskeysSupportedCache: () => passkeySupportProbe.resetPasskeysSupportedCache(),
 };
