@@ -23,6 +23,11 @@ import {
   renderCreateAccountForm as renderCreateAccountAuthForm,
   renderSignInForm as renderSignInAuthForm,
 } from './components/account_auth_flows.js';
+import {
+  renderAccountKeyView as renderAccountKeyReveal,
+  startReplaceAccountKeyFlow as startReplaceAccountKeyFlowModule,
+  startViewAccountKeyFlow as startViewAccountKeyFlowModule,
+} from './components/account_key_flows.js';
 
 // Track the swipe-dismiss cleanup so we can detach on close.
 let _accountResetSwipe = null;
@@ -30,7 +35,6 @@ let _accountResetSwipe = null;
 // SVG icons for auth forms
 const SVG_EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const SVG_EYE_OFF = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
-const SVG_SHIELD = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`;
 const SVG_EDIT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 const SVG_DOWNLOAD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 
@@ -233,104 +237,8 @@ function completePostCreateAccount(content, { email, accountKey }) {
 // ACCOUNT KEY VIEW (post-register)
 // ============================================================================
 
-/**
- * Build the inner markup for the 24-word account-key grid. Used by signup
- * reveal, Settings → View account key, and Settings → Replace account key
- * (post-rotate). Returns the HTML string for the grid + copy row; the
- * caller wraps it in whatever surrounding chrome it needs (auth-header,
- * action button, etc.) and is responsible for wiring the copy button.
- *
- * @param {string} accountKey 24-word string
- * @returns {string} HTML
- */
-function buildAccountKeyGridMarkup(accountKey) {
-  const words = accountKey.trim().split(/\s+/);
-  const wordCells = words.map((w, i) => {
-    const n = String(i + 1).padStart(2, '0');
-    return `<li class="account-key-word"><span class="account-key-word-num">${n}</span><span class="account-key-word-text">${escapeHtml(w)}</span></li>`;
-  }).join('');
-  return `
-    <ol class="account-key-grid">${wordCells}</ol>
-    <div class="account-key-actions-row">
-      <button data-account-key-copy type="button" class="btn secondary">Copy words</button>
-    </div>
-  `;
-}
-
-/**
- * Wire the copy button (`[data-account-key-copy]`) inside `root` to copy
- * `accountKey` to the clipboard, with transient feedback on the button.
- */
-function wireAccountKeyCopyButton(root, accountKey) {
-  const copyBtn = root.querySelector('[data-account-key-copy]');
-  if (!copyBtn) return;
-  copyBtn.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(accountKey);
-      copyBtn.textContent = 'Copied';
-      setTimeout(() => { copyBtn.textContent = 'Copy words'; }, 1500);
-    } catch {
-      copyBtn.textContent = "Couldn't copy";
-      setTimeout(() => { copyBtn.textContent = 'Copy words'; }, 1500);
-    }
-  });
-}
-
-/**
- * Render the post-register account-key reveal. Shows the 24 words in a
- * numbered grid plus a copy button. The Continue button is enabled by
- * default; only Continue triggers the post-signup handoff.
- *
- * Close-via-X / backdrop / swipe-dismiss close the modal via the normal
- * modal-close path but DO NOT fire `onContinue()`. Tapping X means
- * "close this dialog, I'm not done with it" — not "I've saved the key,
- * take me into the app." If the user dismisses without tapping
- * Continue, they're still logged in (the account exists) and can
- * re-open Settings → Account & Security to view the key any time.
- *
- * No save-proof gate: the user can view this key again any time from
- * Settings (recovery v2, Model B by default). Type-back or checkbox
- * gating at signup is security theater that retrieval-from-Settings
- * solves more cleanly.
- *
- * @param {HTMLElement} content
- * @param {{
- *   accountKey: string,
- *   onContinue: () => void,
- * }} opts
- */
 function renderAccountKeyView(content, opts) {
-  const { accountKey, onContinue } = opts;
-
-  content.innerHTML = `
-    <div class="auth-form account-key-view">
-      <div class="auth-header">
-        <div class="auth-icon">${SVG_SHIELD}</div>
-        <h2>Your account key</h2>
-        <p>Save these 24 words somewhere safe — a password manager works well. We can't reset your account for you, but you can view this key again any time in Settings → Account &amp; Security.</p>
-      </div>
-
-      ${buildAccountKeyGridMarkup(accountKey)}
-
-      <button id="accountKeyContinueBtn" class="btn primary auth-submit">
-        Continue to Bookish
-      </button>
-    </div>
-  `;
-
-  const continueBtn = content.querySelector('#accountKeyContinueBtn');
-  wireAccountKeyCopyButton(content, accountKey);
-
-  // Only Continue triggers the handoff. X / backdrop / swipe-dismiss
-  // close via the modal's existing close listeners (no handoff fires).
-  // The `fired` guard is still useful because a fast double-tap on
-  // Continue could otherwise run the handoff twice.
-  let fired = false;
-  continueBtn.addEventListener('click', () => {
-    if (fired) return;
-    fired = true;
-    onContinue();
-  });
+  renderAccountKeyReveal(content, opts);
 }
 
 // ============================================================================
@@ -1265,114 +1173,22 @@ function humanizeAccountKeyError(err, { phraseFlow }) {
   return 'Something went wrong. Please try again.';
 }
 
-/**
- * Start the View account key flow: password prompt (with inline-error
- * retry) → SDK call → grid overlay. The password dialog stays open on
- * wrong-password attempts; cancel aborts the flow.
- *
- * Accepts an optional `onCompleted` callback fired ONLY when the user
- * has successfully reached the result overlay AND tapped the Done
- * button — i.e. the user has actually seen the words. Cancel from the
- * password prompt, wrong-password retry that the user abandons, or any
- * thrown error all leave `onCompleted` un-fired. Used by the Phase 5
- * engagement-milestone reminder to mark the key as "saved".
- *
- * Exported so the reminder module can invoke it without going through
- * the Settings → Account & Security panel.
- *
- * @param {{ onCompleted?: () => void }} [opts]
- */
+function accountKeyFlowDeps() {
+  return {
+    tarnService,
+    confirmDialog,
+    createOverlay,
+    requestPasswordConfirmation,
+    onWarn: (...args) => console.warn(...args),
+  };
+}
+
 export async function startViewAccountKeyFlow(opts = {}) {
-  const { onCompleted } = opts;
-  const result = await requestPasswordConfirmation({
-    title: 'View your account key',
-    body: 'Re-enter your password to see your 24-word account key.',
-    confirmLabel: 'Show account key',
-    submit: async (password) => tarnService.accountKey.view({ password }),
-  });
-  if (!result || !result.accountKey) return;
-  showAccountKeyResultOverlay({
-    heading: 'Your account key',
-    body: "Save these 24 words somewhere safe — a password manager works well. We won't be able to give them to you again if you lose them.",
-    accountKey: result.accountKey,
-    onDone: typeof onCompleted === 'function' ? onCompleted : undefined,
-  });
+  return startViewAccountKeyFlowModule(opts, accountKeyFlowDeps());
 }
 
-/**
- * Start the Replace account key flow: confirmation → password (with
- * inline-error retry) → rotate → new grid. The confirmation copy spells
- * out that the saved 24 words stop working.
- */
 async function startReplaceAccountKeyFlow() {
-  const confirmed = await confirmDialog({
-    title: 'Replace your account key?',
-    body: "Your saved 24 words will stop working. We'll show you a new account key — save it somewhere safe before continuing.",
-    confirmLabel: 'Continue',
-  });
-  if (!confirmed) return;
-
-  const result = await requestPasswordConfirmation({
-    title: 'Confirm your password',
-    body: 'Re-enter your password to replace your account key.',
-    confirmLabel: 'Replace account key',
-    submit: async (password) => tarnService.accountKey.rotate({ password }),
-  });
-  if (!result || !result.accountKey) return;
-  showAccountKeyResultOverlay({
-    heading: 'Your new account key',
-    body: 'Your old 24 words no longer work. Save these new 24 words somewhere safe before closing this screen.',
-    accountKey: result.accountKey,
-  });
-}
-
-// ----------------------------------------------------------------------------
-// Account-key result overlay (View / Replace shared)
-// ----------------------------------------------------------------------------
-
-/**
- * Show the 24-word grid in a full overlay above the account panel. The
- * Done button removes the overlay and returns the user to the panel.
- *
- * The optional `onDone` callback fires ONLY when the user taps Done —
- * not on overlay teardown via other paths (there are none today, but
- * this contract is documented so future changes don't break callers
- * that depend on "Done = user actually saw the words"). Used by the
- * Phase 5 engagement reminder to mark the account key as saved.
- *
- * @param {{
- *   heading: string,
- *   body: string,
- *   accountKey: string,
- *   onDone?: () => void,
- * }} opts
- */
-function showAccountKeyResultOverlay(opts) {
-  const overlay = createOverlay('account-key-result-overlay');
-  overlay.innerHTML = `
-    <div class="security-overlay-card">
-      <div class="auth-header">
-        <div class="auth-icon">${SVG_SHIELD}</div>
-        <h2>${escapeHtml(opts.heading)}</h2>
-        <p>${escapeHtml(opts.body)}</p>
-      </div>
-      ${buildAccountKeyGridMarkup(opts.accountKey)}
-      <button type="button" data-overlay-done class="btn primary auth-submit">Done</button>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  wireAccountKeyCopyButton(overlay, opts.accountKey);
-  const done = overlay.querySelector('[data-overlay-done]');
-  if (done) {
-    done.addEventListener('click', () => {
-      overlay.remove();
-      if (typeof opts.onDone === 'function') {
-        try { opts.onDone(); } catch (err) {
-          console.warn('[AccountUI] onDone callback threw:', err?.message || err);
-        }
-      }
-    });
-  }
+  return startReplaceAccountKeyFlowModule(accountKeyFlowDeps());
 }
 
 // ============================================================================
