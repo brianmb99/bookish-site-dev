@@ -18,6 +18,10 @@ import {
   FRIENDS_VISIBILITY_EVENT,
 } from './components/friend-glyph-trigger.js';
 import {
+  hydrateAccountFriendsSection,
+  renderAccountFriendsSectionMarkup,
+} from './components/account_friends_section.js';
+import {
   humanizePasskeySigninError,
   promptStalePasskeyRepair,
   renderCreateAccountForm as renderCreateAccountAuthForm,
@@ -414,34 +418,7 @@ function renderAccountPanel(content) {
         </div>
       </div>
 
-      <div class="account-panel-friends" id="accountPanelFriends">
-        <div class="account-panel-sub-label">Friends</div>
-        <!-- #122: "+ Add a friend" entry moved to the Friends drawer (header glyph).
-             Account keeps the read-only Connections + Pending invites lists for
-             power-user verification. To invite someone, open the Friends drawer
-             from the header and tap "+ Add".
-             #124: added the "Show in header" toggle so users who hid the glyph
-             from the drawer have a clear path to re-enable it. -->
-        <!-- #146: switched from native checkbox to the .toggle-switch
-             pattern used by the Owned toggle and the privacy-add toggle.
-             Order matters: input must immediately precede .toggle-track
-             so the input:checked + .toggle-track adjacent-sibling rule
-             applies. Input id stays the same so the wiring still finds it. -->
-        <label class="toggle-switch account-friends-toggle" for="accountFriendsShowToggle">
-          <span class="account-friends-toggle-label">Show in header</span>
-          <input type="checkbox" id="accountFriendsShowToggle" />
-          <span class="toggle-track"></span>
-        </label>
-        <div class="account-friends-section" id="accountConnectionsSection" style="display:none;">
-          <div class="account-friends-heading">Connections</div>
-          <ul class="account-friends-list" id="accountConnectionsList"></ul>
-        </div>
-        <div class="account-friends-section" id="accountPendingInvitesSection" style="display:none;">
-          <div class="account-friends-heading">Pending invites</div>
-          <ul class="account-friends-list" id="accountPendingInvitesList"></ul>
-        </div>
-        <div class="account-friends-status" id="accountFriendsStatus" style="display:none;"></div>
-      </div>
+      ${renderAccountFriendsSectionMarkup()}
 
       <div class="account-actions">
         <button id="exportCsvBtn" class="btn secondary account-csv-btn">
@@ -503,51 +480,7 @@ function renderAccountPanel(content) {
   // Account & Security section — View / Replace + Passkeys (#144 removed the custody toggle).
   wireAccountSecuritySection(content);
 
-  // Friends section (#118 → #122). The "+ Add a friend" entry now lives in
-  // the Friends drawer (header glyph). Account keeps the read-only
-  // Connections + Pending invites lists for power-user verification.
-  // Hydrate async — listConnections / listIssuedInvites hit Tarn.
-  refreshFriendsSection(content).catch(err =>
-    console.warn('[AccountUI] friends hydrate failed:', err?.message || err)
-  );
-
-  // "Show in header" toggle (#124). Reflects the per-device localStorage
-  // flag and writes back through setHideFriendsFromHeader, which dispatches
-  // FRIENDS_VISIBILITY_EVENT so the header glyph updates live without a
-  // reload. This is the canonical re-enable path for users who hid the
-  // glyph via the drawer link.
-  const showInHeaderToggle = content.querySelector('#accountFriendsShowToggle');
-  if (showInHeaderToggle) {
-    // checked = visible (i.e. NOT hidden). Default = visible.
-    showInHeaderToggle.checked = !isFriendsHiddenFromHeader();
-    showInHeaderToggle.addEventListener('change', () => {
-      setHideFriendsFromHeader(!showInHeaderToggle.checked);
-    });
-    // Keep the toggle in sync if the preference changes elsewhere (e.g. the
-    // drawer's hide link fires while Account is open in another tab — rare
-    // but cheap to handle, and keeps the surfaces consistent).
-    const onVisibilityChange = (e) => {
-      const hidden = !!(e?.detail?.hidden);
-      showInHeaderToggle.checked = !hidden;
-    };
-    window.addEventListener(FRIENDS_VISIBILITY_EVENT, onVisibilityChange);
-    // Detach when the modal closes — the next render() rebuilds the panel
-    // and re-binds, so a stale listener would just leak. Hook it via the
-    // existing modal close path: a one-shot listener on the modal's hide.
-    const accountModal = document.getElementById('accountModal');
-    if (accountModal) {
-      const cleanup = () => {
-        window.removeEventListener(FRIENDS_VISIBILITY_EVENT, onVisibilityChange);
-      };
-      // MutationObserver on display:none is overkill; just clean up on the
-      // close button + backdrop click paths the modal already uses.
-      const closeBtn = document.getElementById('accountModalClose');
-      if (closeBtn) closeBtn.addEventListener('click', cleanup, { once: true });
-      accountModal.addEventListener('click', (e) => {
-        if (e.target === accountModal) cleanup();
-      }, { once: true });
-    }
-  }
+  hydrateAccountFriendsSection(content, accountFriendsSectionDeps());
 
   // Logout
   content.querySelector('#logoutBtn').addEventListener('click', async () => {
@@ -604,107 +537,17 @@ function renderAccountPanel(content) {
   });
 }
 
-// ============================================================================
-// FRIENDS SECTION (#118 — issue 2 of the Friends rollout)
-// ============================================================================
-
-/**
- * Hydrate the Account → Friends section: list connections by label and list
- * outstanding issued invites with revoke buttons. Both are temporary
- * verification surfaces for issue 2; the proper drawer ships in issue 3.
- *
- * @param {HTMLElement} content
- */
-async function refreshFriendsSection(content) {
-  const connSection = content.querySelector('#accountConnectionsSection');
-  const connList = content.querySelector('#accountConnectionsList');
-  const invSection = content.querySelector('#accountPendingInvitesSection');
-  const invList = content.querySelector('#accountPendingInvitesList');
-  const status = content.querySelector('#accountFriendsStatus');
-  if (!connSection || !connList || !invSection || !invList || !status) return;
-
-  let connections = [];
-  let invites = [];
-  try {
-    [connections, invites] = await Promise.all([
-      friends.listConnections(),
-      friends.listIssuedInvites(),
-    ]);
-  } catch (err) {
-    status.style.display = 'block';
-    status.textContent = "Couldn't load friends — try reopening Account.";
-    console.warn('[AccountUI] friends fetch failed:', err.message);
-    return;
-  }
-  status.style.display = 'none';
-
-  // Connections list
-  if (connections.length > 0) {
-    connSection.style.display = 'block';
-    connList.innerHTML = connections
-      .map(c => {
-        const label = (c.label && c.label.trim()) || (c.email ? c.email : c.share_pub.slice(0, 8));
-        return `<li class="account-friend-row"><span class="account-friend-label">${escapeHtml(label)}</span></li>`;
-      })
-      .join('');
-  } else {
-    connSection.style.display = 'none';
-    connList.innerHTML = '';
-  }
-
-  // Pending invites list
-  const outstanding = invites.filter(i => !i.redeemed_at);
-
-  // Note on zero-friends discoverability: the Account-screen "+ Add a friend"
-  // button was REMOVED in #122 per the issue spec — the drawer is now the
-  // canonical entry point. However, the drawer trigger is hidden when
-  // zero friends, which creates a bootstrap chicken-and-egg problem for
-  // first-time users. The parent FRIENDS.md spec calls out "Account → Add
-  // a friend" as the zero-state discovery path; reconciling that with the
-  // issue 3 removal is left to a follow-up surface (likely a dedicated
-  // education sheet in #9 / #122 follow-up). For now we leave the section
-  // empty in the zero-friends state — first invites can be sent via a
-  // direct `/invite/...` link from a friend OR by opening the dev console
-  // (alpha-cohort only). Document the gap so a reviewer doesn't think it
-  // was an oversight.
-  if (outstanding.length > 0) {
-    invSection.style.display = 'block';
-    invList.innerHTML = outstanding
-      .map(inv => {
-        const expires = inv.expires_at
-          ? new Date(inv.expires_at * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' })
-          : '';
-        const namePart = inv.display_name?.trim()
-          ? `for ${escapeHtml(inv.display_name)}`
-          : 'unnamed';
-        return `
-          <li class="account-friend-row" data-pending-token="${escapeHtml(inv.token_id)}">
-            <span class="account-friend-label">Invite ${namePart}</span>
-            <span class="account-friend-meta">${expires ? 'Expires ' + escapeHtml(expires) : ''}</span>
-            <button type="button" class="btn-link account-friend-revoke" data-revoke-token="${escapeHtml(inv.token_id)}">Revoke</button>
-          </li>
-        `;
-      })
-      .join('');
-    invList.querySelectorAll('[data-revoke-token]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const tokenId = btn.dataset.revokeToken;
-        btn.disabled = true;
-        btn.textContent = 'Revoking…';
-        try {
-          await friends.revokeInvite(tokenId);
-          await refreshFriendsSection(content);
-        } catch (err) {
-          console.error('[AccountUI] revoke failed:', err);
-          btn.disabled = false;
-          btn.textContent = 'Try again';
-        }
-      });
-    });
-  } else {
-    invSection.style.display = 'none';
-    invList.innerHTML = '';
-  }
+function accountFriendsSectionDeps() {
+  return {
+    listConnections: () => friends.listConnections(),
+    listIssuedInvites: () => friends.listIssuedInvites(),
+    revokeInvite: tokenId => friends.revokeInvite(tokenId),
+    isFriendsHiddenFromHeader,
+    setHideFriendsFromHeader,
+    friendsVisibilityEvent: FRIENDS_VISIBILITY_EVENT,
+    onWarn: (...args) => console.warn(...args),
+    onError: (...args) => console.error(...args),
+  };
 }
 
 function escapeHtml(s) {
