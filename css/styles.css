@@ -1,4 +1,27 @@
-/* Self-hosted fonts — Latin subset, woff2 */
+/* ============================================================================
+   Stylesheet Map
+   ----------------------------------------------------------------------------
+   This file intentionally remains a single stylesheet for the static Pages
+   deploy path (`public/index.html` -> `css/styles.css`, cached by `sw.js`).
+   Section headers below are navigational; selector order is preserved because
+   library cards, modals, mobile overrides, and repeated keyframes are cascade
+   sensitive.
+
+   1.  Base tokens, fonts, reset, and shared buttons
+   2.  App shell, fixed header, auth chips, and library cards
+   3.  Empty states, shelf/year navigation, and WTR drawer
+   4.  Omnibox search/add UI, including empty-state omnibox
+   5.  Account panel, account modal, auth forms, and account security flows
+   6.  Mobile/PWA interaction polish, including mobile search takeover
+   7.  Book detail modal and add/edit-book form surfaces
+   8.  Friends account section, invite modals, drawer, strip, pips, shelves
+   ============================================================================ */
+
+/* ============================================================================
+   1. Base tokens, fonts, reset, and shared buttons
+   ============================================================================ */
+
+/* Self-hosted fonts - Latin subset, woff2 */
 @font-face{font-family:'DM Sans';font-style:normal;font-weight:400 700;font-display:swap;src:url('../fonts/dm-sans-latin.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:'Fraunces';font-style:normal;font-weight:400 600;font-display:swap;src:url('../fonts/fraunces-latin.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400 500;font-display:swap;src:url('../fonts/jetbrains-mono-latin.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
@@ -75,6 +98,10 @@ h1,h2,h3,.headline{
     transition-duration:.01ms!important;
   }
 }
+/* ============================================================================
+   2. App shell, fixed header, auth chips, and library cards
+   ============================================================================ */
+
 #app{width:100%;max-width:1200px;padding:calc(var(--header-height) + env(safe-area-inset-top) + 16px) max(16px,env(safe-area-inset-right)) 16px max(16px,env(safe-area-inset-left));box-sizing:border-box}
 header{
   position:fixed;
@@ -168,7 +195,7 @@ header .omnibox-wrap{
   }
 }
 
-/* Mobile header search takeover rules are in section 7e at the bottom of this file */
+/* Mobile header search takeover rules are in the Mobile/PWA section below. */
 #status{
   font-size:.65rem;
   opacity:.7;
@@ -276,6 +303,9 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 .signin-link:hover{
   color:var(--color-text-primary)!important;
 }
+/* Library card stack/grid. Responsive grid overrides for the same selectors
+   live later near the shared modal/form rules, where their current cascade
+   position is required. */
 .cards{display:flex;flex-direction:column;gap:14px;margin-top:8px;position:relative}
 .card{
   position:relative;
@@ -574,6 +604,10 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
     transform:translateY(0);
   }
 }
+/* ============================================================================
+   3. Empty states, shelf/year navigation, and WTR drawer
+   ============================================================================ */
+
 /* Empty state - Phase 2 redesign */
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;min-height:300px}
 .empty-illustration{font-size:4rem;margin-bottom:24px;opacity:.9;animation:gentleBounce 1s ease-in-out 1}
@@ -670,6 +704,10 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
    rules. The reading-status pill is now inline in .details (.card-reading-status),
    and the per-card mark-as-read button was removed — that affordance is in
    the detail view. */
+
+/* ============================================================================
+   4. Omnibox search/add UI, including empty-state omnibox
+   ============================================================================ */
 
 /* Header WTR badge + Omnibox */
 /* WTR header button with badge */
@@ -975,6 +1013,10 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   color:var(--color-text-muted);
   margin-top:2px;
 }
+
+/* ============================================================================
+   5. Account panel, account modal, auth forms, and account security flows
+   ============================================================================ */
 
 /* Account panel subscription section (#74) */
 /* Flat section matching the identity header pattern: no card chrome,
@@ -1617,7 +1659,7 @@ html.modal-transitioning::view-transition-new(root){
 .install-popover-body strong{font-weight:600}
 .install-popover-dismiss{position:absolute;top:4px;right:4px;background:transparent;border:none;color:#64748b;font-size:1.1rem;cursor:pointer;padding:0;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;border-radius:4px;line-height:1}
 .install-popover-dismiss:hover{color:#94a3b8;background:#334155}
-/* Account modal styles */
+/* Account modal shell */
 .modal-overlay{
   position:fixed;
   inset:0;
@@ -2511,7 +2553,7 @@ form.inline label.toggle-switch{display:flex}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 /* Search status message (progressive loading feedback) */
 .search-status{font-size:.6rem;padding:4px 8px;opacity:.5;border-bottom:1px solid #252d35;pointer-events:none}
-/* Account modal styles */
+/* Helper modal content used by account/auth sub-flows */
 .modal-content{background:#1e242b;border:1px solid #2b333b;border-radius:16px;padding:20px;width:100%;max-width:420px;position:relative}
 /* Helper modal close button uses unified .modal-close-btn */
 
@@ -3530,23 +3572,21 @@ form.inline label.toggle-switch{display:flex}
 }
 
 /* ============================================================================
-   7a: Overscroll containment — keep scroll inside modals/overlays
+   6. Mobile/PWA interaction polish, including mobile search takeover
    ============================================================================ */
+
+/* 7a: Overscroll containment - keep scroll inside modals/overlays */
 .modal-inner,.wtr-drawer,.notes-overlay{overscroll-behavior:contain}
 body.modal-open{overscroll-behavior-y:contain}
 
-/* ============================================================================
-   7c: Touch press feedback — coarse pointer only
-   ============================================================================ */
+/* 7c: Touch press feedback - coarse pointer only */
 @media (pointer:coarse){
   button:active,.btn:active{transform:scale(0.95);filter:brightness(0.9);transition:transform 50ms,filter 50ms}
   .card:active{transform:scale(0.98);transition:transform 80ms}
   button,.btn,.card,a{-webkit-tap-highlight-color:transparent}
 }
 
-/* ============================================================================
-   7d: Text selection control
-   ============================================================================ */
+/* 7d: Text selection control */
 @media (pointer:coarse){
   header,.spine-panel,button,.btn,.status-selector,.card .meta{user-select:none;-webkit-user-select:none}
   .notes-content,.modal-inner input,.modal-inner textarea{user-select:auto;-webkit-user-select:auto}
@@ -3555,9 +3595,7 @@ body.modal-open{overscroll-behavior-y:contain}
   button,.btn,.status-selector{user-select:none}
 }
 
-/* ============================================================================
-   Mobile Bottom Sheet
-   ============================================================================ */
+/* Mobile Bottom Sheet */
 @media (max-width: 480px) {
   .auth-form .form-group {
     margin-bottom: 20px;
@@ -3568,9 +3606,7 @@ body.modal-open{overscroll-behavior-y:contain}
   }
 }
 
-/* ============================================================================
-   Narrow screens (iPhone SE 1st gen, older small phones)
-   ============================================================================ */
+/* Narrow screens (iPhone SE 1st gen, older small phones) */
 @media (max-width: 374px) {
   .account-actions .btn{min-width:0}
   .strength-label{min-width:0;white-space:normal}
@@ -3578,9 +3614,7 @@ body.modal-open{overscroll-behavior-y:contain}
   .modal-inner .fields-cluster{grid-template-columns:1fr}
 }
 
-/* ============================================================================
-   7e: Mobile header search takeover (#80)
-   ============================================================================ */
+/* Mobile header search takeover (#80) */
 @media (pointer:coarse){
   .header-search-btn{display:flex}
   /* Hide omnibox by default on mobile (shown via search takeover) */
@@ -3599,9 +3633,7 @@ body.modal-open{overscroll-behavior-y:contain}
   header.search-takeover .header-search-cancel{display:flex;opacity:1}
 }
 
-/* ============================================================================
-   #90: Pull-to-refresh indicator (standalone PWA only)
-   ============================================================================ */
+/* #90: Pull-to-refresh indicator (standalone PWA only) */
 .ptr-indicator{
   position:fixed;
   top:calc(var(--header-height) + env(safe-area-inset-top));
@@ -3633,9 +3665,7 @@ body.modal-open{overscroll-behavior-y:contain}
   body{overscroll-behavior-y:contain}
 }
 
-/* ============================================================================
-   Reduced Motion
-   ============================================================================ */
+/* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   .success-check-animated,
   .progress-step.active .step-icon,
@@ -3654,6 +3684,10 @@ body.modal-open{overscroll-behavior-y:contain}
     animation-iteration-count:1!important;
   }
 }
+
+/* ============================================================================
+   7. Book detail modal and add/edit-book form surfaces
+   ============================================================================ */
 
 /* === Book Detail Redesign (#114) === */
 /* Modal-as-page: cover hero, placard textareas, inline detail rows.
@@ -3991,10 +4025,11 @@ body.modal-open{overscroll-behavior-y:contain}
 }
 
 /* ============================================================================
-   Friends — Account-screen entry points + invite/accept modals (#118)
-   These are the temporary surfaces for issue 2. The drawer in issue 3 will
-   replace the Account → Friends entry; revisit then.
+   8. Friends account section, invite modals, drawer, strip, pips, shelves
    ============================================================================ */
+
+/* Friends account section + invite/accept modals (#118). The account section
+   is now a read-only verification surface; the drawer owns invite creation. */
 .account-panel-friends{
   margin:4px 0;
   padding:14px 0 6px;
@@ -4170,12 +4205,10 @@ body.modal-open{overscroll-behavior-y:contain}
   margin-top:6px;
 }
 
-/* ============================================================================
-   Friends drawer + header glyph trigger + friend strip (#122)
+/* Friends drawer + header glyph trigger + friend strip (#122).
    Mirrors the WTR drawer chrome (`.wtr-drawer`) so the two surfaces share
    the same mechanic and animations. Different class names so they can drift
-   independently if a future visual change applies to only one.
-   ============================================================================ */
+   independently if a future visual change applies to only one. */
 
 /* --- Header trigger glyph -------------------------------------------------
    Sized to match `.wtr-header-btn` exactly: same padding, same border-radius,
