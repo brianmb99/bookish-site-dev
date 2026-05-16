@@ -805,6 +805,18 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 .omnibox-wrap.omnibox-in-empty .omnibox-clear{
   right:10px;
 }
+@media (pointer:coarse){
+  .omnibox-wrap.omnibox-in-empty #omniboxInput{
+    padding:14px 34px 14px 38px;
+    font-size:.95rem;
+  }
+  .omnibox-wrap.omnibox-in-empty .omnibox-icon{
+    left:12px;
+  }
+  .omnibox-wrap.omnibox-in-empty .omnibox-clear{
+    right:8px;
+  }
+}
 
 /* Omnibox dropdown */
 .omnibox-dropdown{
@@ -4022,6 +4034,86 @@ body.modal-open{overscroll-behavior-y:contain}
   /* Detail row height for 44px+ touch targets on values */
   .detail-row{min-height:48px}
   .detail-row .detail-value{min-height:38px}
+}
+@media (pointer:coarse){
+  .modal-inner.book-detail-page .modal-close-btn{
+    display:none;
+  }
+  .modal-inner.book-detail-page .privacy-toggle-btn{
+    right:12px;
+  }
+  .modal-inner.book-detail-page .book-detail-hero{
+    padding-right:0;
+  }
+  .modal-inner.book-detail-page.add-mode{
+    padding:10px 22px calc(12px + env(safe-area-inset-bottom));
+  }
+  .modal-inner.book-detail-page.add-mode .book-detail-form{
+    min-height:calc(100% - 16px);
+    gap:8px;
+  }
+  .modal-inner.book-detail-page.add-mode .book-detail-hero{
+    gap:4px;
+  }
+  .modal-inner.book-detail-page.add-mode .book-detail-hero .tile-cover-wrap{
+    width:42%;
+    max-width:168px;
+    gap:6px;
+  }
+  .modal-inner.book-detail-page.add-mode .book-detail-placards{
+    max-width:520px;
+  }
+  .modal-inner.book-detail-page.add-mode .placard{
+    padding:2px 6px;
+    line-height:1.22;
+  }
+  .modal-inner.book-detail-page.add-mode .placard-title{
+    font-size:.95rem!important;
+  }
+  .modal-inner.book-detail-page.add-mode .placard-author{
+    font-size:.82rem!important;
+  }
+  .modal-inner.book-detail-page.add-mode .status-selector{
+    margin-bottom:6px;
+  }
+  .modal-inner.book-detail-page.add-mode .status-option{
+    min-height:36px;
+    padding:8px 6px;
+    font-size:.72rem;
+  }
+  .modal-inner.book-detail-page.add-mode .status-microcopy{
+    min-height:.6em;
+    margin-top:-6px;
+  }
+  .modal-inner.book-detail-page.add-mode .detail-row{
+    min-height:38px;
+    padding:6px 0;
+  }
+  .modal-inner.book-detail-page.add-mode .detail-row .detail-value{
+    min-height:32px;
+    padding:4px 6px!important;
+  }
+  .modal-inner.book-detail-page.add-mode .optional-chips{
+    justify-content:center;
+    gap:6px;
+    margin-top:0;
+  }
+  .modal-inner.book-detail-page.add-mode .optional-chip{
+    min-height:30px;
+    padding:5px 8px!important;
+    font-size:.72rem!important;
+  }
+  .modal-inner.book-detail-page.add-mode .privacy-add-toggle{
+    margin-top:0;
+    padding:6px 4px;
+  }
+  .modal-inner.book-detail-page.add-mode .primary-actions{
+    margin-top:auto;
+    padding-top:8px;
+  }
+  .modal-inner.book-detail-page.add-mode .primary-actions .btn{
+    min-height:46px;
+  }
 }
 
 /* ============================================================================

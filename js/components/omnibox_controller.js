@@ -4,6 +4,8 @@ import { pickRandomPlaceholder } from '../core/omnibox_placeholders.js';
 import { escapeHtml, generatedCoverColor } from './book-card.js';
 import { renderPipOverlay } from './friend-pip.js';
 
+const MOBILE_EMPTY_PLACEHOLDER = 'Search books';
+
 export function activeEntryCount(entries = []) {
   return entries.filter(entry => entry?.status !== 'tombstoned').length;
 }
@@ -191,6 +193,26 @@ export function createOmniboxController({
   let searchTakeoverActive = false;
   let backdrop = null;
 
+  function isEmptyPlacement() {
+    return refs.wrap?.classList?.contains('omnibox-in-empty') === true;
+  }
+
+  function isCoarsePointer() {
+    return windowRef?.matchMedia?.('(pointer: coarse)')?.matches === true;
+  }
+
+  function nextPlaceholder() {
+    return isEmptyPlacement() && isCoarsePointer()
+      ? MOBILE_EMPTY_PLACEHOLDER
+      : pickRandomPlaceholder();
+  }
+
+  function refreshPlaceholder() {
+    if (!refs.input) return;
+    try { refs.input.placeholder = nextPlaceholder(); }
+    catch (err) { onWarn('[Bookish] omnibox placeholder rotation failed:', err?.message || err); }
+  }
+
   function count() {
     return getActiveEntryCount();
   }
@@ -226,6 +248,7 @@ export function createOmniboxController({
       }
       refs.wrap.classList.remove('omnibox-in-empty');
     }
+    refreshPlaceholder();
     positionDropdown();
   }
 
@@ -483,10 +506,7 @@ export function createOmniboxController({
   refs.headerSearchBtn?.addEventListener('click', openSearchTakeover);
   refs.headerSearchCancel?.addEventListener('click', () => closeSearchTakeover());
 
-  if (refs.input) {
-    try { refs.input.placeholder = pickRandomPlaceholder(); }
-    catch (err) { onWarn('[Bookish] omnibox placeholder rotation failed:', err?.message || err); }
-  }
+  refreshPlaceholder();
 
   return {
     setVisible,

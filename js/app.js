@@ -370,6 +370,17 @@ function showCoverLoaded(){
   if(inner) inner.classList.remove('no-cover');
 }
 
+function resetMobileBookSheetViewport(){
+  if(!isTouchDevice) return;
+  const inner=modal.querySelector('.modal-inner');
+  if(!inner) return;
+  const active = document.activeElement;
+  if(active && inner.contains(active) && typeof active.blur === 'function'){
+    active.blur();
+  }
+  requestAnimationFrame(()=>{ inner.scrollTop = 0; });
+}
+
 // --- State ---
 let entries=[];
 // Book repository — single owner of all book data operations
@@ -512,12 +523,16 @@ function openModal(entry, forceIntent){
   pushOverlayState('modal');
   setTimeout(()=>{
     if(notesInput){ notesInput.style.height='auto'; notesInput.style.height=Math.max(60,notesInput.scrollHeight)+'px'; }
-    // In add mode, focus title placard (#114)
-    if(!entry && placardTitle){
+    // In add mode, focus title placard on desktop only. On mobile, automatic
+    // focus opens the keyboard and lets the viewport reposition the sheet
+    // before the search prefill/cover pipeline finishes.
+    if(!entry && placardTitle && !isTouchDevice){
       placardTitle.focus();
       // Place caret at end if value pre-filled by omnibox prefill, otherwise no-op
       const len = placardTitle.value.length;
       try{ placardTitle.setSelectionRange(len,len); }catch{}
+    } else if(!entry){
+      resetMobileBookSheetViewport();
     }
   }, 0);
 }
@@ -1743,6 +1758,7 @@ function openOmniboxApiResult(meta){
       if(meta.source === 'itunes') form.format.value = 'audio';
       form.dispatchEvent(new Event('input', {bubbles:true}));
     }
+    resetMobileBookSheetViewport();
   }, 50);
 }
 
