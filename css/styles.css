@@ -1696,7 +1696,7 @@ html.modal-transitioning::view-transition-new(root){
 }
 /* Account modal — focused-sheet pattern, matching book edit modal.
    Mobile: full-height bottom sheet. Desktop: centered 640px modal. */
-.account-modal{
+.modal.account-modal{
   /* Override .modal class positioning - this is a flex child, not fixed positioned */
   position:relative !important;
   inset:auto !important;
@@ -1722,7 +1722,7 @@ html.modal-transitioning::view-transition-new(root){
 }
 /* Mobile: full-height bottom sheet matching book edit (#100 + #104 followup) */
 @media (pointer: coarse){
-  .account-modal{
+  .modal.account-modal{
     max-width:100% !important;
     border-radius:16px 16px 0 0;
     border-left:none;
@@ -1733,11 +1733,14 @@ html.modal-transitioning::view-transition-new(root){
     box-sizing:border-box;
     height:100%;
     max-height:none;
-    padding:20px 14px;
+    padding:20px 14px calc(96px + env(safe-area-inset-bottom));
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
     animation:slideUpSheet .3s ease-out;
     margin:0;
   }
-  .account-modal.sheet-dismissing{
+  .modal.account-modal.sheet-dismissing{
     animation:slideDownSheet .25s ease-in forwards;
   }
 }
@@ -1756,10 +1759,17 @@ html.modal-transitioning::view-transition-new(root){
   visibility:visible;
 }
 @media (max-width:480px){
-  .account-modal{
+  .modal.account-modal{
     width:calc(100vw - 24px);
     padding:24px;
     border-radius:16px;
+  }
+}
+@media (max-width:480px) and (pointer:coarse){
+  .modal.account-modal{
+    width:100%;
+    border-radius:16px 16px 0 0;
+    padding:20px 14px calc(96px + env(safe-area-inset-bottom));
   }
 }
 /* Account modal close button uses unified .modal-close-btn */
@@ -3373,6 +3383,18 @@ form.inline label.toggle-switch{display:flex}
   width: 100%;
   padding: 12px 20px;
   justify-content: center;
+}
+@media (pointer:coarse){
+  .account-modal .account-actions{
+    position:sticky;
+    bottom:calc(12px + env(safe-area-inset-bottom));
+    z-index:2;
+    padding:12px 0 0;
+    background:linear-gradient(180deg, rgba(36,43,53,0), var(--color-bg-elevated) 32%);
+  }
+  .account-modal .account-actions .btn{
+    min-height:48px;
+  }
 }
 .account-signout {
   background: transparent !important;
