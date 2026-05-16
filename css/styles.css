@@ -1153,6 +1153,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   background:var(--color-bg-surface);
   color:var(--color-text-primary);
   border:1px solid var(--color-border-subtle);
+  box-shadow:none;
   font-weight:500;
   font-size:.85rem;
   padding:10px 16px;
@@ -1709,6 +1710,7 @@ html.modal-transitioning::view-transition-new(root){
   width:100%;
   max-width:640px;
   max-height:calc(100vh - 64px);
+  box-sizing:border-box;
   overflow-y:auto;
   box-shadow:0 24px 48px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,.05) inset;
   z-index:1001;
@@ -1730,10 +1732,9 @@ html.modal-transitioning::view-transition-new(root){
     border-bottom:none;
     /* 100% of the visible viewport (parent .modal-overlay is position:fixed;
        inset:0). box-sizing:border-box so padding is INCLUDED in height. */
-    box-sizing:border-box;
     height:100%;
     max-height:none;
-    padding:20px 14px calc(96px + env(safe-area-inset-bottom));
+    padding:20px 14px calc(24px + env(safe-area-inset-bottom));
     overflow-y:auto;
     overscroll-behavior:contain;
     -webkit-overflow-scrolling:touch;
@@ -1769,7 +1770,7 @@ html.modal-transitioning::view-transition-new(root){
   .modal.account-modal{
     width:100%;
     border-radius:16px 16px 0 0;
-    padding:20px 14px calc(96px + env(safe-area-inset-bottom));
+    padding:20px 14px calc(24px + env(safe-area-inset-bottom));
   }
 }
 /* Account modal close button uses unified .modal-close-btn */
@@ -3374,6 +3375,141 @@ form.inline label.toggle-switch{display:flex}
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.modal.account-modal:has(.account-hub){
+  max-width:560px;
+}
+.modal.account-modal:has(.account-subview){
+  max-width:620px;
+}
+.account-hub{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.account-hub .account-panel-header{
+  margin-bottom:0;
+  padding-bottom:16px;
+}
+.account-hub .account-panel-tagline{
+  padding:0;
+  margin-top:-4px;
+}
+.account-hub .account-panel-subscription{
+  margin:0;
+  padding:14px 0 4px;
+}
+.account-hub-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:2px 0 0;
+}
+.account-hub-row{
+  width:100%;
+  min-height:64px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:13px 14px;
+  border:1px solid var(--color-border-subtle);
+  border-radius:8px;
+  background:var(--color-bg-surface);
+  color:var(--color-text-primary);
+  box-shadow:none;
+  text-align:left;
+  cursor:pointer;
+  transition:background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.account-hub-row:hover,
+.account-hub-row:focus-visible{
+  background:var(--color-bg-base);
+  border-color:var(--color-border-default);
+  outline:none;
+}
+.account-hub-row:active{
+  transform:translateY(1px);
+}
+.account-hub-row-main{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.account-hub-row-title{
+  font-size:.9rem;
+  font-weight:600;
+  line-height:1.25;
+}
+.account-hub-row-desc{
+  font-size:.76rem;
+  line-height:1.35;
+  color:var(--color-text-muted);
+}
+.account-hub-chevron{
+  flex:0 0 auto;
+  color:var(--color-text-muted);
+  font-size:.95rem;
+}
+.account-hub .account-actions{
+  padding-top:2px;
+}
+.account-subview{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.account-subview-back{
+  align-self:flex-start;
+  min-height:36px;
+  padding:0;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+  color:var(--color-primary);
+  font:inherit;
+  font-size:.86rem;
+  font-weight:600;
+  cursor:pointer;
+  overflow:visible;
+}
+.account-subview-back:hover,
+.account-subview-back:focus-visible{
+  color:var(--color-primary-hover);
+  outline:none;
+}
+.account-subview-back:active{
+  transform:none;
+}
+.account-subview-heading{
+  padding-bottom:14px;
+  border-bottom:1px solid var(--color-border-default);
+}
+.account-subview-heading h2{
+  margin:0 0 5px;
+  font-family:var(--font-body);
+  font-size:1.15rem;
+  font-weight:700;
+  line-height:1.25;
+}
+.account-subview-heading p{
+  margin:0;
+  font-size:.82rem;
+  line-height:1.4;
+  color:var(--color-text-muted);
+}
+.account-subview .account-panel-security,
+.account-subview .account-panel-archive,
+.account-subview .account-panel-friends,
+.account-subview .account-data-export{
+  margin:0;
+  padding:0;
+  border-top:0;
+}
+.account-subview .account-security-block + .account-security-block{
+  margin-top:22px;
+  padding-top:20px;
+}
 .account-actions {
   display: flex;
   flex-direction: column;
@@ -3385,12 +3521,21 @@ form.inline label.toggle-switch{display:flex}
   justify-content: center;
 }
 @media (pointer:coarse){
-  .account-modal .account-actions{
-    position:sticky;
-    bottom:calc(12px + env(safe-area-inset-bottom));
-    z-index:2;
-    padding:12px 0 0;
-    background:linear-gradient(180deg, rgba(36,43,53,0), var(--color-bg-elevated) 32%);
+  .modal.account-modal:has(.account-hub),
+  .modal.account-modal:has(.account-subview){
+    height:auto;
+    max-height:calc(100dvh - max(42px, env(safe-area-inset-top)));
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+  }
+  .account-hub .account-panel-header{
+    padding-right:46px;
+  }
+  .account-hub{
+    gap:12px;
+  }
+  .account-hub-row{
+    min-height:58px;
+    padding:11px 12px;
   }
   .account-modal .account-actions .btn{
     min-height:48px;
