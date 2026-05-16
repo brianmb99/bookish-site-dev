@@ -17,6 +17,12 @@ import {
   setHideFriendsFromHeader,
   FRIENDS_VISIBILITY_EVENT,
 } from './components/friend-glyph-trigger.js';
+import {
+  humanizePasskeySigninError,
+  promptStalePasskeyRepair,
+  renderCreateAccountForm as renderCreateAccountAuthForm,
+  renderSignInForm as renderSignInAuthForm,
+} from './components/account_auth_flows.js';
 
 // Track the swipe-dismiss cleanup so we can detach on close.
 let _accountResetSwipe = null;
@@ -25,10 +31,8 @@ let _accountResetSwipe = null;
 const SVG_EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const SVG_EYE_OFF = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 const SVG_SHIELD = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`;
-const SVG_USER = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
 const SVG_EDIT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 const SVG_DOWNLOAD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
-const SVG_FINGERPRINT = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 4"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M9 6.8a6 6 0 0 1 9 5.2c0 .47 0 1.44-.05 2"/></svg>`;
 
 /**
  * Full logout: stop sync, clear Tarn session, clear IndexedDB cache,
@@ -190,224 +194,38 @@ async function renderAccountModalContent(content, mode) {
 // ============================================================================
 
 function renderCreateAccountForm(content) {
-  content.innerHTML = `
-    <div class="auth-form">
-      <div class="auth-header">
-        <div class="auth-icon">${SVG_SHIELD}</div>
-        <h2>Create Your Account</h2>
-        <p>Private. Permanent. Yours.</p>
-      </div>
-
-      <div class="form-group">
-        <label for="acctEmail">Email</label>
-        <input type="email" id="acctEmail" autocomplete="email" placeholder="you@example.com" required />
-        <span class="field-hint" id="emailPreview"></span>
-      </div>
-
-      <div class="form-group">
-        <label for="acctPassword">Password</label>
-        <div class="password-field">
-          <input type="password" id="acctPassword" minlength="8" autocomplete="new-password" placeholder="At least 8 characters" required />
-          <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
-        </div>
-        <div class="password-strength">
-          <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
-          <span class="strength-label" id="strengthLabel"></span>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="acctConfirmPassword">Confirm Password</label>
-        <div class="password-field">
-          <input type="password" id="acctConfirmPassword" autocomplete="new-password" placeholder="Re-enter password" required />
-          <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
-        </div>
-        <span class="field-match" id="confirmHint"></span>
-      </div>
-
-      <div class="auth-note">
-        Your reading list is private — even Bookish can't read it or reset your password. After signup we'll show you a 24-word account key. You can view it again any time in Settings.
-      </div>
-
-      <button id="createAccountBtn" class="btn primary auth-submit" disabled>
-        Create Account
-      </button>
-
-      <div id="createError" class="auth-error" style="display:none;"></div>
-      <div id="createProgress" class="auth-progress" style="display:none;"></div>
-
-      <div class="auth-switch">
-        Already have an account?
-        <a href="#" id="switchToSignIn">Sign in</a>
-      </div>
-    </div>
-  `;
-
-  const emailInput = content.querySelector('#acctEmail');
-  const passwordInput = content.querySelector('#acctPassword');
-  const confirmInput = content.querySelector('#acctConfirmPassword');
-  const createBtn = content.querySelector('#createAccountBtn');
-  const switchLink = content.querySelector('#switchToSignIn');
-
-  function validate() {
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
-    const confirm = confirmInput.value;
-    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    const passwordValid = password.length >= 8;
-    const confirmMatch = password === confirm && confirm.length > 0;
-
-    createBtn.disabled = !(emailValid && passwordValid && confirmMatch);
-  }
-
-  // Email preview
-  emailInput.addEventListener('blur', () => {
-    const preview = content.querySelector('#emailPreview');
-    const normalized = emailInput.value.trim().toLowerCase();
-    if (normalized && normalized !== emailInput.value.trim()) {
-      preview.textContent = `Will be stored as: ${normalized}`;
-    } else {
-      preview.textContent = '';
-    }
+  renderCreateAccountAuthForm(content, {
+    tarnService,
+    bookishApiUrl: BOOKISH_API,
+    onCreated: ({ email, accountKey }) => completePostCreateAccount(content, { email, accountKey }),
+    onSwitchToSignIn: () => renderSignInForm(content),
+    onWarn: (...args) => console.warn(...args),
+    onError: (...args) => console.error(...args),
   });
+}
 
-  // Password toggles
-  content.querySelectorAll('.password-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const input = btn.previousElementSibling;
-      const showing = input.type === 'text';
-      input.type = showing ? 'password' : 'text';
-      btn.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
-    });
-  });
+function completePostCreateAccount(content, { email, accountKey }) {
+  tarnService.displayName(email.split('@')[0]);
+  localStorage.setItem('bookish.hasHadAccount', 'true');
 
-  // Password strength
-  passwordInput.addEventListener('input', () => {
-    const pw = passwordInput.value;
-    const fill = content.querySelector('#strengthFill');
-    const label = content.querySelector('#strengthLabel');
-    const strength = assessPasswordStrength(pw);
-    fill.style.width = strength.pct + '%';
-    fill.className = 'strength-fill ' + strength.cls;
-    label.textContent = strength.label;
-    label.className = 'strength-label ' + strength.cls;
-    validate();
-  });
+  transientState.justCreated = true;
+  transientState.createdTime = Date.now();
+  markInitialSyncDone(); // New account - no books to sync
 
-  // Confirm match
-  confirmInput.addEventListener('input', () => {
-    const hint = content.querySelector('#confirmHint');
-    if (confirmInput.value && confirmInput.value !== passwordInput.value) {
-      hint.textContent = 'Passwords do not match';
-      hint.className = 'field-match match-error';
-    } else if (confirmInput.value) {
-      hint.textContent = 'Passwords match';
-      hint.className = 'field-match match-success';
-    } else {
-      hint.textContent = '';
-      hint.className = 'field-match';
-    }
-    validate();
-  });
+  subscription.resetStatus();
+  subscription.fetchStatus().catch(() => {});
 
-  emailInput.addEventListener('input', validate);
-
-  // Create account
-  createBtn.addEventListener('click', async () => {
-    const email = emailInput.value.trim().toLowerCase();
-    const password = passwordInput.value;
-
-    createBtn.disabled = true;
-    const progress = content.querySelector('#createProgress');
-    const error = content.querySelector('#createError');
-    error.style.display = 'none';
-    progress.style.display = 'block';
-    progress.textContent = 'Creating account...';
-
-    try {
-      // Step 1: Register with Tarn. The SDK derives keys and generates a
-      // 24-word BIP39 account key. In Model B (the default) the SDK also
-      // ships an encrypted wrap of the key to Tarn so the user can view
-      // it again later from Settings — no PDF, no email.
-      progress.textContent = 'Deriving encryption keys...';
-      const reg = await tarnService.register(email, password);
-      const { dataLookupKey, accountKey } = reg;
-
-      // Step 2: Set free-tier rules via Bookish API. Critical — without
-      // rules, writes are denied. Retry up to 3 times with backoff.
-      progress.textContent = 'Setting up your account...';
-      let provisioned = false;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const res = await fetch(`${BOOKISH_API}/api/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, dataLookupKey }),
-          });
-          if (res.ok) {
-            provisioned = true;
-            break;
-          }
-          console.warn(`[AccountUI] Provisioning attempt ${attempt} failed: ${res.status}`);
-        } catch (apiErr) {
-          console.warn(`[AccountUI] Provisioning attempt ${attempt} failed:`, apiErr.message);
-        }
-        if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
-      }
-
-      if (!provisioned) {
-        localStorage.setItem('bookish.needsProvisioning', JSON.stringify({ email, dataLookupKey }));
-        console.warn('[AccountUI] Provisioning failed after 3 attempts — will retry later');
-      }
-
-      // Step 3: Store display info
-      tarnService.displayName(email.split('@')[0]);
-      localStorage.setItem('bookish.hasHadAccount', 'true');
-
-      transientState.justCreated = true;
-      transientState.createdTime = Date.now();
-      markInitialSyncDone(); // New account — no books to sync
-
-      subscription.resetStatus();
-      subscription.fetchStatus().catch(() => {});
-
-      // Step 4: Hand off to the account-key reveal. The user can dismiss
-      // via Continue OR the modal close button — both run the same
-      // post-signup handoff. We don't gate the dismiss anymore because
-      // the user can re-view the account key from Settings any time.
-      renderAccountKeyView(content, {
-        accountKey,
-        onContinue: () => {
-          closeAccountModal();
-          startSync();
-          uiStatusManager.refresh();
-          if (typeof window.updateBookDots === 'function') window.updateBookDots();
-          // Friends invite redemption (#118). If the user signed up because
-          // they clicked an invite link, fire the accept modal now.
-          friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
-            console.warn('[Bookish:AccountUI] friends invite handler failed:', err?.message || err)
-          );
-        },
-      });
-
-      // Drop the in-memory account-key reference from this scope. The
-      // SDK already doesn't cache it; the reveal view holds its own
-      // closure-scoped copy until dismiss.
-    } catch (e) {
-      console.error('[AccountUI] Registration failed:', e);
-      let msg = e.message || 'Registration failed. Please try again.';
-      if (e.message?.includes('already in use')) msg = 'An account with this email already exists. Try signing in.';
-      error.style.display = 'block';
-      error.textContent = msg;
-      progress.style.display = 'none';
-      createBtn.disabled = false;
-    }
-  });
-
-  // Switch to sign in
-  switchLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    renderSignInForm(content);
+  renderAccountKeyView(content, {
+    accountKey,
+    onContinue: () => {
+      closeAccountModal();
+      startSync();
+      uiStatusManager.refresh();
+      if (typeof window.updateBookDots === 'function') window.updateBookDots();
+      friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
+        console.warn('[Bookish:AccountUI] friends invite handler failed:', err?.message || err)
+      );
+    },
   });
 }
 
@@ -520,167 +338,13 @@ function renderAccountKeyView(content, opts) {
 // ============================================================================
 
 function renderSignInForm(content) {
-  // The passkey CTA + "or" divider are hidden by default (display:none).
-  // We probe `tarnService.passkeys.isSupported()` after render and only
-  // unhide both atomically when the probe resolves true. Browsers without
-  // PRF (Firefox, etc.) keep the screen identical to pre-Phase-4.
-  content.innerHTML = `
-    <div class="auth-form">
-      <div class="auth-header">
-        <div class="auth-icon">${SVG_USER}</div>
-        <h2>Welcome Back</h2>
-        <p>Sign in to access your reading list.</p>
-      </div>
-
-      <div class="form-group">
-        <label for="signInEmail">Email</label>
-        <input type="email" id="signInEmail" autocomplete="email" placeholder="you@example.com" required />
-      </div>
-
-      <div class="form-group">
-        <label for="signInPassword">Password</label>
-        <div class="password-field">
-          <input type="password" id="signInPassword" autocomplete="current-password" placeholder="Your password" required />
-          <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
-        </div>
-      </div>
-
-      <button id="signInBtn" class="btn primary auth-submit" disabled>
-        Sign In
-      </button>
-
-      <div class="auth-or-divider" id="signInOrDivider" style="display:none;"><span>or</span></div>
-
-      <button id="signInPasskeyBtn" class="btn secondary auth-submit auth-passkey-btn" type="button" style="display:none;">
-        ${SVG_FINGERPRINT}<span>Sign in with passkey</span>
-      </button>
-
-      <div id="signInError" class="auth-error" style="display:none;"></div>
-      <div id="signInProgress" class="auth-progress" style="display:none;"></div>
-
-      <div class="auth-switch">
-        Don't have an account?
-        <a href="#" id="switchToCreate">Create one</a>
-      </div>
-    </div>
-  `;
-
-  const emailInput = content.querySelector('#signInEmail');
-  const passwordInput = content.querySelector('#signInPassword');
-  const signInBtn = content.querySelector('#signInBtn');
-  const passkeyBtn = content.querySelector('#signInPasskeyBtn');
-  const orDivider = content.querySelector('#signInOrDivider');
-  const switchLink = content.querySelector('#switchToCreate');
-
-  // Password toggle
-  content.querySelectorAll('.password-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const input = btn.previousElementSibling;
-      const showing = input.type === 'text';
-      input.type = showing ? 'password' : 'text';
-      btn.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
-    });
+  renderSignInAuthForm(content, {
+    tarnService,
+    getPasskeysSupported,
+    onSignedIn: () => completePostSignIn(),
+    onSwitchToCreate: () => renderCreateAccountForm(content),
+    onError: (...args) => console.error(...args),
   });
-
-  function validate() {
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
-    signInBtn.disabled = !(email && password.length >= 1);
-  }
-
-  emailInput.addEventListener('input', validate);
-  passwordInput.addEventListener('input', validate);
-
-  signInBtn.addEventListener('click', async () => {
-    const email = emailInput.value.trim().toLowerCase();
-    const password = passwordInput.value;
-
-    signInBtn.disabled = true;
-    if (passkeyBtn) passkeyBtn.disabled = true;
-    const progress = content.querySelector('#signInProgress');
-    const error = content.querySelector('#signInError');
-    error.style.display = 'none';
-    progress.style.display = 'block';
-    progress.textContent = 'Signing in...';
-
-    try {
-      progress.textContent = 'Deriving encryption keys...';
-      await tarnService.login(email, password);
-      tarnService.displayName(email.split('@')[0]);
-      progress.textContent = 'Signed in!';
-      completePostSignIn();
-    } catch (e) {
-      console.error('[AccountUI] Sign in failed:', e);
-      let msg = 'Sign in failed. Please check your email and password.';
-      if (e.message?.includes('not found')) msg = 'Account not found. Check your email address.';
-      error.style.display = 'block';
-      error.textContent = msg;
-      progress.style.display = 'none';
-      signInBtn.disabled = false;
-      if (passkeyBtn) passkeyBtn.disabled = false;
-    }
-  });
-
-  passkeyBtn.addEventListener('click', async () => {
-    const progress = content.querySelector('#signInProgress');
-    const error = content.querySelector('#signInError');
-    error.style.display = 'none';
-    progress.style.display = 'block';
-    progress.textContent = 'Authenticating…';
-    passkeyBtn.disabled = true;
-    signInBtn.disabled = true;
-
-    // Capture the email field's current value (if any) at click time. The
-    // user may have typed an email then chosen passkey instead — we don't
-    // pre-fill the stale-repair view from this (the spec defers that), but
-    // we DO use it as a hint for `displayName` if the SDK auth succeeded
-    // and the user typed an email.
-    const typedEmail = emailInput.value.trim().toLowerCase();
-
-    try {
-      await tarnService.authenticateWithPasskey({
-        stalePasskeyHandler: () => promptStalePasskeyRepair(content),
-      });
-
-      // Passkey auth doesn't return the email (passkey-only sessions are
-      // username-less by design). Set displayName only if we have one in
-      // hand from the form field.
-      if (typedEmail && typedEmail.includes('@')) {
-        tarnService.displayName(typedEmail.split('@')[0]);
-      }
-
-      progress.textContent = 'Signed in!';
-      completePostSignIn();
-    } catch (e) {
-      console.error('[AccountUI] Passkey sign-in failed:', e);
-      // Re-render the original sign-in form fresh so the stale-repair
-      // view (if it was shown) cleanly disappears and any password the
-      // user typed in the repair form is dropped from the DOM.
-      renderSignInForm(content);
-      const errEl = content.querySelector('#signInError');
-      if (errEl) {
-        errEl.style.display = 'block';
-        errEl.textContent = humanizePasskeySigninError(e);
-      }
-    }
-  });
-
-  switchLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    renderCreateAccountForm(content);
-  });
-
-  // Asynchronously probe passkey support; reveal the CTA + divider only
-  // if supported. The cached probe from Phase 3 is reused.
-  getPasskeysSupported().then((supported) => {
-    if (!supported) return;
-    // Re-query in case the form was re-rendered between probe start
-    // and resolve; bail if the elements are gone.
-    const btn = content.querySelector('#signInPasskeyBtn');
-    const div = content.querySelector('#signInOrDivider');
-    if (btn) btn.style.display = '';
-    if (div) div.style.display = '';
-  }).catch(() => { /* swallow — keep button hidden on probe failure */ });
 }
 
 /**
@@ -720,100 +384,6 @@ function completePostSignIn() {
       console.warn('[Bookish:AccountUI] accountKeyReminder.init failed:', err?.message || err);
     }
   }, 500);
-}
-
-/**
- * Render the stale-credential repair view in place of the sign-in form
- * and resolve the returned Promise with `{ username, password }` if the
- * user submits, or `null` if they cancel. Called by the SDK via
- * `stalePasskeyHandler` only when the just-used credential is stale —
- * users will rarely see this view.
- *
- * The view fully replaces the sign-in form's content so any half-typed
- * state (email-only, partial password) doesn't leak in. On submit, the
- * password is collected and the form is removed from the DOM before the
- * Promise resolves — by the time the SDK is processing the repair, no
- * password is visible anywhere on the page.
- *
- * @param {HTMLElement} content - the modal content container
- * @returns {Promise<{ username: string, password: string } | null>}
- */
-function promptStalePasskeyRepair(content) {
-  return new Promise((resolve) => {
-    content.innerHTML = `
-      <div class="auth-form">
-        <div class="auth-header">
-          <div class="auth-icon">${SVG_SHIELD}</div>
-          <h2>Just a moment</h2>
-          <p>We need to confirm it's you to keep this device signed in. Enter your email and password — this only happens occasionally.</p>
-        </div>
-
-        <div class="form-group">
-          <label for="staleRepairEmail">Email</label>
-          <input type="email" id="staleRepairEmail" autocomplete="email" placeholder="you@example.com" required />
-        </div>
-
-        <div class="form-group">
-          <label for="staleRepairPassword">Password</label>
-          <div class="password-field">
-            <input type="password" id="staleRepairPassword" autocomplete="current-password" placeholder="Your password" required />
-            <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
-          </div>
-        </div>
-
-        <button id="staleRepairBtn" class="btn primary auth-submit" disabled>
-          Continue
-        </button>
-
-        <div class="auth-switch">
-          <button type="button" class="btn-link" id="staleRepairCancel">Cancel</button>
-        </div>
-      </div>
-    `;
-
-    const emailInput = content.querySelector('#staleRepairEmail');
-    const pwInput = content.querySelector('#staleRepairPassword');
-    const btn = content.querySelector('#staleRepairBtn');
-    const cancelLink = content.querySelector('#staleRepairCancel');
-
-    content.querySelectorAll('.password-toggle').forEach(b => {
-      b.addEventListener('click', () => {
-        const input = b.previousElementSibling;
-        const showing = input.type === 'text';
-        input.type = showing ? 'password' : 'text';
-        b.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
-      });
-    });
-
-    const validate = () => {
-      btn.disabled = !(emailInput.value.trim() && pwInput.value.length >= 1);
-    };
-    emailInput.addEventListener('input', validate);
-    pwInput.addEventListener('input', validate);
-
-    let resolved = false;
-    const finish = (val) => {
-      if (resolved) return;
-      resolved = true;
-      // Clear password field BEFORE resolving so the value is gone from
-      // the DOM by the time the SDK starts processing it. The form will
-      // also be replaced wholesale by the success/failure path, but
-      // belt-and-suspenders.
-      try { pwInput.value = ''; } catch { /* noop */ }
-      resolve(val);
-    };
-
-    btn.addEventListener('click', () => {
-      const username = emailInput.value.trim().toLowerCase();
-      const password = pwInput.value;
-      if (!username || !password) return;
-      finish({ username, password });
-    });
-
-    cancelLink.addEventListener('click', () => {
-      finish(null);
-    });
-  });
 }
 
 // ============================================================================
@@ -1611,50 +1181,6 @@ function humanizePasskeyError(err) {
 }
 
 /**
- * Translate a passkey *sign-in* error into a user-facing string. Sibling
- * of `humanizePasskeyError` (registration). The error space is different:
- * sign-in surfaces "no passkey on this device", `StalePasskeyError` (raised
- * by the SDK when the stale-repair handler returns null), and the usual
- * WebAuthn cancel / network / generic cases.
- */
-function humanizePasskeySigninError(err) {
-  const msg = err?.message || '';
-  const name = err?.name || '';
-
-  // SDK raises StalePasskeyError when stalePasskeyHandler returns null.
-  // Detect by name (the SDK's class isn't re-exported from the bundle).
-  if (name === 'StalePasskeyError' || /StalePasskeyError/i.test(msg)) {
-    return 'Sign-in cancelled.';
-  }
-
-  // WebAuthn user-cancel: NotAllowedError on most browsers.
-  if (name === 'NotAllowedError' || /not allowed|user cancelled|user canceled|cancelled by user/i.test(msg)) {
-    return 'Passkey sign-in was cancelled. Try again or sign in with your password.';
-  }
-
-  // No registered passkey for this device / account. The server's
-  // /api/v1/auth/passkey/authentication-options route returns a 404-ish
-  // when no credential matches; the SDK wraps this into "options failed".
-  // Match on common phrasings — "no credentials", "no passkeys", etc.
-  if (
-    /no credentials|no passkey|no registered|credential not found|no_credentials_found|options failed/i.test(msg)
-  ) {
-    return "We couldn't find a passkey on this device. Sign in with your password to add one.";
-  }
-
-  // Network / fetch failure.
-  if (
-    name === 'TypeError' && /failed to fetch|network|load failed/i.test(msg) ||
-    /network|fetch|offline/i.test(msg)
-  ) {
-    return "Couldn't reach the server. Check your connection and try again.";
-  }
-
-  // Generic fallback.
-  return "Passkey sign-in didn't work. Try again or sign in with your password.";
-}
-
-/**
  * Open the Add-passkey dialog. Resolves with `{ deviceLabel }` on
  * confirm, `null` on cancel/backdrop dismiss. The returned label is
  * trimmed; an empty trimmed value blocks the confirm button.
@@ -2447,26 +1973,6 @@ function csvEscape(str) {
     return '"' + str.replace(/"/g, '""') + '"';
   }
   return str;
-}
-
-// ============================================================================
-// PASSWORD STRENGTH
-// ============================================================================
-
-function assessPasswordStrength(password) {
-  if (!password) return { pct: 0, label: '', cls: '' };
-  let score = 0;
-  if (password.length >= 8) score++;
-  if (password.length >= 12) score++;
-  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
-  if (/\d/.test(password)) score++;
-  if (/[^a-zA-Z0-9]/.test(password)) score++;
-
-  if (score <= 1) return { pct: 20, label: 'Weak', cls: 'strength-weak' };
-  if (score === 2) return { pct: 40, label: 'Fair', cls: 'strength-weak' };
-  if (score === 3) return { pct: 60, label: 'Good', cls: 'strength-medium' };
-  if (score === 4) return { pct: 80, label: 'Strong', cls: 'strength-good' };
-  return { pct: 100, label: 'Very Strong', cls: 'strength-good' };
 }
 
 // Expose for app.js
