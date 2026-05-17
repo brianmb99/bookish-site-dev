@@ -1596,30 +1596,30 @@ html.modal-transitioning::view-transition-new(root){
 .status-option{flex:1;padding:10px 8px;font-size:.75rem;font-weight:600;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--color-text-muted);transition:all .2s;min-height:40px;font-family:var(--font-body);box-shadow:none;white-space:nowrap}
 .status-option.active{background:var(--color-bg-elevated);color:var(--color-text-primary);box-shadow:0 1px 4px rgba(0,0,0,.2)}
 .status-selector.status-commit-actions{
-  gap:8px;
+  gap:10px;
   background:transparent;
   padding:0;
   margin-bottom:14px;
 }
-.status-selector.status-commit-actions .status-option,
-.status-selector.status-commit-actions .status-option.active{
-  background:var(--color-bg-surface);
-  border:1px solid var(--color-border-subtle);
+.status-selector.status-commit-actions .status-option{
+  background:linear-gradient(180deg,rgba(36,43,53,.98),rgba(24,30,38,.98));
+  border:1px solid var(--color-border-default);
   color:var(--color-text-primary);
-  box-shadow:0 6px 18px rgba(0,0,0,.16);
-}
-.status-selector.status-commit-actions .status-option.active{
-  border-color:rgba(96,165,250,.42);
+  box-shadow:0 8px 20px rgba(0,0,0,.18),0 1px 0 rgba(255,255,255,.04) inset;
+  min-height:44px;
 }
 .status-selector.status-commit-actions .status-option:hover:not(:disabled),
 .status-selector.status-commit-actions .status-option:focus-visible{
   border-color:var(--color-primary);
   background:var(--color-bg-elevated);
+  color:#fff;
+  transform:translateY(-1px);
 }
 .status-selector.status-commit-actions .status-option:disabled{
   cursor:not-allowed;
   opacity:.42;
   box-shadow:none;
+  transform:none;
 }
 @media(max-width:399px){.status-option{padding:8px 6px;font-size:.7rem}}
 
@@ -4061,7 +4061,8 @@ body.modal-open{overscroll-behavior-y:contain}
   transition:opacity .2s;
   margin-top:-8px;
 }
-.status-microcopy.visible{opacity:.85}
+.status-microcopy:not(.visible){display:none}
+.status-microcopy.visible{display:block;opacity:.85}
 
 /* Status pill pulse confirmation */
 .status-option.pulse{animation:status-pulse .45s ease-out}
@@ -4087,6 +4088,35 @@ body.modal-open{overscroll-behavior-y:contain}
   transition:background .15s,color .15s;
 }
 .summary-row .summary-seg:hover{background:var(--color-bg-surface);color:var(--color-text-primary)}
+.summary-row .summary-date-seg{
+  padding:6px 10px;
+  border:1px solid transparent;
+}
+.summary-row .summary-date-seg:hover,
+.summary-row .summary-date-seg:focus-visible{
+  border-color:var(--color-border-default);
+  outline:none;
+}
+.summary-row .summary-static-seg{
+  cursor:default;
+}
+.summary-row .summary-static-seg:hover{
+  background:transparent;
+  color:var(--color-text-secondary);
+}
+.summary-date-input{
+  width:auto!important;
+  max-width:160px!important;
+  min-height:32px!important;
+  margin:0!important;
+  padding:5px 8px!important;
+  border-radius:8px!important;
+  border:1px solid var(--color-primary)!important;
+  background:var(--color-bg-deep)!important;
+  color:var(--color-text-primary)!important;
+  font-size:.8rem!important;
+  font-family:var(--font-body);
+}
 .summary-row .summary-stars{color:var(--color-warning);letter-spacing:.5px}
 .summary-row .summary-sep{opacity:.4;align-self:center;pointer-events:none}
 

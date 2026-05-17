@@ -701,6 +701,7 @@ function _syncStatusSelectorMode(){
   statusSelector.querySelectorAll('.status-option').forEach(btn => {
     btn.disabled = isDisabled;
     if(isAddMode){
+      btn.classList.remove('active');
       btn.removeAttribute('role');
       btn.removeAttribute('aria-checked');
     } else {
@@ -722,11 +723,12 @@ function _stampStatusTransitionDates(newStatus, prevStatus){
 
 function setReadingStatus(status, opts){
   const prev = readingStatusInput?.value;
+  const isAddMode = _isAddMode();
   if(readingStatusInput) readingStatusInput.value = status;
   statusSelector?.querySelectorAll('.status-option').forEach(btn => {
     const active = btn.dataset.status === status;
-    btn.classList.toggle('active', active);
-    if(!_isAddMode()) btn.setAttribute('aria-checked', active ? 'true' : 'false');
+    btn.classList.toggle('active', !isAddMode && active);
+    if(!isAddMode) btn.setAttribute('aria-checked', active ? 'true' : 'false');
   });
   applyIntentUI(status);
   _syncStatusSelectorMode();
@@ -744,14 +746,8 @@ function setReadingStatus(status, opts){
 }
 
 /**
- * Apply status-driven row visibility for the new detail-rows layout (#114).
- * - WTR: hide Started, hide Finished
- * - Reading: show Started, hide Finished
- * - Read: show Started (if data) and Finished (label "Finished")
- *
- * The single dateRead input is repurposed: for Reading it represents the
- * `readingStartedAt` date (label "Started"); for Read it represents `dateRead`
- * (label "Finished"). For WTR, the row is hidden (the date is implicit createdAt).
+ * Apply status-driven state for the date value. The physical date row is kept
+ * out of the detail table; the summary chip owns the visible edit affordance.
  */
 function applyIntentUI(intent){
   const isWtr = intent === READING_STATUS.WANT_TO_READ;
@@ -759,11 +755,7 @@ function applyIntentUI(intent){
   const dateInput = form.dateRead;
 
   if(dateRow){
-    if(isWtr){
-      dateRow.dataset.hidden = 'true';
-    } else {
-      delete dateRow.dataset.hidden;
-    }
+    dateRow.dataset.hidden = 'true';
   }
   if(dateReadLabelEl){
     dateReadLabelEl.textContent = isReading ? 'Started' : 'Finished';
@@ -803,8 +795,40 @@ function _showStatusMicrocopy(status){
  * Shows: rating stars, Started date, Finished date — only segments that are set.
  * Hidden entirely on WTR with no data.
  */
+let _summaryDateEditing = null;
+
+function _dateInputToSummaryMs(value){
+  if(!value) return null;
+  const ms = dateStringToMsNoonUtc(value);
+  return ms == null ? null : ms;
+}
+
+function _summaryDateValueForStatus(status, entry){
+  const formValue = form.dateRead?.value || '';
+  if(formValue) return formValue;
+  if(status === READING_STATUS.READING) return entry?.readingStartedAt ? new Date(entry.readingStartedAt).toISOString().slice(0,10) : '';
+  if(status === READING_STATUS.READ) return msToDateInputUtc(entry?.dateRead) || '';
+  return '';
+}
+
+function _renderSummaryDateSegment(kind, label, value){
+  const ms = _dateInputToSummaryMs(value);
+  if(ms == null) return '';
+  const ariaLabel = kind === 'started' ? 'Edit start date' : 'Edit finish date';
+  if(_summaryDateEditing === kind){
+    return `<input type="date" class="summary-date-input" data-edit-date="${kind}" aria-label="${ariaLabel}" value="${escapeHtml(value)}">`;
+  }
+  return `<span class="summary-seg summary-date-seg" data-edit="${kind}" tabindex="0" role="button" aria-label="${ariaLabel}">${label} ${escapeHtml(_formatDayMonth(ms))}</span>`;
+}
+
 function _renderSummaryRow(){
   if(!summaryRowEl) return;
+  if(_isAddMode()){
+    summaryRowEl.style.display='none';
+    summaryRowEl.innerHTML='';
+    _summaryDateEditing = null;
+    return;
+  }
   const status = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
   const isWtr = status === READING_STATUS.WANT_TO_READ;
   const segs = [];
@@ -815,13 +839,15 @@ function _renderSummaryRow(){
   }
   const entry = form.priorTxid.value ? entries.find(e=>(e.txid||e.id)===form.priorTxid.value) : null;
   const startedMs = entry?.readingStartedAt;
-  const finishedMs = entry?.dateRead;
-  if(status === READING_STATUS.READING && startedMs){
-    segs.push(`<span class="summary-seg" data-edit="started" tabindex="0" role="button" aria-label="Edit start date">Started ${escapeHtml(_formatDayMonth(startedMs))}</span>`);
+  const currentDateValue = _summaryDateValueForStatus(status, entry);
+  if(status === READING_STATUS.READING){
+    const startedSeg = _renderSummaryDateSegment('started', 'Started', currentDateValue);
+    if(startedSeg) segs.push(startedSeg);
   }
   if(status === READING_STATUS.READ){
-    if(startedMs) segs.push(`<span class="summary-seg" data-edit="started" tabindex="0" role="button" aria-label="Edit start date">Started ${escapeHtml(_formatDayMonth(startedMs))}</span>`);
-    if(finishedMs) segs.push(`<span class="summary-seg" data-edit="finished" tabindex="0" role="button" aria-label="Edit finish date">Finished ${escapeHtml(_formatDayMonth(finishedMs))}</span>`);
+    if(startedMs) segs.push(`<span class="summary-seg summary-static-seg">Started ${escapeHtml(_formatDayMonth(startedMs))}</span>`);
+    const finishedSeg = _renderSummaryDateSegment('finished', 'Finished', currentDateValue);
+    if(finishedSeg) segs.push(finishedSeg);
   }
   if(!segs.length){
     summaryRowEl.style.display='none';
@@ -830,6 +856,32 @@ function _renderSummaryRow(){
   }
   summaryRowEl.innerHTML = segs.join('<span class="summary-sep">·</span>');
   summaryRowEl.style.display='flex';
+}
+
+function _startSummaryDateEdit(which){
+  if(_isAddMode()) return;
+  const status = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
+  const canEditStarted = which === 'started' && status === READING_STATUS.READING;
+  const canEditFinished = which === 'finished' && status === READING_STATUS.READ;
+  if(!canEditStarted && !canEditFinished) return;
+  _summaryDateEditing = which;
+  _renderSummaryRow();
+  requestAnimationFrame(()=>{
+    const input = summaryRowEl?.querySelector(`.summary-date-input[data-edit-date="${which}"]`);
+    input?.focus?.();
+    try{ input?.showPicker?.(); }catch{}
+  });
+}
+
+function _commitSummaryDateInput(input){
+  if(!input || !input.classList.contains('summary-date-input')) return;
+  if(input.value && form.dateRead.value !== input.value){
+    form.dateRead.value = input.value;
+    updateDirty();
+  }
+  _summaryDateEditing = null;
+  _renderSummaryRow();
+  _autoSaveIfDirty();
 }
 
 function _formatDayMonth(ms){
@@ -1096,7 +1148,39 @@ summaryRowEl?.addEventListener('click', e=>{
     const firstStar = starRatingEl?.querySelector('.star');
     firstStar?.focus?.();
   } else if(which === 'started' || which === 'finished'){
-    form.dateRead?.focus?.();
+    _startSummaryDateEdit(which);
+  }
+});
+summaryRowEl?.addEventListener('keydown', e=>{
+  const seg = e.target.closest('.summary-seg');
+  if(!seg) return;
+  if(e.key !== 'Enter' && e.key !== ' ') return;
+  const which = seg.dataset.edit;
+  if(which !== 'started' && which !== 'finished') return;
+  e.preventDefault();
+  _startSummaryDateEdit(which);
+});
+summaryRowEl?.addEventListener('change', e=>{
+  const input = e.target.closest('.summary-date-input');
+  if(input) _commitSummaryDateInput(input);
+});
+summaryRowEl?.addEventListener('focusout', e=>{
+  const input = e.target.closest('.summary-date-input');
+  if(input) setTimeout(()=>{
+    if(_summaryDateEditing) _commitSummaryDateInput(input);
+  }, 0);
+});
+summaryRowEl?.addEventListener('keydown', e=>{
+  const input = e.target.closest('.summary-date-input');
+  if(!input) return;
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    _commitSummaryDateInput(input);
+  }
+  if(e.key === 'Escape'){
+    e.preventDefault();
+    _summaryDateEditing = null;
+    _renderSummaryRow();
   }
 });
 
