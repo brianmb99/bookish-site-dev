@@ -3,6 +3,14 @@
 
 const KEYBOARD_THRESHOLD = 150; // px difference to consider keyboard open
 
+function isBookDetailPlacard(el) {
+  return !!el?.classList?.contains('placard') && !!el.closest?.('.book-detail-placards');
+}
+
+function getScrollBlock(el) {
+  return isBookDetailPlacard(el) ? 'nearest' : 'center';
+}
+
 /**
  * Attach keyboard-aware viewport handling to a bottom sheet modal.
  * Listens for visualViewport resize events to detect keyboard open/close,
@@ -62,7 +70,7 @@ export function attachKeyboardHandler({ sheet }) {
     setTimeout(() => {
       focused.scrollIntoView({
         behavior: reducedMotion ? 'instant' : 'smooth',
-        block: 'center',
+        block: getScrollBlock(focused),
       });
     }, 50);
   }
@@ -76,7 +84,7 @@ export function attachKeyboardHandler({ sheet }) {
       setTimeout(() => {
         el.scrollIntoView({
           behavior: reducedMotion ? 'instant' : 'smooth',
-          block: 'center',
+          block: getScrollBlock(el),
         });
       }, 100);
     }

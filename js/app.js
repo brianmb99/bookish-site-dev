@@ -643,8 +643,45 @@ function attachPrivacyLockOverlay(cardEl, entry){
 /** Auto-grow a single-row textarea (#114 placards). */
 function _autoGrowPlacard(el){
   if(!el) return;
+  const styles = window.getComputedStyle ? window.getComputedStyle(el) : null;
+  const lineHeight = parseFloat(styles?.lineHeight) || (parseFloat(styles?.fontSize) || 16) * 1.3;
+  const padding = (parseFloat(styles?.paddingTop) || 0) + (parseFloat(styles?.paddingBottom) || 0);
+  const maxLines = parseFloat(styles?.getPropertyValue('--placard-max-lines')) || 2;
+  const maxHeight = Math.ceil(lineHeight * maxLines + padding);
+  _autoSizePlacardWidth(el, styles);
   el.style.height='auto';
-  el.style.height = el.scrollHeight + 'px';
+  const nextHeight = Math.min(el.scrollHeight, maxHeight);
+  el.style.height = nextHeight + 'px';
+  el.style.overflowY = el.scrollHeight > maxHeight + 1 ? 'auto' : 'hidden';
+}
+
+function _autoSizePlacardWidth(el, styles){
+  const parent = el.closest?.('.book-detail-placards');
+  const parentWidth = parent?.clientWidth || el.parentElement?.clientWidth || 0;
+  if(!parentWidth || !styles) return;
+
+  const padding = (parseFloat(styles.paddingLeft) || 0) + (parseFloat(styles.paddingRight) || 0);
+  const minCh = parseFloat(styles.getPropertyValue('--placard-min-ch')) || 10;
+  const maxCh = parseFloat(styles.getPropertyValue('--placard-max-ch')) || 32;
+  const fontSize = parseFloat(styles.fontSize) || 16;
+  let chWidth = fontSize * 0.55;
+  let measured = 0;
+
+  try{
+    const canvas = _autoSizePlacardWidth._canvas || (_autoSizePlacardWidth._canvas = document.createElement('canvas'));
+    const ctx = canvas.getContext('2d');
+    if(ctx){
+      ctx.font = `${styles.fontStyle} ${styles.fontVariant} ${styles.fontWeight} ${styles.fontSize} ${styles.fontFamily}`;
+      chWidth = ctx.measureText('0').width || chWidth;
+      const text = (el.value || el.placeholder || ' ').split('\n');
+      measured = Math.max(...text.map(line => ctx.measureText(line || ' ').width));
+    }
+  }catch{}
+
+  const maxWidth = Math.min(parentWidth, Math.ceil(chWidth * maxCh + padding));
+  const minWidth = Math.min(maxWidth, Math.ceil(chWidth * minCh + padding));
+  const contentWidth = measured ? Math.ceil(measured + padding + 2) : minWidth;
+  el.style.setProperty('width', Math.max(minWidth, Math.min(maxWidth, contentWidth)) + 'px', 'important');
 }
 
 function setReadingStatus(status, opts){
@@ -784,9 +821,9 @@ function _finalizeCloseModal(fromPopstate){
   delete form.dataset.orig;
   if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent='Add to List'; }
   if(statusSelector) statusSelector.style.display='none';
-  // Reset placard heights
-  if(placardTitle){ placardTitle.style.height=''; }
-  if(placardAuthor){ placardAuthor.style.height=''; }
+  // Reset placard dimensions
+  if(placardTitle){ placardTitle.style.height=''; placardTitle.style.width=''; placardTitle.style.overflowY=''; }
+  if(placardAuthor){ placardAuthor.style.height=''; placardAuthor.style.width=''; placardAuthor.style.overflowY=''; }
   // Reset row visibility for next open
   if(dateRow) delete dateRow.dataset.hidden;
   if(form.dateRead) form.dateRead.readOnly=false;
