@@ -64,7 +64,6 @@ const tileCoverClick = document.getElementById('tileCoverClick');
 const coverPlaceholder = document.getElementById('coverPlaceholder');
 const coverRemoveBtn = document.getElementById('coverRemoveBtn');
 const notesInput = document.getElementById('notesInput');
-const saveBtn = document.getElementById('saveBtn');
 const deleteBtn = document.getElementById('deleteBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 // Phase 2: First-run experience refs
@@ -688,15 +687,49 @@ function _autoSizePlacardWidth(el, styles){
   el.style.setProperty('width', Math.max(minWidth, Math.min(maxWidth, contentWidth)) + 'px', 'important');
 }
 
+function _hasRequiredTitle(){
+  return !!(titleInput?.value || '').trim();
+}
+
+function _syncStatusSelectorMode(){
+  if(!statusSelector) return;
+  const isAddMode = _isAddMode();
+  const isDisabled = isAddMode && (!_hasRequiredTitle() || _formSubmitting);
+  statusSelector.classList.toggle('status-commit-actions', isAddMode);
+  statusSelector.setAttribute('role', isAddMode ? 'group' : 'radiogroup');
+  statusSelector.setAttribute('aria-label', isAddMode ? 'Add book as' : 'Reading status');
+  statusSelector.querySelectorAll('.status-option').forEach(btn => {
+    btn.disabled = isDisabled;
+    if(isAddMode){
+      btn.removeAttribute('role');
+      btn.removeAttribute('aria-checked');
+    } else {
+      btn.setAttribute('role', 'radio');
+      btn.setAttribute('aria-checked', btn.classList.contains('active') ? 'true' : 'false');
+    }
+  });
+}
+
+function _stampStatusTransitionDates(newStatus, prevStatus){
+  const todayIso = new Date().toISOString().slice(0,10);
+  if(newStatus === READING_STATUS.READING && prevStatus === READING_STATUS.WANT_TO_READ){
+    if(form.dateRead) form.dateRead.value = todayIso;
+  }
+  if(newStatus === READING_STATUS.READ && prevStatus !== READING_STATUS.READ){
+    if(form.dateRead) form.dateRead.value = todayIso;
+  }
+}
+
 function setReadingStatus(status, opts){
   const prev = readingStatusInput?.value;
   if(readingStatusInput) readingStatusInput.value = status;
   statusSelector?.querySelectorAll('.status-option').forEach(btn => {
     const active = btn.dataset.status === status;
     btn.classList.toggle('active', active);
-    btn.setAttribute('aria-checked', active ? 'true' : 'false');
+    if(!_isAddMode()) btn.setAttribute('aria-checked', active ? 'true' : 'false');
   });
   applyIntentUI(status);
+  _syncStatusSelectorMode();
   _applyStatusFieldVisibility();
   _renderSummaryRow();
   // Confirmation pulse + microcopy (#114) — skipped during initial silent open
@@ -746,10 +779,7 @@ function applyIntentUI(intent){
     }
   }
 
-  const isAddMode = modal.querySelector('.modal-inner')?.classList.contains('add-mode');
-  if(isAddMode){
-    if(saveBtn) saveBtn.textContent = (isWtr || isReading) ? 'Add to List' : 'Add to Shelf';
-  }
+  _syncStatusSelectorMode();
 }
 
 const STATUS_MICROCOPY = {
@@ -823,8 +853,7 @@ function _finalizeCloseModal(fromPopstate){
   coverPreview.style.display='none';
   if(coverRemoveBtn) coverRemoveBtn.style.display='none';
   delete form.dataset.orig;
-  if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent='Add to List'; }
-  if(statusSelector) statusSelector.style.display='none';
+  if(statusSelector){ statusSelector.style.display='none'; statusSelector.classList.remove('status-commit-actions'); }
   // Reset placard dimensions
   if(placardTitle){ placardTitle.style.height=''; placardTitle.style.width=''; placardTitle.style.overflowY=''; }
   if(placardAuthor){ placardAuthor.style.height=''; placardAuthor.style.width=''; placardAuthor.style.overflowY=''; }
@@ -911,7 +940,7 @@ function snapshotOriginal(){ form.dataset.orig = currentFormState(); }
 function updateDirty(){
   const orig=form.dataset.orig||'';
   const cur=currentFormState();
-  if(saveBtn) saveBtn.disabled = (orig===cur);
+  _syncStatusSelectorMode();
 }
 if(!form._dirtyBound){
   form._dirtyBound=true;
@@ -928,7 +957,7 @@ if(!form._dirtyBound){
 
 // --- Auto-save (#114) ---
 // Auto-save on blur for inline-edit fields. Skip when no change vs snapshot,
-// or when in add-mode (the explicit Add to List CTA handles that case).
+// or when in add-mode (status commit buttons handle that case).
 let _autosaveInFlight = false;
 function _isAddMode(){ return modal.querySelector('.modal-inner')?.classList.contains('add-mode'); }
 function _showAutosaveSaved(){
@@ -1037,7 +1066,7 @@ function _buildPayloadFromForm(){
 }
 
 // Wire up blur-based auto-save for inline-edit fields. Triggered only in
-// edit (view) mode — add-mode commits via the Add to List CTA.
+// edit (view) mode — add-mode commits via the status choices.
 function _bindAutoSaveBlur(el){
   if(!el || el._autoSaveBound) return;
   el._autoSaveBound = true;
@@ -2185,19 +2214,20 @@ statusSelector?.addEventListener('click', (ev)=>{
   if(!btn) return;
   const newStatus = btn.dataset.status;
   const prevStatus = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
+  if(_isAddMode() && !form.priorTxid.value){
+    _stampStatusTransitionDates(newStatus, prevStatus);
+    setReadingStatus(newStatus, { silent: true });
+    updateDirty();
+    commitEntryForm();
+    return;
+  }
   if(newStatus === prevStatus) return;
   haptic();
   // Stamp transition timestamps when crossing into Reading/Read for the first time.
   // (BookRepository.changeStatus also stamps these on persist; we mirror here so
   // the open modal reflects the new state immediately and auto-save sends
   // the canonical values.)
-  const todayIso = new Date().toISOString().slice(0,10);
-  if(newStatus === READING_STATUS.READING && prevStatus === READING_STATUS.WANT_TO_READ){
-    if(form.dateRead) form.dateRead.value = todayIso;
-  }
-  if(newStatus === READING_STATUS.READ && prevStatus !== READING_STATUS.READ){
-    if(form.dateRead) form.dateRead.value = todayIso;
-  }
+  _stampStatusTransitionDates(newStatus, prevStatus);
   setReadingStatus(newStatus);
   updateDirty();
   // Auto-save status change in view mode (#114)
@@ -2265,7 +2295,44 @@ async function deleteServerless(priorTxid) {
 
 // --- Form handlers ---
 let _formSubmitting = false;
-form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) return; _formSubmitting=true; const priorTxid=form.priorTxid.value||undefined; const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ; const dateVal = form.dateRead.value; const payload={ title:(titleInput?.value||'').trim(), author:(authorInput?.value||'').trim(), format:form.format.value, readingStatus:rsValue }; if(rsValue === READING_STATUS.READ){ const ms = dateStringToMsNoonUtc(dateVal); if(ms != null) payload.dateRead = ms; } else if(rsValue === READING_STATUS.READING){ payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now(); } if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; if(coverPreview.dataset.fit) payload.coverFit=coverPreview.dataset.fit; } else if(priorTxid){ payload.coverImage=''; payload.mimeType=''; } const notesVal=(notesInput?.value||'').trim(); if(notesVal) payload.notes=notesVal; const optVals=getOptionalFieldValues(); if(priorTxid){ payload.rating=optVals.rating||0; payload.owned=!!optVals.owned; payload.tags=optVals.tags||''; if(!notesVal) payload.notes=''; } else { if(optVals.rating) payload.rating=optVals.rating; if(optVals.owned) payload.owned=optVals.owned; if(optVals.tags) payload.tags=optVals.tags; }
+
+function _buildSubmitPayloadFromForm(priorTxid){
+  const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
+  const dateVal = form.dateRead.value;
+  const payload = {
+    title: (titleInput?.value||'').trim(),
+    author: (authorInput?.value||'').trim(),
+    format: form.format.value,
+    readingStatus: rsValue
+  };
+  if(rsValue === READING_STATUS.READ){
+    const ms = dateStringToMsNoonUtc(dateVal);
+    if(ms != null) payload.dateRead = ms;
+  } else if(rsValue === READING_STATUS.READING){
+    payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now();
+  }
+  if(coverPreview.dataset.b64){
+    payload.coverImage = coverPreview.dataset.b64;
+    if(coverPreview.dataset.mime) payload.mimeType = coverPreview.dataset.mime;
+    if(coverPreview.dataset.fit) payload.coverFit = coverPreview.dataset.fit;
+  } else if(priorTxid){
+    payload.coverImage = '';
+    payload.mimeType = '';
+  }
+  const notesVal = (notesInput?.value||'').trim();
+  if(notesVal) payload.notes = notesVal;
+  const optVals = getOptionalFieldValues();
+  if(priorTxid){
+    payload.rating = optVals.rating || 0;
+    payload.owned = !!optVals.owned;
+    payload.tags = optVals.tags || '';
+    if(!notesVal) payload.notes = '';
+  } else {
+    if(optVals.rating) payload.rating = optVals.rating;
+    if(optVals.owned) payload.owned = optVals.owned;
+    if(optVals.tags) payload.tags = optVals.tags;
+  }
+
   // Friend-matching identifiers: capture from search state for new books only.
   // Edits leave the existing work_key/isbn13 untouched (book_repository.update merges).
   if(!priorTxid && window.bookSearch?.getSearchMeta){
@@ -2286,13 +2353,36 @@ form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) re
   // pre-edit shape.
   if(isPrivateInput?.value === 'true') payload.is_private = true;
   else if(priorTxid) payload.is_private = false;
+  return payload;
+}
+
+function commitEntryForm(){
+  if(_formSubmitting) return;
+  const priorTxid = form.priorTxid.value || undefined;
+  if(!priorTxid && !_hasRequiredTitle()){
+    _syncStatusSelectorMode();
+    titleInput?.focus();
+    return;
+  }
+  _formSubmitting = true;
+  _syncStatusSelectorMode();
+  const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
+  const payload = _buildSubmitPayloadFromForm(priorTxid);
   uiStatusManager.refresh();
   const toastMsg = rsValue === READING_STATUS.WANT_TO_READ ? 'Added to Want to Read' : rsValue === READING_STATUS.READING ? 'Added to Currently Reading' : (!priorTxid ? 'Added to Shelf' : null);
   haptic();
   if(priorTxid){
-  closeModal();
-  editServerless(priorTxid,payload).catch(()=> { appError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); });
-} else { closeModal(); createServerless(payload).then(()=>{ if(toastMsg) showStatusToast(toastMsg); }).catch(()=> { appError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); }); }
+    closeModal();
+    editServerless(priorTxid,payload).catch(()=> { appError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); });
+  } else {
+    closeModal();
+    createServerless(payload).then(()=>{ if(toastMsg) showStatusToast(toastMsg); }).catch(()=> { appError='Couldn\u2019t save to cloud. Your book is safe locally.'; uiStatusManager.refresh(); });
+  }
+}
+
+form.addEventListener('submit', ev => {
+  ev.preventDefault();
+  commitEntryForm();
 });
 
 deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value; if(!txid) return; haptic(); closeModal(); await deleteServerless(txid); });

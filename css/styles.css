@@ -1595,6 +1595,32 @@ html.modal-transitioning::view-transition-new(root){
 .status-selector{display:flex;gap:0;background:var(--color-bg-deep);border-radius:10px;padding:3px;margin-bottom:16px}
 .status-option{flex:1;padding:10px 8px;font-size:.75rem;font-weight:600;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--color-text-muted);transition:all .2s;min-height:40px;font-family:var(--font-body);box-shadow:none;white-space:nowrap}
 .status-option.active{background:var(--color-bg-elevated);color:var(--color-text-primary);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.status-selector.status-commit-actions{
+  gap:8px;
+  background:transparent;
+  padding:0;
+  margin-bottom:14px;
+}
+.status-selector.status-commit-actions .status-option,
+.status-selector.status-commit-actions .status-option.active{
+  background:var(--color-bg-surface);
+  border:1px solid var(--color-border-subtle);
+  color:var(--color-text-primary);
+  box-shadow:0 6px 18px rgba(0,0,0,.16);
+}
+.status-selector.status-commit-actions .status-option.active{
+  border-color:rgba(96,165,250,.42);
+}
+.status-selector.status-commit-actions .status-option:hover:not(:disabled),
+.status-selector.status-commit-actions .status-option:focus-visible{
+  border-color:var(--color-primary);
+  background:var(--color-bg-elevated);
+}
+.status-selector.status-commit-actions .status-option:disabled{
+  cursor:not-allowed;
+  opacity:.42;
+  box-shadow:none;
+}
 @media(max-width:399px){.status-option{padding:8px 6px;font-size:.7rem}}
 
 /* Status toast */
@@ -2021,8 +2047,6 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   /* 16px minimum prevents iOS Safari auto-zoom on focus */
   input,select,textarea{font-size:16px!important}
   .modal-inner .field-block input,.modal-inner .field-block select{padding:5px 7px}
-  .modal-inner .primary-actions{margin-top:8px}
-  .modal-inner .primary-actions .btn{padding:8px 14px;font-size:.75rem;min-height:42px}
   .notes-block{margin-top:4px}
   .notes-block textarea{min-height:48px}
   .cards{display:grid;grid-template-columns:repeat(var(--mobile-columns), minmax(0,1fr));gap:18px;margin-top:8px;transition:grid-template-columns .25s}
@@ -2325,12 +2349,6 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .modal-inner .field-block input,.modal-inner .field-block select{background:transparent;border:1px solid var(--color-border-subtle);padding:6px 8px;font-size:.75rem;border-radius:8px;transition:border-color .2s,background .2s}
 .modal-inner .field-block input:focus,.modal-inner .field-block select:focus{outline:none;border-color:#2563eb;background:#192028}
 .modal-inner .field-block.readonly input:not(:focus){border-color:transparent;background:transparent;cursor:text}
-.modal-inner .primary-actions{margin-top:12px;display:flex;gap:10px;justify-content:flex-end}
-/* #144: tightened add-mode primary-actions margin so the Add-to-List
-   button sits closer to the privacy row above (less wasted vertical
-   space at typical content density). */
-.modal-inner.add-mode .primary-actions{justify-content:center;margin-top:6px}
-.modal-inner .primary-actions .btn{padding:10px 18px;font-size:.8rem}
 /* Distinguish edit (existing entry) vs add */
 .modal-inner:not(.add-mode) .add-only{display:none}
 .add-mode .edit-only{display:none}
@@ -4172,39 +4190,96 @@ body.modal-open{overscroll-behavior-y:contain}
 .autosave-microcopy.visible{opacity:.85}
 .autosave-microcopy.error{color:var(--color-error);opacity:1;cursor:pointer}
 
-/* Add-mode: solid-blue Add to List CTA centered */
+/* Add/edit visibility toggles */
 .modal-inner:not(.add-mode) .add-only{display:none}
 .modal-inner.add-mode .edit-only{display:none}
-.modal-inner.add-mode .primary-actions{justify-content:center}
 
 /* Hide status selector by default; openModal toggles inline */
 /* (status-selector existing styles already provide layout) */
 
-/* Desktop: switch hero to 2-col layout */
+/* Desktop: detail sheet becomes a true two-column surface */
 @media(min-width:760px){
+  .modal-inner.book-detail-page,
+  .modal-inner.book-detail-page.add-mode{
+    max-width:860px;
+  }
+  .book-detail-form{
+    display:grid;
+    grid-template-columns:minmax(220px,280px) minmax(0,1fr);
+    grid-template-areas:
+      "cover placards"
+      "cover status"
+      "cover microcopy"
+      "cover summary"
+      "cover details"
+      "cover optional"
+      "cover privacy"
+      "cover autosave"
+      "delete delete";
+    column-gap:28px;
+    row-gap:10px;
+    align-items:start;
+  }
   .book-detail-hero{
-    flex-direction:row;align-items:flex-start;
-    gap:24px;
+    display:contents;
   }
   .modal-inner .book-detail-hero .tile-cover-wrap{
-    width:40%;max-width:280px;flex-shrink:0;
+    grid-area:cover;
+    width:100%;
+    max-width:280px;
+    justify-self:center;
+    align-self:start;
   }
   .book-detail-placards{
-    flex:1;min-width:0;
+    grid-area:placards;
+    width:100%;
+    max-width:none;
     align-items:flex-start;text-align:left;
-    padding-top:8px;
+    padding-top:10px;
   }
   .placard{text-align:left}
-  .modal-inner.book-detail-page{max-width:720px}
-  /* #144: add-mode keeps the narrower 560px cap on desktop. Edit-mode
-     uses the wider 720px above because populated entries can have more
-     content density (detail-rows + status selector + optional fields). */
-  .modal-inner.book-detail-page.add-mode{max-width:560px}
+  .status-selector{
+    grid-area:status;
+    width:100%;
+    margin-bottom:6px;
+  }
+  .status-microcopy{
+    grid-area:microcopy;
+    text-align:left;
+    margin-top:-6px;
+  }
+  .summary-row{
+    grid-area:summary;
+    justify-content:flex-start;
+  }
+  .detail-rows{
+    grid-area:details;
+    max-width:none;
+    margin:4px 0 0;
+  }
+  .optional-fields-zone{
+    grid-area:optional;
+    width:100%;
+  }
+  .privacy-add-toggle{
+    grid-area:privacy;
+  }
+  .autosave-microcopy{
+    grid-area:autosave;
+    text-align:left;
+  }
+  .delete-action{
+    grid-area:delete;
+  }
 }
 
 /* Mobile compaction tweaks */
 @media (max-width:599px){
   .modal-inner.book-detail-page{padding:16px 14px 24px}
+  .modal-inner.book-detail-page.add-mode{
+    height:100dvh;
+    max-height:100dvh;
+  }
   .book-detail-form{gap:14px}
   .modal-inner .book-detail-hero .tile-cover-wrap{width:70%;max-width:220px}
   .placard-title{font-size:1rem}
@@ -4284,13 +4359,6 @@ body.modal-open{overscroll-behavior-y:contain}
   .modal-inner.book-detail-page.add-mode .privacy-add-toggle{
     margin-top:0;
     padding:6px 4px;
-  }
-  .modal-inner.book-detail-page.add-mode .primary-actions{
-    margin-top:auto;
-    padding-top:8px;
-  }
-  .modal-inner.book-detail-page.add-mode .primary-actions .btn{
-    min-height:46px;
   }
 }
 
