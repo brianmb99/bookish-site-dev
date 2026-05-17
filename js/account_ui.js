@@ -17,10 +17,11 @@ import {
   setHideFriendsFromHeader,
   FRIENDS_VISIBILITY_EVENT,
 } from './components/friend-glyph-trigger.js';
-import {
-  hydrateAccountFriendsSection,
-  renderAccountFriendsSectionMarkup,
-} from './components/account_friends_section.js';
+import { renderAccountHub } from './components/account_hub_view.js';
+import { renderAccountSecurityView as renderAccountSecurityAccountView } from './components/account_security_view.js';
+import { renderArchiveView as renderArchiveAccountView } from './components/account_archive_view.js';
+import { renderFriendsView as renderFriendsAccountView } from './components/account_friends_view.js';
+import { renderExportView as renderExportAccountView } from './components/account_export_view.js';
 import {
   humanizePasskeySigninError,
   promptStalePasskeyRepair,
@@ -51,10 +52,6 @@ let _accountResetSwipe = null;
 // SVG icons for auth forms
 const SVG_EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const SVG_EYE_OFF = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
-const SVG_EDIT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
-const SVG_DOWNLOAD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
-const ARCHIVE_URL = 'https://arweave.net/U6dP2xK9mN3qRvT8aBc4FdEgH1jKlM2oPqRsTuVwXyZ';
-
 const passkeySupportProbe = createPasskeySupportProbe({
   isSupported: () => tarnService.passkeys.isSupported(),
   onWarn: (...args) => console.warn(...args),
@@ -321,7 +318,7 @@ function completePostSignIn() {
 // ============================================================================
 
 function renderAccountPanel(content) {
-  renderAccountHub(content);
+  renderAccountHub(content, accountHubViewDeps(content));
 }
 
 function getAccountIdentity() {
@@ -331,330 +328,53 @@ function getAccountIdentity() {
   return { email, displayName, initial };
 }
 
-function renderSubscriptionSection() {
-  // Subscription section (#74). All three states get a block: free users
-  // see their count + proactive Subscribe CTA; lapsed users see an
-  // expired status + Renew; subscribed users see their renewal date + a
-  // Manage subscription link that opens the Stripe Billing Portal.
-  const subStatus = subscription.getStatus();
-  const count = window.bookishApp?.getActiveEntryCount?.() || 0;
-  if (subStatus === 'free') {
-    return `
-      <div class="account-panel-subscription">
-        <div class="account-panel-sub-label">Subscription</div>
-        <div class="account-panel-sub-value">Trial \u2014 ${count} of ${subscription.FREE_LIMIT} books used</div>
-        <div class="account-panel-sub-pitch">Add unlimited books: <strong>$10/year</strong> \u00B7 cancel anytime</div>
-        <button type="button" id="accountSubscribeBtn" class="account-panel-sub-btn" data-subscribe-action="subscribe">Subscribe \u2014 $10/year</button>
-      </div>
-    `;
-  }
-  if (subStatus === 'lapsed') {
-    return `
-      <div class="account-panel-subscription">
-        <div class="account-panel-sub-label">Subscription</div>
-        <div class="account-panel-sub-value">Expired \u2014 renew to keep adding books</div>
-        <button type="button" id="accountSubscribeBtn" class="account-panel-sub-btn" data-subscribe-action="renew">Renew \u2014 $10/year</button>
-      </div>
-    `;
-  }
-  if (subStatus === 'subscribed') {
-    const periodEndIso = subscription.getCurrentPeriodEnd();
-    let renewLine = 'Subscribed';
-    if (periodEndIso) {
-      try {
-        const d = new Date(periodEndIso);
-        renewLine = `Subscribed \u2014 renews ${d.toLocaleDateString('en-US', { dateStyle: 'long' })}`;
-      } catch { /* fall back to plain label */ }
-    }
-    return `
-      <div class="account-panel-subscription">
-        <div class="account-panel-sub-label">Subscription</div>
-        <div class="account-panel-sub-value">${renewLine}</div>
-        <button type="button" id="accountManageBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Manage subscription <span aria-hidden="true" class="external-link-icon">\u2197</span></button>
-      </div>
-    `;
-  }
-  return '';
-}
-
-function renderAccountHeaderHtml({ email, displayName, initial }) {
-  return `
-    <div class="account-panel-header">
-      <div class="account-avatar">${escapeHtml(initial)}</div>
-      <div class="account-panel-info">
-        <div class="account-panel-name">
-          <span id="displayNameValue">${escapeHtml(displayName)}</span>
-          <button id="editDisplayNameBtn" class="btn-link" title="Edit name">${SVG_EDIT}</button>
-        </div>
-        <div class="account-panel-email">${escapeHtml(email)}</div>
-      </div>
-    </div>
-  `;
-}
-
-function renderAccountHub(content) {
-  const identity = getAccountIdentity();
-
-  content.innerHTML = `
-    <div class="auth-form account-hub">
-      ${renderAccountHeaderHtml(identity)}
-
-      <div class="account-panel-tagline">Private. Permanent. Yours.</div>
-
-      ${renderSubscriptionSection()}
-
-      <div class="account-hub-list" aria-label="Account settings">
-        <button type="button" class="account-hub-row" data-account-view="security">
-          <span class="account-hub-row-main">
-            <span class="account-hub-row-title">Account &amp; Security</span>
-            <span class="account-hub-row-desc">Account key, passkeys, username and password</span>
-          </span>
-          <span class="account-hub-chevron" aria-hidden="true">&rarr;</span>
-        </button>
-        <button type="button" class="account-hub-row" data-account-view="friends">
-          <span class="account-hub-row-main">
-            <span class="account-hub-row-title">Friends</span>
-            <span class="account-hub-row-desc">Header visibility, connections and pending invites</span>
-          </span>
-          <span class="account-hub-chevron" aria-hidden="true">&rarr;</span>
-        </button>
-        <button type="button" class="account-hub-row" data-account-view="archive">
-          <span class="account-hub-row-main">
-            <span class="account-hub-row-title">Permanent Archive</span>
-            <span class="account-hub-row-desc">Open your Tarn-backed archive link</span>
-          </span>
-          <span class="account-hub-chevron" aria-hidden="true">&rarr;</span>
-        </button>
-        <button type="button" class="account-hub-row" data-account-view="export">
-          <span class="account-hub-row-main">
-            <span class="account-hub-row-title">Data Export</span>
-            <span class="account-hub-row-desc">Download a CSV copy of your library</span>
-          </span>
-          <span class="account-hub-chevron" aria-hidden="true">&rarr;</span>
-        </button>
-      </div>
-
-      <div class="account-actions">
-        <button id="logoutBtn" class="btn account-signout">
-          Sign Out
-        </button>
-      </div>
-    </div>
-  `;
-
-  wireSubscriptionSection(content);
-  wireDisplayNameEditor(content);
-  wireAccountHubRows(content);
-  wireLogout(content);
-}
-
-function renderAccountSubView(content, { view, title, subtitle, bodyHtml, onAfterRender }) {
-  content.innerHTML = `
-    <div class="auth-form account-subview" data-account-view="${escapeHtml(view)}">
-      <button type="button" class="account-subview-back" id="accountBackBtn">&larr; Account</button>
-      <div class="account-subview-heading">
-        <h2>${escapeHtml(title)}</h2>
-        ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ''}
-      </div>
-      ${bodyHtml}
-    </div>
-  `;
-
-  content.querySelector('#accountBackBtn')?.addEventListener('click', () => renderAccountHub(content));
-  onAfterRender?.(content);
-}
-
-function renderAccountSecurityView(content) {
-  renderAccountSubView(content, {
-    view: 'security',
-    title: 'Account & Security',
-    subtitle: 'Manage the recovery and sign-in methods for this account.',
-    bodyHtml: `
-      <div class="account-panel-security account-subview-section" id="accountPanelSecurity">
-        <div class="account-security-block">
-          <div class="account-security-subtitle">Account key</div>
-          <div class="account-security-desc">A 24-word phrase that's the only way to recover your account if you forget your password.</div>
-          <div class="account-security-actions">
-            <button type="button" id="viewAccountKeyBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">View account key</button>
-          </div>
-          <button type="button" id="replaceAccountKeyBtn" class="btn-link account-security-replace-link">Replace account key &rarr;</button>
-        </div>
-
-        <div class="account-security-block" id="accountPasskeysBlock"></div>
-
-        <div class="account-security-block" id="accountCredentialsBlock">
-          <div class="account-security-subtitle">Username &amp; password</div>
-          <div class="account-security-desc">Together, these let you sign in. Change either or both at any time.</div>
-          <div class="account-security-actions">
-            <button type="button" id="changeCredentialsBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Change username or password</button>
-          </div>
-        </div>
-      </div>
-    `,
+function showAccountSecurityView(content) {
+  renderAccountSecurityAccountView(content, {
+    onBack: () => renderAccountPanel(content),
     onAfterRender: wireAccountSecuritySection,
   });
 }
 
-function renderArchiveView(content) {
-  renderAccountSubView(content, {
-    view: 'archive',
-    title: 'Permanent Archive',
-    subtitle: 'Your library export is yours regardless of subscription.',
-    bodyHtml: `
-      <div class="account-panel-archive account-subview-section">
-        <div class="account-panel-sub-label">Your Permanent Archive</div>
-        <a class="account-panel-archive-url" href="#" target="_blank" rel="noopener noreferrer" data-archive-link>arweave.net/U6dP2xK9mN3qRvT8aBc4FdEgH1jKlM2oPqRsTuVwXyZ</a>
-        <div class="account-panel-archive-note">Works without Bookish. Private, permanent, and yours regardless of subscription.</div>
-        <button type="button" id="accountArchiveBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Open archive <span aria-hidden="true" class="external-link-icon">\u2197</span></button>
-      </div>
-    `,
-    onAfterRender: wireArchiveSection,
+function showArchiveView(content) {
+  renderArchiveAccountView(content, {
+    onBack: () => renderAccountPanel(content),
   });
 }
 
-function renderFriendsView(content) {
-  renderAccountSubView(content, {
-    view: 'friends',
-    title: 'Friends',
-    subtitle: 'Control the header shortcut and review active sharing links.',
-    bodyHtml: renderAccountFriendsSectionMarkup(),
-    onAfterRender: panel => hydrateAccountFriendsSection(panel, accountFriendsSectionDeps()),
+function showFriendsView(content) {
+  renderFriendsAccountView(content, {
+    onBack: () => renderAccountPanel(content),
+    sectionDeps: accountFriendsSectionDeps(),
   });
 }
 
-function renderExportView(content) {
-  renderAccountSubView(content, {
-    view: 'export',
-    title: 'Data Export',
-    subtitle: 'Download a simple CSV copy of your reading list.',
-    bodyHtml: `
-      <div class="account-data-export account-subview-section">
-        <div class="account-security-subtitle">CSV export</div>
-        <div class="account-security-desc">Includes title, author, date read, rating, format, and notes for every active book on this device.</div>
-        <div class="account-security-actions">
-          <button id="exportCsvBtn" class="btn secondary account-csv-btn">
-            ${SVG_DOWNLOAD} Export CSV
-          </button>
-        </div>
-      </div>
-    `,
-    onAfterRender: wireCsvExport,
+function showExportView(content) {
+  renderExportAccountView(content, {
+    onBack: () => renderAccountPanel(content),
+    onExportCsv: exportBooksToCSV,
   });
 }
 
-function wireSubscriptionSection(content) {
-  // Subscribe / Renew (#74)
-  const subscribeBtn = content.querySelector('#accountSubscribeBtn');
-  if (subscribeBtn) {
-    subscribeBtn.addEventListener('click', async () => {
-      subscribeBtn.disabled = true;
-      try {
-        await subscription.startCheckout();
-        // Success redirects via window.location.assign; below only runs on failure.
-      } catch (err) {
-        console.error('[AccountUI] Checkout failed:', err?.message || err);
-        subscribeBtn.disabled = false;
-        subscribeBtn.textContent = "Couldn't start checkout \u2014 try again";
-      }
-    });
+function accountHubViewDeps(content) {
+  return {
+    identity: getAccountIdentity(),
+    subscription,
+    activeEntryCount: window.bookishApp?.getActiveEntryCount?.() || 0,
+    onView: view => {
+      if (view === 'security') showAccountSecurityView(content);
+      else if (view === 'friends') showFriendsView(content);
+      else if (view === 'archive') showArchiveView(content);
+      else if (view === 'export') showExportView(content);
+    },
+    onLogout: async () => {
+      closeAccountModal();
+      await performLogout();
+    },
+    getEmail: () => tarnService.getEmail() || '',
+    setDisplayName: name => tarnService.displayName(name),
+    onError: (...args) => console.error(...args),
+    setTimeoutRef: setTimeout,
   }
-
-  // Manage subscription (#74 — opens Stripe Billing Portal in new tab)
-  const manageBtn = content.querySelector('#accountManageBtn');
-  if (manageBtn) {
-    manageBtn.addEventListener('click', async () => {
-      manageBtn.disabled = true;
-      try {
-        await subscription.openPortal();
-      } catch (err) {
-        console.error('[AccountUI] Portal open failed:', err?.message || err);
-        manageBtn.textContent = "Couldn't open portal \u2014 try again";
-      } finally {
-        // Re-enable after a beat so a slow new-tab open doesn't lock the button.
-        setTimeout(() => { manageBtn.disabled = false; }, 1500);
-      }
-    });
-  }
-}
-
-function wireArchiveSection(content) {
-  const archiveLink = content.querySelector('[data-archive-link]');
-  if (archiveLink) archiveLink.href = ARCHIVE_URL;
-  const archiveBtn = content.querySelector('#accountArchiveBtn');
-  if (archiveBtn) {
-    archiveBtn.addEventListener('click', () => {
-      window.open(ARCHIVE_URL, '_blank', 'noopener,noreferrer');
-    });
-  }
-}
-
-function wireLogout(content) {
-  content.querySelector('#logoutBtn')?.addEventListener('click', async () => {
-    closeAccountModal();
-    await performLogout();
-  });
-}
-
-function wireCsvExport(content) {
-  content.querySelector('#exportCsvBtn')?.addEventListener('click', () => {
-    exportBooksToCSV();
-  });
-}
-
-function wireAccountHubRows(content) {
-  content.querySelectorAll('.account-hub-row[data-account-view]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const view = btn.dataset.accountView;
-      if (view === 'security') renderAccountSecurityView(content);
-      else if (view === 'friends') renderFriendsView(content);
-      else if (view === 'archive') renderArchiveView(content);
-      else if (view === 'export') renderExportView(content);
-    });
-  });
-}
-
-function wireDisplayNameEditor(content) {
-  content.querySelector('#editDisplayNameBtn')?.addEventListener('click', () => {
-    const valueEl = content.querySelector('#displayNameValue');
-    const editBtn = content.querySelector('#editDisplayNameBtn');
-    const current = valueEl.textContent;
-
-    valueEl.innerHTML = `<input type="text" id="displayNameInput" value="${escapeHtml(current)}" />`;
-    editBtn.innerHTML = 'Save';
-    editBtn.classList.add('save-active');
-
-    const input = content.querySelector('#displayNameInput');
-    input.focus({ preventScroll: true });
-    input.select();
-
-    const save = () => {
-      // Guard against persisting an empty display name. Three-tier fallback:
-      // 1. The trimmed input (user's intent)
-      // 2. The current value if non-empty (revert to existing)
-      // 3. The email prefix or 'User' (last-resort default)
-      // Without this guard, a user who clears the field after their name was
-      // already accidentally cleared (or paste-deletes everything) would
-      // persist an empty display name. The render path has its own fallback
-      // chain (tarn_service.js line ~824) but the SAVE path was bypassing it
-      // by writing "" directly to localStorage. (Bug from 2026-05-11 UAT.)
-      let newName = input.value.trim();
-      if (!newName) {
-        newName = (current && current.trim()) || (tarnService.getEmail() || '').split('@')[0] || 'User';
-      }
-      tarnService.displayName(newName);
-      valueEl.textContent = newName;
-      editBtn.innerHTML = SVG_EDIT;
-      editBtn.classList.remove('save-active');
-      // Update avatar initial
-      const avatar = content.querySelector('.account-avatar');
-      if (avatar) avatar.textContent = (newName[0] || 'U').toUpperCase();
-    };
-
-    editBtn.onclick = save;
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') save();
-    });
-  });
 }
 
 function accountFriendsSectionDeps() {
@@ -812,7 +532,7 @@ async function startChangeCredentialsFlow(content) {
     getCurrentEmail: () => tarnService.getEmail() || '',
     changeCredentials: args => tarnService.changeCredentials(args),
     createOverlay,
-    renderAccountPanel: panelContent => renderAccountSecurityView(panelContent),
+    renderAccountPanel: panelContent => showAccountSecurityView(panelContent),
     onWarn: (...args) => console.warn(...args),
   });
 }
