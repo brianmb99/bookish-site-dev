@@ -1464,7 +1464,19 @@ function attachFriendPips(cardEl, entry){
 
 /** Quick fingerprint for change detection — avoids unnecessary innerHTML rewrites */
 function entryFingerprint(e){
-  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.readingStartedAt||'')+'\t'+(e.createdAt||'')+'\t'+(e.coverImage?'1':'0')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'')+'\t'+(e.is_private===true?'p':'_');
+  return (e.txid||e.id||'')+'\t'+(e.title||'')+'\t'+(e.author||'')+'\t'+(e.dateRead||'')+'\t'+(e.readingStartedAt||'')+'\t'+(e.createdAt||'')+'\t'+(e._deleting?'1':'0')+'\t'+(e.format||'')+'\t'+(e.readingStatus||'')+'\t'+(e.rating||'')+'\t'+(e.is_private===true?'p':'_');
+}
+
+function cardCoverChanged(card, e){
+  return card._bookishCoverImage !== (e.coverImage || '') ||
+    card._bookishCoverMime !== (e.mimeType || '') ||
+    card._bookishCoverFit !== (e.coverFit || '');
+}
+
+function rememberCardCover(card, e){
+  card._bookishCoverImage = e.coverImage || '';
+  card._bookishCoverMime = e.mimeType || '';
+  card._bookishCoverFit = e.coverFit || '';
 }
 
 /**
@@ -1674,7 +1686,7 @@ function render(){
 
     let card = existingMap.get(key);
     if(card){
-      if(card.dataset._fp !== fp){
+      if(card.dataset._fp !== fp || cardCoverChanged(card, e)){
         const rawFmt=(e.format||'').toLowerCase();
         const fmtVariant=rawFmt==='audiobook'?'audio':(rawFmt==='ebook'?'ebook':'print');
         card.className='card'+(e._deleting?' deleting':'');
@@ -1688,6 +1700,7 @@ function render(){
         attachFriendPips(card, e);
         attachPrivacyLockOverlay(card, e);
         card.dataset._fp=fp;
+        rememberCardCover(card, e);
         if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
         else { card.style.pointerEvents=''; card.style.opacity=''; }
       } else {
@@ -1714,6 +1727,7 @@ function render(){
       attachFriendPips(card, e);
       attachPrivacyLockOverlay(card, e);
       card.dataset._fp=fp;
+      rememberCardCover(card, e);
       if(e._deleting){ card.style.pointerEvents='none'; card.style.opacity='0.35'; }
     }
     card.onclick=(ev)=>{
