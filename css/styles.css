@@ -2127,8 +2127,11 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   }
   /* Keyboard-open state: smooth max-height transition (#93) */
   .modal-inner.keyboard-open{
-    transition:max-height .2s ease-out;
+    transition:max-height .2s ease-out, margin-bottom .2s ease-out;
     padding-bottom:8px;
+  }
+  .modal.account-modal.keyboard-open{
+    transition:max-height .2s ease-out, margin-bottom .2s ease-out;
   }
 }
 @media (min-width:600px){

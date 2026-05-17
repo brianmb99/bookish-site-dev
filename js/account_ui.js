@@ -7,6 +7,7 @@ import * as tarnService from './core/tarn_service.js';
 import * as subscription from './core/subscription.js';
 import { pushOverlayState, popOverlayState } from './core/overlay_history.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
+import { attachKeyboardHandler } from './core/keyboard_viewport.js';
 import { msToDateInputUtc } from './core/id_core.js';
 import * as friends from './core/friends.js';
 import * as friendsRouter from './core/friends_router.js';
@@ -48,6 +49,7 @@ import {
 
 // Track the swipe-dismiss cleanup so we can detach on close.
 let _accountResetSwipe = null;
+let _accountDetachKeyboard = null;
 
 // SVG icons for auth forms
 const SVG_EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
@@ -148,6 +150,9 @@ export async function openAccountModal(mode) {
           onDismiss: () => closeAccountModal(),
         });
       }
+      if (!_accountDetachKeyboard) {
+        _accountDetachKeyboard = attachKeyboardHandler({ sheet: modalContent });
+      }
     }
   }
 
@@ -170,6 +175,7 @@ export function closeAccountModal(fromPopstate = false) {
   if (!modal) return;
   // Clean up swipe-dismiss listeners and inline transform from the gesture.
   if (_accountResetSwipe) { _accountResetSwipe(); _accountResetSwipe = null; }
+  if (_accountDetachKeyboard) { _accountDetachKeyboard(); _accountDetachKeyboard = null; }
   modal.style.display = 'none';
   const modalContent = modal.querySelector('.account-modal');
   if (modalContent) modalContent.classList.remove('sheet-dismissing');

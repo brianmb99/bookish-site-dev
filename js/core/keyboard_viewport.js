@@ -44,21 +44,25 @@ export function attachKeyboardHandler({ sheet }) {
     const fullHeight = window.innerHeight;
     const diff = fullHeight - viewportHeight;
     const isKbOpen = diff > KEYBOARD_THRESHOLD;
+    const bottomInset = Math.max(0, fullHeight - viewportHeight - (vv.offsetTop || 0));
 
     if (isKbOpen && !keyboardOpen) {
       keyboardOpen = true;
       sheet.classList.add('keyboard-open');
       // Set max-height to fit within the visible viewport
       sheet.style.maxHeight = viewportHeight + 'px';
+      sheet.style.marginBottom = bottomInset ? bottomInset + 'px' : '';
       scrollFocusedInput();
     } else if (isKbOpen && keyboardOpen) {
       // Keyboard still open but viewport height changed (e.g., suggestions bar)
       sheet.style.maxHeight = viewportHeight + 'px';
+      sheet.style.marginBottom = bottomInset ? bottomInset + 'px' : '';
       scrollFocusedInput();
     } else if (!isKbOpen && keyboardOpen) {
       keyboardOpen = false;
       sheet.classList.remove('keyboard-open');
       sheet.style.maxHeight = '';
+      sheet.style.marginBottom = '';
     }
   }
 
@@ -100,5 +104,6 @@ export function attachKeyboardHandler({ sheet }) {
     keyboardOpen = false;
     sheet.classList.remove('keyboard-open');
     sheet.style.maxHeight = '';
+    sheet.style.marginBottom = '';
   };
 }
