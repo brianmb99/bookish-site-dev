@@ -2,6 +2,8 @@
 
 function noop() {}
 
+const SVG_FINGERPRINT = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 4"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M9 6.8a6 6 0 0 1 9 5.2c0 .47 0 1.44-.05 2"/></svg>`;
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, ch => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
@@ -231,6 +233,83 @@ export function suggestDeviceLabel(nav = globalThis.navigator) {
   } catch {
     return 'This device';
   }
+}
+
+/**
+ * Render the post-signup optional passkey step. This intentionally skips the
+ * device-label dialog used in Settings: signup should be one clear tap after
+ * the account-key screen, with a sensible default label and an always-visible
+ * skip path.
+ */
+export function renderSignupPasskeyPrompt(content, deps = {}) {
+  const {
+    passkeys,
+    onDone = noop,
+    onWarn = noop,
+    suggestDeviceLabelImpl = suggestDeviceLabel,
+  } = deps;
+  const deviceLabel = suggestDeviceLabelImpl();
+
+  content.innerHTML = `
+    <div class="auth-form signup-passkey-view">
+      <div class="auth-header">
+        <div class="auth-icon">${SVG_FINGERPRINT}</div>
+        <h2>Add a passkey?</h2>
+        <p>Use your screen lock to sign in faster next time. Your password still works.</p>
+      </div>
+
+      <div class="signup-passkey-card">
+        <div class="signup-passkey-card-title">${escapeHtml(deviceLabel)}</div>
+        <div class="signup-passkey-card-body">Bookish will ask this device to create a passkey. Nothing about your reading list becomes readable to Bookish.</div>
+      </div>
+
+      <button id="signupAddPasskeyBtn" class="btn primary auth-submit auth-passkey-btn" type="button">
+        ${SVG_FINGERPRINT}<span>Add passkey</span>
+      </button>
+      <button id="signupSkipPasskeyBtn" class="btn secondary auth-submit" type="button">
+        Skip for now
+      </button>
+
+      <div id="signupPasskeyError" class="auth-error" style="display:none;"></div>
+      <div id="signupPasskeyProgress" class="auth-progress" style="display:none;"></div>
+    </div>
+  `;
+
+  const addBtn = content.querySelector('#signupAddPasskeyBtn');
+  const skipBtn = content.querySelector('#signupSkipPasskeyBtn');
+  const errorEl = content.querySelector('#signupPasskeyError');
+  const progressEl = content.querySelector('#signupPasskeyProgress');
+  let busy = false;
+
+  skipBtn.addEventListener('click', () => {
+    if (busy) return;
+    onDone();
+  });
+
+  addBtn.addEventListener('click', async () => {
+    if (busy) return;
+    busy = true;
+    addBtn.disabled = true;
+    skipBtn.disabled = true;
+    errorEl.style.display = 'none';
+    errorEl.textContent = '';
+    progressEl.style.display = 'block';
+    progressEl.textContent = 'Starting passkey prompt...';
+
+    try {
+      await passkeys.register({ deviceLabel });
+      progressEl.textContent = 'Passkey added.';
+      onDone();
+    } catch (err) {
+      onWarn('[AccountUI] signup passkey register failed:', err?.message || err);
+      errorEl.textContent = humanizePasskeyError(err, deps);
+      errorEl.style.display = 'block';
+      progressEl.style.display = 'none';
+      addBtn.disabled = false;
+      skipBtn.disabled = false;
+      busy = false;
+    }
+  });
 }
 
 /**

@@ -3006,6 +3006,29 @@ form.inline label.toggle-switch{display:flex}
   margin-right: auto;
   display: flex;
 }
+.signup-passkey-card{
+  max-width:380px;
+  margin:0 auto 14px;
+  padding:14px 16px;
+  background:var(--color-bg-base);
+  border:1px solid var(--color-border-subtle);
+  border-radius:10px;
+}
+.signup-passkey-card-title{
+  color:var(--color-text-primary);
+  font-size:.92rem;
+  font-weight:700;
+  line-height:1.25;
+}
+.signup-passkey-card-body{
+  margin-top:5px;
+  color:var(--color-text-muted);
+  font-size:.8rem;
+  line-height:1.45;
+}
+.signup-passkey-view #signupSkipPasskeyBtn{
+  margin-top:10px;
+}
 
 /* "or" divider between the password Sign In button and the passkey
    sign-in CTA on the Welcome Back screen (recovery v2 phase 4). Hidden

@@ -38,6 +38,7 @@ import {
   createPasskeySupportProbe,
   humanizePasskeyDate,
   hydratePasskeysSection as hydratePasskeySettingsSection,
+  renderSignupPasskeyPrompt,
   showPasskeyAddedAffirmation,
   suggestDeviceLabel,
   truncateCredentialId,
@@ -246,16 +247,30 @@ function completePostCreateAccount(content, { email, accountKey }) {
 
   renderAccountKeyView(content, {
     accountKey,
-    onContinue: () => {
-      closeAccountModal();
-      startSync();
-      uiStatusManager.refresh();
-      if (typeof window.updateBookDots === 'function') window.updateBookDots();
-      friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
-        console.warn('[Bookish:AccountUI] friends invite handler failed:', err?.message || err)
-      );
-    },
+    onContinue: () => continueAfterAccountKey(content),
   });
+}
+
+async function continueAfterAccountKey(content) {
+  if (await getPasskeysSupported()) {
+    renderSignupPasskeyPrompt(content, {
+      passkeys: tarnService.passkeys,
+      onDone: finishPostCreateAccount,
+      onWarn: (...args) => console.warn(...args),
+    });
+    return;
+  }
+  finishPostCreateAccount();
+}
+
+function finishPostCreateAccount() {
+  closeAccountModal();
+  startSync();
+  uiStatusManager.refresh();
+  if (typeof window.updateBookDots === 'function') window.updateBookDots();
+  friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
+    console.warn('[Bookish:AccountUI] friends invite handler failed:', err?.message || err)
+  );
 }
 
 // ============================================================================
