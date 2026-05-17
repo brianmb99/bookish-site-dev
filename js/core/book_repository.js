@@ -421,7 +421,17 @@ export class BookRepository {
   // --- Sync pipeline ---
 
   async sync() {
-    if (!this._cache || this._purged) return;
+    if (!this._cache) return;
+
+    // clear() is used during logout to empty the in-memory list and keep
+    // logged-out cache reads from repopulating the previous user's books.
+    // Once a new authenticated session starts, the same repository instance
+    // must be allowed to sync again; otherwise logout -> login shows an empty
+    // library until a page refresh creates a fresh repository.
+    if (this._purged) {
+      if (!this._tarnService.isLoggedIn()) return;
+      this._purged = false;
+    }
 
     await this.replayPending();
 
