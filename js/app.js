@@ -13,6 +13,7 @@ import { haptic } from './core/haptic.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
 import { attachKeyboardHandler } from './core/keyboard_viewport.js';
 import { initPullToRefresh } from './core/pull_to_refresh.js';
+import { initPwaUpdateManager } from './core/pwa_update.js';
 import { getFieldPref, setFieldPref } from './core/field_prefs.js';
 import * as subscription from './core/subscription.js';
 import * as friendsRouter from './core/friends_router.js';
@@ -23,7 +24,7 @@ import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCa
 import { renderPipOverlay } from './components/friend-pip.js';
 import { getMatchingFriendBookEntries as friendsGetMatchingFriendBookEntries, primeFriendLibraryCache as friendsPrimeFriendLibraryCache, invalidateFriendLibraryCache as friendsInvalidateLibraryCache } from './core/friends.js';
 import { openFriendBookDetail } from './components/friend-book-detail.js';
-import { setStatusLine, showMarkAsReadUndoToast, showStatusToast, showSubscriptionSuccessToast } from './components/status_helpers.js';
+import { setStatusLine, showMarkAsReadUndoToast, showStatusToast, showSubscriptionSuccessToast, showUpdateReadyToast } from './components/status_helpers.js';
 import { createWtrDrawerController, sortWtrList } from './components/wtr_drawer.js';
 import { activeEntryCount as countActiveEntries, createOmniboxController } from './components/omnibox_controller.js';
 
@@ -46,6 +47,11 @@ friendsRouter.captureInviteFromUrl();
     console.info(`[Bookish] ${appVer} | SW not yet active`);
   }
 }
+
+const pwaUpdateManager = initPwaUpdateManager({
+  onUpdateReady: ({ refresh }) => showUpdateReadyToast({ onRefresh: refresh }),
+});
+window.bookishPwaUpdate = pwaUpdateManager;
 
 // --- DOM refs ---
 const statusEl = document.getElementById('status');

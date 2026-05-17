@@ -1627,7 +1627,8 @@ html.modal-transitioning::view-transition-new(root){
 .status-toast{background:rgba(36,43,53,.85)!important;border:1px solid var(--color-success)!important;border-radius:9999px;padding:12px 20px;font-size:.875rem;color:var(--color-text-primary);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .status-toast-with-action{display:flex!important;align-items:center;gap:16px;padding:12px 16px 12px 20px!important;flex-wrap:wrap;justify-content:center}
 .status-toast-with-action .toast-message{flex:0 1 auto}
-.toast-undo-btn{
+.toast-undo-btn,
+.toast-action-btn{
   margin:0;
   padding:8px 14px;
   min-height:40px;
@@ -1640,10 +1641,20 @@ html.modal-transitioning::view-transition-new(root){
   cursor:pointer;
   flex-shrink:0;
 }
-.toast-undo-btn:hover{
+.toast-undo-btn:hover,
+.toast-action-btn:hover{
   background:var(--color-bg-deep);
   border-color:var(--color-primary);
   color:var(--color-primary);
+}
+.toast-action-btn:disabled{
+  opacity:.7;
+  cursor:default;
+}
+.toast-action-btn:disabled:hover{
+  background:var(--color-bg-surface);
+  border-color:var(--color-border-default);
+  color:var(--color-text-primary);
 }
 
 /* Celebration toast */

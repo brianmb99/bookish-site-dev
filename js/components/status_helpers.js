@@ -93,6 +93,26 @@ export function showMarkAsReadUndoToast(options = {}) {
   return toast;
 }
 
+export function showUpdateReadyToast(options = {}) {
+  const toast = createToast({
+    className: 'toast status-toast status-toast-with-action pwa-update-toast',
+    role: 'status',
+    html: '<span class="toast-message">Update ready</span><button type="button" class="toast-action-btn">Refresh</button>',
+    documentRef: options.document,
+  });
+
+  toast.querySelector('.toast-action-btn')?.addEventListener('click', () => {
+    const btn = toast.querySelector('.toast-action-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Refreshing...';
+    }
+    options.onRefresh?.();
+  });
+
+  return toast;
+}
+
 export function setStatusLine(statusEl, message) {
   if (!statusEl) return;
   statusEl.textContent = message;
