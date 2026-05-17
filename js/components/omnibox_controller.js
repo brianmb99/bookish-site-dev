@@ -1,10 +1,10 @@
 import { filterBySearch } from '../core/shelf_filter.js';
 import { normalizeOLDoc, normalizeItunesItem, mergeOmniboxResults } from '../core/omnibox_merge.js';
-import { pickRandomPlaceholder } from '../core/omnibox_placeholders.js';
 import { escapeHtml, generatedCoverColor } from './book-card.js';
 import { renderPipOverlay } from './friend-pip.js';
 
-const MOBILE_EMPTY_PLACEHOLDER = 'Search books';
+const EMPTY_LIBRARY_PLACEHOLDER = 'Add your first book';
+const DEFAULT_PLACEHOLDER = 'Find or add a book';
 
 export function activeEntryCount(entries = []) {
   return entries.filter(entry => entry?.status !== 'tombstoned').length;
@@ -197,14 +197,10 @@ export function createOmniboxController({
     return refs.wrap?.classList?.contains('omnibox-in-empty') === true;
   }
 
-  function isCoarsePointer() {
-    return windowRef?.matchMedia?.('(pointer: coarse)')?.matches === true;
-  }
-
   function nextPlaceholder() {
-    return isEmptyPlacement() && isCoarsePointer()
-      ? MOBILE_EMPTY_PLACEHOLDER
-      : pickRandomPlaceholder();
+    return isEmptyPlacement() || count() === 0
+      ? EMPTY_LIBRARY_PLACEHOLDER
+      : DEFAULT_PLACEHOLDER;
   }
 
   function refreshPlaceholder() {

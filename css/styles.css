@@ -658,10 +658,9 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 }
 /* #149: Empty-state declutter — removed `.empty-search-examples`,
    `.empty-add-manual-link`, `.empty-signin`, and `.empty-links` blocks.
-   The "Try:" line is replaced by a rotating placeholder inside the
-   omnibox itself; the manual-add affordance lives in the omnibox
-   dropdown; the sign-in entry point is now a header chip; and the
-   footer covers the explainer surface. */
+   The "Try:" line is replaced by concise omnibox placeholder copy; the
+   manual-add affordance lives in the omnibox dropdown; the sign-in entry
+   point is now a header chip; and the footer covers the explainer surface. */
 
 /* Shelf-empty state (has WTR books but no shelf books) */
 .shelf-empty{

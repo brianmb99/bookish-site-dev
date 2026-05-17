@@ -1396,10 +1396,10 @@ function render(){
     // #144: search affordance in empty state is the relocated `#omniboxWrap`
     // (moved into `#emptyOmniboxSlot`). While syncing, hide the slot so the
     // loading message reads cleanly.
-    // #149: declutter \u2014 `.empty-search-examples`, `.empty-add-manual-link`,
-    // `#emptySignIn`, and `.empty-links` are gone. The rotating placeholder
-    // on the omnibox itself replaces the example line; the sign-in entry
-    // point is the new header chip.
+    // #149/#167: declutter \u2014 `.empty-search-examples`,
+    // `.empty-add-manual-link`, `#emptySignIn`, and `.empty-links` are gone.
+    // The omnibox placeholder now carries the add-book affordance directly;
+    // the sign-in entry point is the header chip.
     const emptySlot = emptyEl.querySelector('#emptyOmniboxSlot');
     const illustration = emptyEl.querySelector('.empty-illustration');
 
