@@ -1,8 +1,8 @@
-// friend-shelf-view.js — Surface 2 of the Friends feature (issue #123).
+// friend_shelf_view.js — Surface 2 of the Friends feature (issue #123).
 //
 // A full-screen, read-only mirror of the Library grid for someone else's
 // books. Same card markup as the user's own Library (consumed from the
-// shared book-card.js builders); different chrome (header is the friend's
+// shared book_card.js builders); different chrome (header is the friend's
 // name + avatar, no +Add button, no edit affordances).
 //
 // Lifecycle:
@@ -29,9 +29,9 @@
 // (one extra tap). This friction is intentional.
 
 import * as friends from '../core/friends.js';
-import { buildCardHTML } from './book-card.js';
-import { renderFriendAvatar } from './friend-avatar.js';
-import { displayNameForConnection } from './friend-strip.js';
+import { buildCardHTML } from './book_card.js';
+import { renderFriendAvatar } from './friend_avatar.js';
+import { displayNameForConnection } from './friend_strip.js';
 import { READING_STATUS, normalizeReadingStatus } from '../core/book_repository.js';
 import { pushOverlayState, popOverlayState } from '../core/overlay_history.js';
 

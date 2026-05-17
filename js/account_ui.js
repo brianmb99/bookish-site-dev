@@ -16,7 +16,7 @@ import {
   isFriendsHiddenFromHeader,
   setHideFriendsFromHeader,
   FRIENDS_VISIBILITY_EVENT,
-} from './components/friend-glyph-trigger.js';
+} from './components/friend_glyph_trigger.js';
 import { renderAccountHub } from './components/account_hub_view.js';
 import { renderAccountSecurityView as renderAccountSecurityAccountView } from './components/account_security_view.js';
 import { renderArchiveView as renderArchiveAccountView } from './components/account_archive_view.js';

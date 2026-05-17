@@ -1,4 +1,4 @@
-// first-connect-sheet.js — One-time privacy education on first friend.
+// first_connect_sheet.js — One-time privacy education on first friend.
 //
 // FRIENDS.md / Surface 7 → "First-connect education". When a user accepts
 // their first ever connection (transition from 0 → 1), we surface a single

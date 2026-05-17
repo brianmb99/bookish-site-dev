@@ -36,7 +36,7 @@ export function normalizeReadingStatus(entry) {
 /**
  * Build the wire-shape payload for `tarn.books.create()` / `update()`.
  * Filters out local-only fields and undefined values; includes only what's
- * declared in bookish-schema.js (the SDK rejects unknown fields).
+ * declared in bookish_schema.js (the SDK rejects unknown fields).
  */
 function buildPayloadFromEntry(entry) {
   const payload = {

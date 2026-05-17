@@ -1,7 +1,7 @@
 import { filterBySearch } from '../core/shelf_filter.js';
 import { normalizeOLDoc, normalizeItunesItem, mergeOmniboxResults } from '../core/omnibox_merge.js';
-import { escapeHtml, generatedCoverColor } from './book-card.js';
-import { renderPipOverlay } from './friend-pip.js';
+import { escapeHtml, generatedCoverColor } from './book_card.js';
+import { renderPipOverlay } from './friend_pip.js';
 
 const EMPTY_LIBRARY_PLACEHOLDER = 'Add your first book';
 const DEFAULT_PLACEHOLDER = 'Find or add a book';

@@ -1,4 +1,4 @@
-// friend-strip.js — Region B of the Friends drawer (issue #122).
+// friend_strip.js — Region B of the Friends drawer (issue #122).
 //
 // Horizontal scrollable row of friend avatars + display names. This is the
 // "friends-as-launcher" surface from FRIENDS.md (Surface 1, Region B).
@@ -15,7 +15,7 @@
 // All callbacks are optional; if omitted, the corresponding interaction is
 // a no-op (with a debug breadcrumb so dev work can confirm wiring).
 
-import { renderFriendAvatar } from './friend-avatar.js';
+import { renderFriendAvatar } from './friend_avatar.js';
 import { debugLog } from '../core/debug_log.js';
 
 const LONG_PRESS_MS = 500;

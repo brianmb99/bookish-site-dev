@@ -1,4 +1,4 @@
-// confirm-dialog.js — Lightweight modal confirmation dialog.
+// confirm_dialog.js — Lightweight modal confirmation dialog.
 //
 // Shipped with issue #131 (Mute / Remove friend) for the "Remove friend"
 // confirmation. Generic enough that future destructive actions (e.g. delete-

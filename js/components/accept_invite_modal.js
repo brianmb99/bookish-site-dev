@@ -1,4 +1,4 @@
-// accept-invite-modal.js — Recipient-side invite preview + accept modal.
+// accept_invite_modal.js — Recipient-side invite preview + accept modal.
 //
 // Renders dynamically into a dedicated overlay. The flow:
 //   1. previewInviteToken (non-consuming) — show inviter's display name +
@@ -16,7 +16,7 @@
 import * as friends from '../core/friends.js';
 import * as tarnService from '../core/tarn_service.js';
 import { pushOverlayState, popOverlayState } from '../core/overlay_history.js';
-import { maybeShowFirstConnectSheet } from './first-connect-sheet.js';
+import { maybeShowFirstConnectSheet } from './first_connect_sheet.js';
 
 const MODAL_ID = 'acceptInviteModal';
 const CONTENT_ID = 'acceptInviteModalContent';

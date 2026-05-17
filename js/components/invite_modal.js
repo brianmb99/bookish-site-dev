@@ -1,4 +1,4 @@
-// invite-modal.js — Sender-side invite modal.
+// invite_modal.js — Sender-side invite modal.
 //
 // Displays a generated invite as a QR code + copy-link button. Hooks
 // directly into the dedicated #inviteModal overlay in index.html. Dynamic;

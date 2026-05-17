@@ -45,7 +45,7 @@
 // Today, Bookish doesn't publish books to the share log (issue #8 — per-book
 // privacy — gates the publish path). Until #8 ships, every friend's
 // `fetchFriendLibrary` returns []. This module returns [] in that case and the
-// `recent-finishes.js` component renders nothing (the region is hidden).
+// `recent_finishes.js` component renders nothing (the region is hidden).
 
 import * as friends from './friends.js';
 import * as tarnService from './tarn_service.js';

@@ -1,4 +1,4 @@
-import { escapeHtml, generatedCoverColor } from './book-card.js';
+import { escapeHtml, generatedCoverColor } from './book_card.js';
 
 export function sortWtrList(wantList) {
   const hasPositions = wantList.some(e => e.wtrPosition != null);

@@ -1,4 +1,4 @@
-// friend-glyph-trigger.js — Header entry point for the Friends drawer.
+// friend_glyph_trigger.js — Header entry point for the Friends drawer.
 //
 // A small, abstract "person cluster" glyph + ↗ arrow that opens the Friends
 // drawer when tapped. Sized to match the existing WTR `12 ↗` button visually
@@ -31,7 +31,7 @@
 //   3. Exposing a `refreshFriendGlyphTrigger()` for callers (login,
 //      logout, post-accept, toggle change) to re-evaluate visibility.
 
-import { openFriendsDrawer } from './friends-drawer.js';
+import { openFriendsDrawer } from './friends_drawer.js';
 
 const TRIGGER_ID = 'friendsHeaderBtn';
 

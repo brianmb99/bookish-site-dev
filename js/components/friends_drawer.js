@@ -1,4 +1,4 @@
-// friends-drawer.js — Surface 1 of the Friends feature (issues #122, #124, #125).
+// friends_drawer.js — Surface 1 of the Friends feature (issues #122, #124, #125).
 //
 // The drawer is a peer of the existing WTR drawer. It uses the same chrome
 // pattern (bottom sheet on touch / right panel on desktop), the same
@@ -15,7 +15,7 @@
 //     The full rendering pipeline is wired and lights up automatically as
 //     soon as real share-log entries exist.
 //
-//   Region B — friend strip. See friend-strip.js. When 0 connections, the
+//   Region B — friend strip. See friend_strip.js. When 0 connections, the
 //     strip renders an empty state with a friendly message + prominent
 //     "+ Add" button (#124 — the trigger is now always visible, so the
 //     drawer must handle the zero-friends case gracefully).
@@ -25,17 +25,17 @@
 // immediately, shows a toast, and closes the drawer. Re-enable lives on
 // the Account screen.
 //
-// The trigger glyph in the header lives in friend-glyph-trigger.js. This
+// The trigger glyph in the header lives in friend_glyph_trigger.js. This
 // module owns drawer chrome + lifecycle + region rendering only.
 
 import * as friends from '../core/friends.js';
 import { attachSwipeDismiss } from '../core/swipe_dismiss.js';
 import { pushOverlayState, popOverlayState } from '../core/overlay_history.js';
-import { renderFriendStrip, displayNameForConnection } from './friend-strip.js';
-import { setHideFriendsFromHeader } from './friend-glyph-trigger.js';
-import { hydrateRecentFinishes } from './recent-finishes.js';
-import { openFriendOverflowMenu } from './friend-overflow-menu.js';
-import { openConfirmDialog } from './confirm-dialog.js';
+import { renderFriendStrip, displayNameForConnection } from './friend_strip.js';
+import { setHideFriendsFromHeader } from './friend_glyph_trigger.js';
+import { hydrateRecentFinishes } from './recent_finishes.js';
+import { openFriendOverflowMenu } from './friend_overflow_menu.js';
+import { openConfirmDialog } from './confirm_dialog.js';
 
 const OVERLAY_ID = 'friendsOverlay';
 const DRAWER_ID = 'friendsDrawer';
@@ -221,7 +221,7 @@ function handleAvatarTap(connection) {
   // when an avatar is tapped. Lazy-import the shelf view so we don't pay
   // its weight on drawer-open if the user just glances and dismisses.
   closeFriendsDrawer();
-  import('./friend-shelf-view.js').then(m => {
+  import('./friend_shelf_view.js').then(m => {
     m.openFriendShelfView(connection).catch(err => {
       console.warn('[Bookish:FriendsDrawer] openFriendShelfView failed:', err.message);
     });
@@ -356,7 +356,7 @@ function showFriendsToast(message) {
  */
 async function openInviteFlow() {
   try {
-    const mod = await import('./invite-modal.js');
+    const mod = await import('./invite_modal.js');
     await mod.openInviteModal();
   } catch (err) {
     console.error('[Bookish:FriendsDrawer] openInviteModal failed:', err);

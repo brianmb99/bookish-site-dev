@@ -1,4 +1,4 @@
-// friend-book-detail.js — Read-only modal showing a friend's copy of a book.
+// friend_book_detail.js — Read-only modal showing a friend's copy of a book.
 //
 // Used by issue #125 (Recent finishes events: tap a row → open this modal).
 // Designed to be reused by issue #6 (Library card friend-pip taps) and issue
@@ -29,9 +29,9 @@
 //     real data to show)
 //   - Friend's notes (notes are still a single-player field; sharing not gated)
 
-import { escapeHtml, generatedCoverColor } from './book-card.js';
-import { renderFriendAvatar } from './friend-avatar.js';
-import { displayNameForConnection } from './friend-strip.js';
+import { escapeHtml, generatedCoverColor } from './book_card.js';
+import { renderFriendAvatar } from './friend_avatar.js';
+import { displayNameForConnection } from './friend_strip.js';
 import { formatMonthYearDisplay } from '../core/id_core.js';
 import { READING_STATUS, normalizeReadingStatus } from '../core/book_repository.js';
 import { pushOverlayState, popOverlayState } from '../core/overlay_history.js';

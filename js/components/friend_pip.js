@@ -1,8 +1,8 @@
-// friend-pip.js — Tiny avatar pip used on Library book cards (#126) and
+// friend_pip.js — Tiny avatar pip used on Library book cards (#126) and
 // later on unisearch result rows (#7).
 //
 // The pip is a 14px circle with the friend's initial in white, painted with
-// the same deterministic color as `friend-avatar.js` so Maya is the same
+// the same deterministic color as `friend_avatar.js` so Maya is the same
 // teal in the drawer, on the friend's shelf header, in event rows, and on
 // the pip — visual identity holds across every social surface.
 //
@@ -13,7 +13,7 @@
 // behavior that opens a friend-book-detail modal rather than navigating to
 // a friend's shelf. Keeping pip rendering in its own module means the
 // avatar component stays general and we don't grow a tangle of variant
-// flags. Color + initial helpers are imported from friend-avatar.js so the
+// flags. Color + initial helpers are imported from friend_avatar.js so the
 // determinism stays single-sourced.
 //
 // What this module does NOT do: layout. The straddling-the-cover-edge
@@ -22,8 +22,8 @@
 // the pips themselves and emits the right markup; it never measures
 // anything or computes positioning.
 
-import { avatarColorForConnection, initialForLabel } from './friend-avatar.js';
-import { displayNameForConnection } from './friend-strip.js';
+import { avatarColorForConnection, initialForLabel } from './friend_avatar.js';
+import { displayNameForConnection } from './friend_strip.js';
 
 /**
  * Render a single 14px friend pip for a connection.

@@ -1,4 +1,4 @@
-import { escapeHtml } from './book-card.js';
+import { escapeHtml } from './book_card.js';
 import {
   renderSubscriptionSection,
   wireSubscriptionSection,

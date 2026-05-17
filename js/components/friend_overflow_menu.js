@@ -1,4 +1,4 @@
-// friend-overflow-menu.js — Mute / Unmute / Remove popover for a friend
+// friend_overflow_menu.js — Mute / Unmute / Remove popover for a friend
 // (issue #131, FRIENDS.md Surface 1 Region B → "long-press / overflow menu").
 //
 // The menu is anchored to the friend cell that triggered it (long-press on

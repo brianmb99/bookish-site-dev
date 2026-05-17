@@ -20,7 +20,7 @@
 // emitted blob.
 
 import { TarnClient, TarnStorage } from '../lib/tarn/tarn-client.bundle.js';
-import { bookishSchema } from './bookish-schema.js';
+import { bookishSchema } from './bookish_schema.js';
 
 const TARN_API = window.BOOKISH_API_BASE || 'https://api.tarn.dev';
 const APP_ID = 'bookish';

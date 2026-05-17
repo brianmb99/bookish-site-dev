@@ -1,4 +1,4 @@
-// book-card.js — Shared book-card builders.
+// book_card.js — Shared book-card builders.
 //
 // These functions used to live as private helpers inside app.js. Issue #123
 // (friend's-shelf full-screen view) needs to render another user's books

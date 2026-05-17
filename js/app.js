@@ -19,11 +19,11 @@ import * as subscription from './core/subscription.js';
 import * as friendsRouter from './core/friends_router.js';
 import * as accountKeyReminder from './core/account_key_reminder.js';
 import { debugLog } from './core/debug_log.js';
-import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend-glyph-trigger.js';
-import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCardDetails, generatedCoverColor as sharedGeneratedCoverColor, escapeHtml as sharedEscapeHtml } from './components/book-card.js';
-import { renderPipOverlay } from './components/friend-pip.js';
+import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend_glyph_trigger.js';
+import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCardDetails, generatedCoverColor as sharedGeneratedCoverColor, escapeHtml as sharedEscapeHtml } from './components/book_card.js';
+import { renderPipOverlay } from './components/friend_pip.js';
 import { getMatchingFriendBookEntries as friendsGetMatchingFriendBookEntries, primeFriendLibraryCache as friendsPrimeFriendLibraryCache, invalidateFriendLibraryCache as friendsInvalidateLibraryCache } from './core/friends.js';
-import { openFriendBookDetail } from './components/friend-book-detail.js';
+import { openFriendBookDetail } from './components/friend_book_detail.js';
 import { setStatusLine, showMarkAsReadUndoToast, showStatusToast, showSubscriptionSuccessToast, showUpdateReadyToast } from './components/status_helpers.js';
 import { createWtrDrawerController, sortWtrList } from './components/wtr_drawer.js';
 import { activeEntryCount as countActiveEntries, createOmniboxController } from './components/omnibox_controller.js';
@@ -362,7 +362,7 @@ if(addCoverCtaEl){
 
 // --- Helpers ---
 // escapeHtml + buildCardHTML + buildCardDetails + generatedCoverColor moved to
-// components/book-card.js (#123) so the friend's-shelf view can reuse the
+// components/book_card.js (#123) so the friend's-shelf view can reuse the
 // same builders verbatim. Local aliases preserve the rest of app.js.
 const escapeHtml = sharedEscapeHtml;
 function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Add cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn(); }
@@ -1339,11 +1339,11 @@ window.addEventListener('popstate', () => {
       // Friend's shelf full-screen view (#123). Topmost peer of the friends
       // drawer; closed via popstate so the PWA system back button returns
       // the user to their Library.
-      import('./components/friend-shelf-view.js').then(m => m.closeFriendShelfView(true)).catch(() => {});
+      import('./components/friend_shelf_view.js').then(m => m.closeFriendShelfView(true)).catch(() => {});
     } else if (friendsOverlay && friendsOverlay.style.display === 'block') {
       // Friends drawer (#122) — stack peer of WTR. Closed via popstate so the
       // PWA system back button dismisses it just like any other overlay.
-      import('./components/friends-drawer.js').then(m => m.closeFriendsDrawer(true)).catch(() => {});
+      import('./components/friends_drawer.js').then(m => m.closeFriendsDrawer(true)).catch(() => {});
     } else if (wtrOverlay && wtrOverlay.style.display === 'block') {
       closeWtrDrawer(true);
     }
@@ -1395,13 +1395,13 @@ export function hideAccountNudge(){
 
 
 // Generated cover color palette + generatedCoverColor() live in
-// components/book-card.js (#123). Local alias preserves callers in this file.
+// components/book_card.js (#123). Local alias preserves callers in this file.
 const generatedCoverColor = sharedGeneratedCoverColor;
 
 // --- Render ---
 function markDeletingVisual(entry){ entry._deleting=true; entry._committed=false; const key=entry.txid||entry.id||''; const el=key?document.querySelector('.card[data-txid="'+key+'"]'):null; if(el){ el.classList.add('deleting'); el.style.pointerEvents='none'; el.style.opacity='0.35'; } }
 
-// buildCardDetails + buildCardHTML live in components/book-card.js (#123).
+// buildCardDetails + buildCardHTML live in components/book_card.js (#123).
 // Local aliases preserve the rest of app.js.
 const buildCardDetails = sharedBuildCardDetails;
 const buildCardHTML = sharedBuildCardHTML;
@@ -1431,7 +1431,7 @@ function attachFriendPips(cardEl, entry){
   if(!cardEl) return;
   // Pip overlay lives in `.cover-wrap` (a sibling of `.cover`) so its
   // bottom-half can straddle the cover's bottom edge without being clipped
-  // by `.cover { overflow: hidden }`. See book-card.js for the wrapper.
+  // by `.cover { overflow: hidden }`. See book_card.js for the wrapper.
   const wrap = cardEl.querySelector('.cover-wrap');
   if(!wrap) return;
   // Always clear stale overlays first so a friend who removed the book or

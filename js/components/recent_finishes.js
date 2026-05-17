@@ -1,4 +1,4 @@
-// recent-finishes.js — Region A of the Friends drawer (#125).
+// recent_finishes.js — Region A of the Friends drawer (#125).
 //
 // Renders the vertical list of friends' recent `finished` events as the
 // primary content above the friend strip. Each row:
@@ -11,7 +11,7 @@
 // where:
 //   A      = 28px friend-avatar circle (renderFriendAvatar)
 //   COVER  = small ~32px cover thumbnail (book.coverImage data-URL or the
-//            generated-cover gradient placeholder from book-card.js)
+//            generated-cover gradient placeholder from book_card.js)
 //   text   = two lines, primary-color top + secondary-color bottom
 //
 // Tap the row → openFriendBookDetail({ book, connection }).
@@ -21,10 +21,10 @@
 // friend strip — which is today's reality (publish-on-save lands in #8).
 
 import { getRecentFinishes, formatRelativeTime } from '../core/activity.js';
-import { renderFriendAvatar } from './friend-avatar.js';
-import { displayNameForConnection } from './friend-strip.js';
-import { generatedCoverColor, escapeHtml } from './book-card.js';
-import { openFriendBookDetail } from './friend-book-detail.js';
+import { renderFriendAvatar } from './friend_avatar.js';
+import { displayNameForConnection } from './friend_strip.js';
+import { generatedCoverColor, escapeHtml } from './book_card.js';
+import { openFriendBookDetail } from './friend_book_detail.js';
 
 const SECTION_HEADING = 'Recent finishes';
 
@@ -59,7 +59,7 @@ export function buildRecentFinishRow(event, opts = {}) {
   avatar.classList.add('recent-finish-avatar');
   row.appendChild(avatar);
 
-  // Cover thumbnail. Reuses the same data-URL pattern as book-card.js. When
+  // Cover thumbnail. Reuses the same data-URL pattern as book_card.js. When
   // there's no cover bytes, fall back to the generated-cover gradient
   // placeholder — same palette + initial treatment as the user's own
   // missing-cover books, so the drawer's covers look consistent with the

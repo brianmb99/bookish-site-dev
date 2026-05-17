@@ -1,4 +1,4 @@
-// friend-avatar.js — deterministic-color initial circle for a friend.
+// friend_avatar.js — deterministic-color initial circle for a friend.
 //
 // Used by the friend strip (Region B of the Friends drawer, issue #122),
 // and reusable later for friend pips on Library cards (#6) and the friend's

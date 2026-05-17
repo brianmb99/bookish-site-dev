@@ -1,4 +1,4 @@
-// bookish-schema.js — Bookish schema declaration for the Tarn SDK.
+// bookish_schema.js — Bookish schema declaration for the Tarn SDK.
 //
 // This is the canonical, single source of truth for what a Bookish book
 // record looks like on the wire. The Tarn SDK uses this declaration to:

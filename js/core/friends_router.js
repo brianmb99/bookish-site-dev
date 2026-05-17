@@ -58,7 +58,7 @@ export async function maybeOpenPendingAcceptModal() {
     return;
   }
   try {
-    const mod = await import('../components/accept-invite-modal.js');
+    const mod = await import('../components/accept_invite_modal.js');
     await mod.openAcceptInviteModal(params);
   } catch (err) {
     console.error('[Bookish:FriendsRouter] failed to open accept modal:', err);
