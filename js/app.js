@@ -84,6 +84,10 @@ const tagsInputEl = document.getElementById('tagsInput');
 const tagsPillsEl = document.getElementById('tagsPills');
 const placardTitle = document.getElementById('placardTitle');
 const placardAuthor = document.getElementById('placardAuthor');
+// Use explicit form element lookups for title/author. `form.title` collides
+// with the native HTMLElement `title` property in some browser engines.
+const titleInput = form?.elements?.namedItem('title') || placardTitle;
+const authorInput = form?.elements?.namedItem('author') || placardAuthor;
 // Per-book privacy (#129 / FRIENDS.md Surface 7) — three surfaces share one
 // `is_private` boolean: an add-form checkbox, an edit-mode lock toggle, and a
 // hidden input that carries the current value into the form-submit payload.
@@ -463,9 +467,9 @@ function openModal(entry, forceIntent){
   const inputs=[...form.querySelectorAll('input,select,textarea')];
   inputs.forEach(i=>{ if(i.name==='priorTxid') return; i.disabled=false; });
   form.priorTxid.value=entry?(entry.txid||entry.id||''):'';
-  // Title and author are <textarea> placards (#114). They use the same form.title/form.author element refs.
-  form.title.value=entry?(entry.title||''):'';
-  form.author.value=entry?(entry.author||''):'';
+  // Title and author are <textarea> placards (#114).
+  if(titleInput) titleInput.value=entry?(entry.title||''):'';
+  if(authorInput) authorInput.value=entry?(entry.author||''):'';
   form.format.value=entry?mapFormat(entry.format):'print';
   // Auto-grow placards once values are set
   _autoGrowPlacard(placardTitle);
@@ -888,8 +892,8 @@ window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, r
 // Dirty tracking helpers
 function currentFormState(){ return JSON.stringify({
   prior: form.priorTxid.value||'',
-  title: (form.title.value||'').trim(),
-  author: (form.author.value||'').trim(),
+  title: (titleInput?.value||'').trim(),
+  author: (authorInput?.value||'').trim(),
   format: form.format.value,
   dateRead: form.dateRead.value,
   readingStatus: readingStatusInput?.value||READING_STATUS.WANT_TO_READ,
@@ -978,8 +982,8 @@ async function _autoSaveIfDirty(){
     // Revert: restore form fields from snapshot JSON
     try{
       const snap = JSON.parse(orig);
-      form.title.value = snap.title || '';
-      form.author.value = snap.author || '';
+      if(titleInput) titleInput.value = snap.title || '';
+      if(authorInput) authorInput.value = snap.author || '';
       form.format.value = snap.format || 'print';
       form.dateRead.value = snap.dateRead || '';
       if(notesInput) notesInput.value = snap.notes || '';
@@ -998,8 +1002,8 @@ function _buildPayloadFromForm(){
   const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
   const dateVal = form.dateRead.value;
   const payload = {
-    title: (form.title.value||'').trim(),
-    author: (form.author.value||'').trim(),
+    title: (titleInput?.value||'').trim(),
+    author: (authorInput?.value||'').trim(),
     format: form.format.value,
     readingStatus: rsValue
   };
@@ -1790,8 +1794,8 @@ function openOmniboxApiResult(meta){
         key: meta.work_key || ''
       });
     } else {
-      if(form.title) form.title.value = meta.title || '';
-      if(form.author) form.author.value = meta.author || '';
+      if(titleInput) titleInput.value = meta.title || '';
+      if(authorInput) authorInput.value = meta.author || '';
       if(meta.source === 'itunes') form.format.value = 'audio';
       form.dispatchEvent(new Event('input', {bubbles:true}));
     }
@@ -1802,7 +1806,7 @@ function openOmniboxApiResult(meta){
 function openOmniboxManualAdd(query){
   openModal(null, READING_STATUS.WANT_TO_READ);
   setTimeout(()=>{
-    if(form.title && query) form.title.value = query;
+    if(titleInput && query) titleInput.value = query;
     form.dispatchEvent(new Event('input', {bubbles:true}));
   }, 50);
 }
@@ -2261,7 +2265,7 @@ async function deleteServerless(priorTxid) {
 
 // --- Form handlers ---
 let _formSubmitting = false;
-form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) return; _formSubmitting=true; const priorTxid=form.priorTxid.value||undefined; const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ; const dateVal = form.dateRead.value; const payload={ title:form.title.value.trim(), author:form.author.value.trim(), format:form.format.value, readingStatus:rsValue }; if(rsValue === READING_STATUS.READ){ const ms = dateStringToMsNoonUtc(dateVal); if(ms != null) payload.dateRead = ms; } else if(rsValue === READING_STATUS.READING){ payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now(); } if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; if(coverPreview.dataset.fit) payload.coverFit=coverPreview.dataset.fit; } else if(priorTxid){ payload.coverImage=''; payload.mimeType=''; } const notesVal=(notesInput?.value||'').trim(); if(notesVal) payload.notes=notesVal; const optVals=getOptionalFieldValues(); if(priorTxid){ payload.rating=optVals.rating||0; payload.owned=!!optVals.owned; payload.tags=optVals.tags||''; if(!notesVal) payload.notes=''; } else { if(optVals.rating) payload.rating=optVals.rating; if(optVals.owned) payload.owned=optVals.owned; if(optVals.tags) payload.tags=optVals.tags; }
+form.addEventListener('submit',ev=>{ ev.preventDefault(); if(_formSubmitting) return; _formSubmitting=true; const priorTxid=form.priorTxid.value||undefined; const rsValue = readingStatusInput?.value || READING_STATUS.WANT_TO_READ; const dateVal = form.dateRead.value; const payload={ title:(titleInput?.value||'').trim(), author:(authorInput?.value||'').trim(), format:form.format.value, readingStatus:rsValue }; if(rsValue === READING_STATUS.READ){ const ms = dateStringToMsNoonUtc(dateVal); if(ms != null) payload.dateRead = ms; } else if(rsValue === READING_STATUS.READING){ payload.readingStartedAt = dateVal ? new Date(dateVal+'T00:00:00').getTime() : Date.now(); } if(coverPreview.dataset.b64){ payload.coverImage=coverPreview.dataset.b64; if(coverPreview.dataset.mime) payload.mimeType=coverPreview.dataset.mime; if(coverPreview.dataset.fit) payload.coverFit=coverPreview.dataset.fit; } else if(priorTxid){ payload.coverImage=''; payload.mimeType=''; } const notesVal=(notesInput?.value||'').trim(); if(notesVal) payload.notes=notesVal; const optVals=getOptionalFieldValues(); if(priorTxid){ payload.rating=optVals.rating||0; payload.owned=!!optVals.owned; payload.tags=optVals.tags||''; if(!notesVal) payload.notes=''; } else { if(optVals.rating) payload.rating=optVals.rating; if(optVals.owned) payload.owned=optVals.owned; if(optVals.tags) payload.tags=optVals.tags; }
   // Friend-matching identifiers: capture from search state for new books only.
   // Edits leave the existing work_key/isbn13 untouched (book_repository.update merges).
   if(!priorTxid && window.bookSearch?.getSearchMeta){

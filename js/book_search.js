@@ -5,6 +5,8 @@ import { resizeImageToBase64, cropAndResizeImageToBase64 } from './core/image_ut
 import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions, insertByRank, buildCoverEdition, fetchAndValidateCover, MIN_COVER_BYTES } from './core/cover_pipeline.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
+  const titleInput=form.elements?.namedItem('title');
+  const authorInput=form.elements?.namedItem('author');
   // #114: in-modal #bookSearchUI (search input + results) deleted; the cover-edition
   // browser is now invoked via the "Browse covers" button via browseCoversForEntry(workKey).
   const prevBtn=document.getElementById('prevEdition'); const nextBtn=document.getElementById('nextEdition'); const editionInfo=document.getElementById('editionInfo');
@@ -352,8 +354,8 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     const _ph0=document.getElementById('coverPlaceholder');
     if(_ph0){ _ph0.style.display='flex'; _ph0.innerHTML=''; _ph0.classList.add('cover-skeleton-pulse'); }
     if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers…'; }
-    form.title.value = cleanTitle(payload.title || '');
-    form.author.value = payload.author || '';
+    if(titleInput) titleInput.value = cleanTitle(payload.title || '');
+    if(authorInput) authorInput.value = payload.author || '';
     form.format.value=activeFilter==='audiobook'?'audio':'print';
     markDirty();
     const hasWorkKey = payload.olWorkKeys && payload.olWorkKeys.length;
@@ -385,8 +387,8 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       }catch(e){ /* swallow — pipeline still runs without iTunes fallback */ }
     } }
   function populateFromBasic(meta){ if(!meta) return;
-    form.title.value = cleanTitle(meta.title || '');
-    if(meta.author) form.author.value = meta.author;
+    if(titleInput) titleInput.value = cleanTitle(meta.title || '');
+    if(meta.author && authorInput) authorInput.value = meta.author;
     markDirty();
     if(meta.cover_url) {
       loadCoverByUrl(meta.cover_url);
@@ -402,7 +404,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     // is defined in the IIFE scope — function declarations hoist, but defensive.)
     if(typeof isAdjusting === 'function' && isAdjusting()) return;
     const ed=editions[editionIndex];
-    if(!coverOnlyMode){ let changed=false; if(ed.title){ form.title.value=cleanTitle(ed.title); changed=true; } if(ed.author_name&&ed.author_name.length){ form.author.value=ed.author_name.join(', '); changed=true; } if(changed) markDirty(); }
+    if(!coverOnlyMode){ let changed=false; if(ed.title && titleInput){ titleInput.value=cleanTitle(ed.title); changed=true; } if(ed.author_name&&ed.author_name.length&&authorInput){ authorInput.value=ed.author_name.join(', '); changed=true; } if(changed) markDirty(); }
     if(ed._coverData) {
       const cd=ed._coverData;
       coverPreview.src=cd.dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=cd.base64; coverPreview.dataset.mime=cd.mime; coverPreview.dataset.fit=coverFitMode(cd.width, cd.height); if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${cd.dataUrl}')`); const ph=document.getElementById('coverPlaceholder'); if(ph) ph.style.display='none'; if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded(); if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn(); markDirty();
@@ -820,8 +822,8 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       coverPreview.dataset._savedB64=coverPreview.dataset.b64||'';
       coverPreview.dataset._savedMime=coverPreview.dataset.mime||'';
     }
-    const title=(form.title.value||'').trim();
-    const author=(form.author.value||'').trim();
+    const title=(titleInput?.value||'').trim();
+    const author=(authorInput?.value||'').trim();
     if(workKey){
       // Direct OL editions browsing path — no in-modal search needed.
       currentWorkKey = workKey;
