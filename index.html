@@ -176,7 +176,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.299</div>
+  <div class="footer-meta">Alpha &bull; v0.2.303</div>
 </footer>
 </div>
 
@@ -318,6 +318,21 @@
   </div>
 </div>
 <script>
+ if('serviceWorker' in navigator){
+  window.addEventListener('load',async()=>{
+    try{
+      const registration=await navigator.serviceWorker.register('./sw.js');
+      // Check for updates on page load. Do not force-refresh the current
+      // page when a worker takes control; users should not see a second
+      // startup pass after the app is already interactive.
+      registration.update();
+      // Check for updates periodically (every 60 minutes)
+      setInterval(()=>registration.update(),60*60*1000);
+    }catch(err){
+      console.warn('SW registration failed:',err);
+    }
+  });
+ }
  // Unified install button handling
  let deferredPrompt; const installBtn=document.getElementById('installBtn');
  const isInstalled=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;

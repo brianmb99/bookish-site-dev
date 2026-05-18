@@ -1,5 +1,5 @@
 // sw.js - basic PWA service worker
-const VERSION='v391';
+const VERSION='v395';
 const CACHE_NAME='bookish-precache-'+VERSION;
 const PRECACHE=[
   '/',
@@ -15,7 +15,6 @@ const PRECACHE=[
   '/js/core/tarn_service.js',
   '/js/core/account_key_reminder.js',
   '/js/core/image_utils.js',
-  '/js/core/pwa_update.js',
   '/js/core/search_core.js',
   '/js/core/cover_pipeline.js',
   '/js/core/id_core.js',
@@ -27,7 +26,7 @@ const PRECACHE=[
   '/fonts/jetbrains-mono-latin.woff2'
 ];
 self.addEventListener('install',e=>{
-  e.waitUntil((async()=>{ const c=await caches.open(CACHE_NAME); try{ await c.addAll(PRECACHE); }catch(err){ console.warn('[SW] Precache partial failure:',err); } })());
+  e.waitUntil((async()=>{ const c=await caches.open(CACHE_NAME); try{ await c.addAll(PRECACHE); }catch(err){ console.warn('[SW] Precache partial failure:',err); } self.skipWaiting(); })());
 });
 self.addEventListener('activate',e=>{
   e.waitUntil((async()=>{
