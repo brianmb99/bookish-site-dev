@@ -78,7 +78,7 @@ export function displayNameForConnection(connection) {
  *   <div class="friend-strip-section">
  *     <div class="friend-strip-header">
  *       <span class="friend-strip-heading">Your circle</span>
- *       <button class="friend-strip-add" type="button">+ Add</button>
+ *       <button class="friend-strip-add" type="button">Invite</button>
  *     </div>
  *     <div class="friend-strip-scroll">
  *       <button class="friend-strip-cell" ...>
@@ -110,7 +110,7 @@ export function renderFriendStrip(container, connections, opts = {}) {
   const sorted = sortConnectionsForStrip(connections || []);
 
   // Empty-state branch (#124). When the user has no friends yet, swap the
-  // compact strip for a friendly empty state with a prominent "+ Add" CTA.
+  // compact strip for a friendly empty state with a prominent Invite CTA.
   // This is now reachable because the header glyph is always visible (the
   // 0-friends auto-hide was removed in #124), so opening the drawer with
   // zero connections is a valid first-run path. The empty state keeps the
@@ -123,8 +123,8 @@ export function renderFriendStrip(container, connections, opts = {}) {
           <span class="friend-strip-heading">Your circle</span>
         </div>
         <div class="friend-strip-empty">
-          <p class="friend-strip-empty-message">No friends yet — invite someone to start.</p>
-          <button class="btn primary friend-strip-empty-add" type="button" data-friend-add>+ Add</button>
+          <p class="friend-strip-empty-message">No friends yet. Invite someone to start.</p>
+          <button class="btn secondary friend-strip-empty-add" type="button" data-friend-add>Invite a friend</button>
         </div>
       </div>
     `;
@@ -143,7 +143,7 @@ export function renderFriendStrip(container, connections, opts = {}) {
     <div class="friend-strip-section">
       <div class="friend-strip-header">
         <span class="friend-strip-heading">Your circle</span>
-        <button class="friend-strip-add" type="button" data-friend-add>+ Add</button>
+        <button class="friend-strip-add" type="button" data-friend-add>Invite</button>
       </div>
       <div class="friend-strip-scroll" role="list" data-friend-scroll></div>
     </div>

@@ -5,9 +5,8 @@
 // no markup is shipped pre-baked — the modal body is rendered on open and
 // torn down on close.
 //
-// Friends Issue 2 (Surface 6) — entry point lives in Account → Add a friend
-// for now; the drawer's "+ Add" affordance will replace this entry in
-// Issue 3.
+// Friends Issue 2 (Surface 6) — entry point lives in the Friends drawer
+// invite affordance.
 
 import * as friends from '../core/friends.js';
 import * as tarnService from '../core/tarn_service.js';

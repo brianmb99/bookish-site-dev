@@ -16,10 +16,10 @@ export function renderAccountFriendsSectionMarkup() {
   return `
       <div class="account-panel-friends" id="accountPanelFriends">
         <div class="account-panel-sub-label">Friends</div>
-        <!-- #122: "+ Add a friend" entry moved to the Friends drawer (header glyph).
+        <!-- #122: the add-a-friend entry moved to the Friends drawer (header glyph).
              Account keeps the read-only Connections + Pending invites lists for
              power-user verification. To invite someone, open the Friends drawer
-             from the header and tap "+ Add".
+             from the header and tap Invite.
              #124: added the "Show in header" toggle so users who hid the glyph
              from the drawer have a clear path to re-enable it. -->
         <!-- #146: switched from native checkbox to the .toggle-switch
@@ -58,7 +58,7 @@ export function renderConnectionRows(connections) {
   return connections
     .map(connection => {
       const label = getAccountFriendLabel(connection);
-      return `<li class="account-friend-row"><span class="account-friend-label">${escapeHtml(label)}</span></li>`;
+      return `<li class="account-friend-row account-friend-row-connection"><span class="account-friend-label">${escapeHtml(label)}</span></li>`;
     })
     .join('');
 }
@@ -73,10 +73,10 @@ export function renderPendingInviteRows(invites) {
         ? `for ${escapeHtml(inv.display_name)}`
         : 'unnamed';
       return `
-          <li class="account-friend-row" data-pending-token="${escapeHtml(inv.token_id)}">
+          <li class="account-friend-row account-friend-row-pending" data-pending-token="${escapeHtml(inv.token_id)}">
             <span class="account-friend-label">Invite ${namePart}</span>
             <span class="account-friend-meta">${expires ? 'Expires ' + escapeHtml(expires) : ''}</span>
-            <button type="button" class="btn-link account-friend-revoke" data-revoke-token="${escapeHtml(inv.token_id)}">Revoke</button>
+            <button type="button" class="account-friend-revoke" data-revoke-token="${escapeHtml(inv.token_id)}">Revoke</button>
           </li>
         `;
     })

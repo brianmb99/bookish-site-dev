@@ -279,7 +279,7 @@ function emptyStateHtml() {
   const name = displayNameForConnection(_currentConnection);
   return `
     <div class="friend-shelf-empty">
-      <div class="friend-shelf-empty-icon" aria-hidden="true">📚</div>
+      <div class="friend-shelf-empty-mark" aria-hidden="true"><span></span><span></span><span></span></div>
       <div class="friend-shelf-empty-headline">${escapeAttr(name)} hasn't added books yet.</div>
       <div class="friend-shelf-empty-sub">When they do, you'll see them here.</div>
     </div>
@@ -290,7 +290,7 @@ function errorStateHtml() {
   const name = displayNameForConnection(_currentConnection);
   return `
     <div class="friend-shelf-error">
-      <div class="friend-shelf-error-icon" aria-hidden="true">⚠️</div>
+      <div class="friend-shelf-error-mark" aria-hidden="true">!</div>
       <div class="friend-shelf-error-headline">Couldn't load ${escapeAttr(name)}'s shelf.</div>
       <button type="button" class="friend-shelf-retry" id="friendShelfRetry">Retry</button>
     </div>

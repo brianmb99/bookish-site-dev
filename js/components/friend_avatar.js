@@ -29,21 +29,21 @@
 //    circle stays visually whole.
 
 // Stable palette — order matters for the hash-bucketing.
-// Picked for chroma + perceived distinctness; keep this short list curated
-// rather than generated so designers can hand-tune later.
+// Picked as muted library tones so social marks stay identifiable without
+// reading as notification badges or random saturated app colors.
 const PALETTE = [
-  '#e07a5f', // terra
-  '#f2b134', // amber
-  '#3d8c40', // forest
-  '#3aaed8', // azure
-  '#2563eb', // bookish primary blue
-  '#7e57c2', // violet
-  '#c2185b', // raspberry
-  '#5e8d4a', // sage
-  '#b45309', // burnt orange
-  '#0d9488', // teal
-  '#6366f1', // indigo
-  '#d97706', // ochre
+  '#8f5f4a', // clay
+  '#9a7138', // ochre
+  '#66764b', // olive
+  '#4d7a6d', // lichen
+  '#4f7182', // slate teal
+  '#6b6688', // dusk
+  '#845f73', // rosewood
+  '#756352', // walnut
+  '#876f3d', // brass
+  '#587069', // pine
+  '#765f4f', // umber
+  '#6f6a45', // moss
 ];
 
 /**

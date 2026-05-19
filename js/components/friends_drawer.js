@@ -17,7 +17,7 @@
 //
 //   Region B — friend strip. See friend_strip.js. When 0 connections, the
 //     strip renders an empty state with a friendly message + prominent
-//     "+ Add" button (#124 — the trigger is now always visible, so the
+//     Invite button (#124 — the trigger is now always visible, so the
 //     drawer must handle the zero-friends case gracefully).
 //
 // The drawer also exposes a small "Hide friends from header" link at the
