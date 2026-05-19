@@ -10,7 +10,7 @@ export function renderAccountSecurityView(content, {
   renderAccountSubView(content, {
     view: 'security',
     title: 'Account & Security',
-    subtitle: 'Manage the recovery and sign-in methods for this account.',
+    subtitle: 'Recovery and sign-in methods for this account.',
     bodyHtml: `
       <div class="account-panel-security account-subview-section" id="accountPanelSecurity">
         <div class="account-security-block">
@@ -19,7 +19,7 @@ export function renderAccountSecurityView(content, {
           <div class="account-security-actions">
             <button type="button" id="viewAccountKeyBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">View account key</button>
           </div>
-          <button type="button" id="replaceAccountKeyBtn" class="btn-link account-security-replace-link">Replace account key &rarr;</button>
+          <button type="button" id="replaceAccountKeyBtn" class="btn-link account-security-replace-link">Replace account key</button>
         </div>
 
         <div class="account-security-block" id="accountPasskeysBlock"></div>

@@ -31,7 +31,7 @@ export function renderAccountHub(content, {
     <div class="auth-form account-hub">
       ${renderAccountHeaderHtml(identity)}
 
-      <div class="account-panel-tagline">Private. Permanent. Yours.</div>
+      <div class="account-panel-tagline">Private, permanent, yours.</div>
 
       ${renderSubscriptionSection({ subscription, activeEntryCount })}
 
@@ -53,7 +53,7 @@ export function renderAccountHub(content, {
         <button type="button" class="account-hub-row" data-account-view="archive">
           <span class="account-hub-row-main">
             <span class="account-hub-row-title">Permanent Archive</span>
-            <span class="account-hub-row-desc">Open your Tarn-backed archive link</span>
+            <span class="account-hub-row-desc">Open your permanent archive link</span>
           </span>
           <span class="account-hub-chevron" aria-hidden="true">&rarr;</span>
         </button>

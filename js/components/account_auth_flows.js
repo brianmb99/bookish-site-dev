@@ -85,7 +85,7 @@ export function renderCreateAccountForm(content, deps = {}) {
       <div class="auth-header">
         <div class="auth-icon">${SVG_SHIELD}</div>
         <h2>Create Your Account</h2>
-        <p>Private. Permanent. Yours.</p>
+        <p>Private, permanent, yours.</p>
       </div>
 
       <div class="form-group">
