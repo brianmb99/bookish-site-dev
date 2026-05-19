@@ -13,7 +13,7 @@
 //     through the Tarn API.
 //
 // Field set mirrors public/schemas/bookish_0.3.0.json (the previous Ajv-
-// based schema). Schema version is bumped from 0.3.0 → 4 (the new SDK
+// based schema). Schema version is bumped from 0.3.0 → 5 (the new SDK
 // uses positive integers, not semver strings).
 //
 // IMPORTANT: every field a Bookish entry might carry must be declared
@@ -24,8 +24,16 @@ import { defineSchema } from '../lib/tarn/tarn-client.bundle.js';
 
 export const bookishSchema = defineSchema({
   appId: 'bookish',
-  version: 4,
+  version: 5,
   collections: {
+    profiles: {
+      primaryKey: 'profileId',
+      fields: {
+        profileId: 'string',
+        displayName: 'string',
+        updatedAt: 'number?',
+      },
+    },
     books: {
       primaryKey: 'bookId',
       fields: {

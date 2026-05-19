@@ -21,6 +21,28 @@ function wirePasswordToggles(root) {
   });
 }
 
+function cleanDisplayName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function optionalMethod(obj, name) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, name) && typeof obj[name] === 'function'
+    ? obj[name]
+    : null;
+}
+
+async function hydrateSignedInDisplayName(tarnService, fallback) {
+  const hydrateDisplayName = optionalMethod(tarnService, 'hydrateDisplayName');
+  const setDisplayName = optionalMethod(tarnService, 'displayName');
+  if (hydrateDisplayName) {
+    await hydrateDisplayName(fallback ? { fallback } : {});
+    return;
+  }
+  if (fallback && setDisplayName) {
+    setDisplayName(fallback);
+  }
+}
+
 export async function provisionBookishAccount({
   email,
   dataLookupKey,
@@ -73,6 +95,11 @@ export function renderCreateAccountForm(content, deps = {}) {
       </div>
 
       <div class="form-group">
+        <label for="acctDisplayName">Display name</label>
+        <input type="text" id="acctDisplayName" autocomplete="name" maxlength="64" placeholder="What friends will see" />
+      </div>
+
+      <div class="form-group">
         <label for="acctPassword">Password</label>
         <div class="password-field">
           <input type="password" id="acctPassword" minlength="8" autocomplete="new-password" placeholder="At least 8 characters" required />
@@ -112,6 +139,7 @@ export function renderCreateAccountForm(content, deps = {}) {
   `;
 
   const emailInput = content.querySelector('#acctEmail');
+  const displayNameInput = content.querySelector('#acctDisplayName');
   const passwordInput = content.querySelector('#acctPassword');
   const confirmInput = content.querySelector('#acctConfirmPassword');
   const createBtn = content.querySelector('#createAccountBtn');
@@ -170,6 +198,7 @@ export function renderCreateAccountForm(content, deps = {}) {
 
   createBtn.addEventListener('click', async () => {
     const email = emailInput.value.trim().toLowerCase();
+    const displayName = cleanDisplayName(displayNameInput.value);
     const password = passwordInput.value;
 
     createBtn.disabled = true;
@@ -198,7 +227,7 @@ export function renderCreateAccountForm(content, deps = {}) {
         onWarn('[AccountUI] Provisioning failed after 3 attempts - will retry later');
       }
 
-      await onCreated({ email, dataLookupKey, accountKey, provisioned });
+      await onCreated({ email, displayName, dataLookupKey, accountKey, provisioned });
     } catch (e) {
       onError('[AccountUI] Registration failed:', e);
       let msg = e.message || 'Registration failed. Please try again.';
@@ -298,7 +327,7 @@ export function renderSignInForm(content, deps = {}) {
     try {
       progress.textContent = 'Deriving encryption keys...';
       await tarnService.login(email, password);
-      tarnService.displayName(email.split('@')[0]);
+      await hydrateSignedInDisplayName(tarnService, email.split('@')[0]);
       progress.textContent = 'Signed in!';
       onSignedIn();
     } catch (e) {
@@ -330,7 +359,9 @@ export function renderSignInForm(content, deps = {}) {
       });
 
       if (typedEmail && typedEmail.includes('@')) {
-        tarnService.displayName(typedEmail.split('@')[0]);
+        await hydrateSignedInDisplayName(tarnService, typedEmail.split('@')[0]);
+      } else {
+        await hydrateSignedInDisplayName(tarnService);
       }
 
       progress.textContent = 'Signed in!';

@@ -1,5 +1,5 @@
 // sw.js - basic PWA service worker
-const VERSION='v397';
+const VERSION='v398';
 const CACHE_NAME='bookish-precache-'+VERSION;
 const PRECACHE=[
   '/',
@@ -26,7 +26,7 @@ const PRECACHE=[
   '/fonts/jetbrains-mono-latin.woff2'
 ];
 self.addEventListener('install',e=>{
-  e.waitUntil((async()=>{ const c=await caches.open(CACHE_NAME); try{ await c.addAll(PRECACHE); }catch(err){ console.warn('[SW] Precache partial failure:',err); } self.skipWaiting(); })());
+  e.waitUntil((async()=>{ const c=await caches.open(CACHE_NAME); try{ await c.addAll(PRECACHE); }catch(err){ console.warn('[SW] Precache partial failure:',err); } })());
 });
 self.addEventListener('activate',e=>{
   e.waitUntil((async()=>{

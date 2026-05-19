@@ -182,11 +182,17 @@ export async function openInviteModal(opts = {}) {
 
   renderLoading(content);
 
-  const displayName = (opts.displayName || tarnService.displayName() || tarnService.getEmail()?.split('@')[0] || '').trim();
-
   const generate = async () => {
     renderLoading(content);
     try {
+      const hydrateDisplayName = Object.prototype.hasOwnProperty.call(tarnService, 'hydrateDisplayName')
+        && typeof tarnService.hydrateDisplayName === 'function'
+        ? tarnService.hydrateDisplayName
+        : null;
+      const syncedName = hydrateDisplayName
+        ? await hydrateDisplayName()
+        : null;
+      const displayName = (opts.displayName || syncedName || tarnService.displayName() || tarnService.getEmail()?.split('@')[0] || '').trim();
       const invite = await friends.generateInvite({ displayName, expiryDays: 7 });
       if (!_isOpen) return; // user closed before generation finished
       renderInvite(content, invite);

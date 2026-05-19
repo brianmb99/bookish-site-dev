@@ -2,8 +2,9 @@
 //
 // Owns the singleton TarnClient instance, the schema declaration handed to
 // it, and the small amount of UI-side metadata that doesn't belong in the
-// SDK (display name, active-fields preference, the email — for display
-// only, never re-used as auth material).
+// SDK (active-fields preference, the email — for display only, never
+// re-used as auth material). Display name is Bookish app profile data:
+// encrypted through Tarn like books, with localStorage only as a cache.
 //
 // The new schema-first SDK does session resume internally — pass it a
 // storage adapter and `TarnClient.create()` rehydrates any persisted blob
@@ -30,6 +31,8 @@ const STORAGE_KEYS = {
   DISPLAY_NAME: 'bookish.displayName',
   ACTIVE_FIELDS: 'bookish_active_fields',
 };
+const PROFILE_ID = 'self';
+const MAX_DISPLAY_NAME_LENGTH = 64;
 
 /** @type {TarnClient|null} */
 let _client = null;
@@ -269,16 +272,108 @@ export function getEmail() {
 }
 
 /**
- * Get/set display name (stored locally).
+ * Normalize a human display name for storage and display.
+ *
+ * @param {string} [name]
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+export function normalizeDisplayName(name, fallback = 'User') {
+  const normalized = String(name || '').trim().replace(/\s+/g, ' ');
+  const clipped = normalized.length > MAX_DISPLAY_NAME_LENGTH
+    ? normalized.slice(0, MAX_DISPLAY_NAME_LENGTH).trim()
+    : normalized;
+  return clipped || fallback || 'User';
+}
+
+/**
+ * Fallback display name from email. This is still used for blank signup
+ * names and legacy accounts that do not have a synced profile yet.
+ *
+ * @param {string|null} [email]
+ * @returns {string}
+ */
+export function defaultDisplayName(email = getEmail()) {
+  return (String(email || '').split('@')[0] || 'User').trim() || 'User';
+}
+
+function cacheDisplayName(name) {
+  const normalized = normalizeDisplayName(name);
+  localStorage.setItem(STORAGE_KEYS.DISPLAY_NAME, normalized);
+  return normalized;
+}
+
+function getProfilesCollection(client) {
+  const profiles = client?.profiles || client?.collections?.profiles;
+  if (!profiles || typeof profiles.get !== 'function') {
+    throw new Error('Tarn profiles collection is unavailable');
+  }
+  return profiles;
+}
+
+/**
+ * Get/set the cached display name. Prefer hydrateDisplayName() /
+ * saveDisplayName() for logged-in flows that need cross-device sync.
+ *
  * @param {string} [name] — if provided, sets the display name
  * @returns {string|null}
  */
 export function displayName(name) {
   if (name !== undefined) {
-    localStorage.setItem(STORAGE_KEYS.DISPLAY_NAME, name);
-    return name;
+    return cacheDisplayName(name);
   }
   return localStorage.getItem(STORAGE_KEYS.DISPLAY_NAME);
+}
+
+/**
+ * Load the synced Bookish profile and refresh the local display-name cache.
+ * If no synced profile exists yet, this returns/cache-falls back to the
+ * email-derived name without writing a profile.
+ *
+ * @param {{ fallback?: string, email?: string }} [opts]
+ * @returns {Promise<string>}
+ */
+export async function hydrateDisplayName(opts = {}) {
+  const fallback = normalizeDisplayName(opts.fallback || defaultDisplayName(opts.email));
+
+  try {
+    const client = await getClient();
+    const profiles = getProfilesCollection(client);
+    const profile = await profiles.get(PROFILE_ID);
+    if (profile?.displayName) {
+      return cacheDisplayName(normalizeDisplayName(profile.displayName, fallback));
+    }
+  } catch (err) {
+    console.warn('[TarnService] profile hydrate failed:', err?.message || err);
+  }
+
+  const cached = displayName();
+  if (cached) return normalizeDisplayName(cached, fallback);
+  return cacheDisplayName(fallback);
+}
+
+/**
+ * Persist the display name to the encrypted Tarn-backed profile record.
+ *
+ * @param {string} name
+ * @param {{ fallback?: string, email?: string }} [opts]
+ * @returns {Promise<string>}
+ */
+export async function saveDisplayName(name, opts = {}) {
+  const fallback = normalizeDisplayName(opts.fallback || defaultDisplayName(opts.email));
+  const nextName = normalizeDisplayName(name, fallback);
+  const updatedAt = Date.now();
+  const client = await getClient();
+  const profiles = getProfilesCollection(client);
+  const existing = await profiles.get(PROFILE_ID);
+
+  if (existing) {
+    await profiles.update(PROFILE_ID, { displayName: nextName, updatedAt });
+  } else {
+    await profiles.create({ profileId: PROFILE_ID, displayName: nextName, updatedAt });
+  }
+
+  return cacheDisplayName(nextName);
 }
 
 // ============ UI PREFERENCES ============

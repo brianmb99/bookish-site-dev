@@ -111,6 +111,9 @@ export async function initAccountUI() {
   debugLog('[Bookish:AccountUI] Initializing...');
   if (tarnService.isLoggedIn()) {
     localStorage.setItem('bookish.hasHadAccount', 'true');
+    hydrateDisplayNameCache().catch(err =>
+      console.warn('[Bookish:AccountUI] display name hydrate failed:', err?.message || err)
+    );
   }
   setupAccountModalListeners();
 }
@@ -211,6 +214,7 @@ function setupAccountModalListeners() {
 
 async function renderAccountModalContent(content, mode) {
   if (tarnService.isLoggedIn()) {
+    await hydrateDisplayNameCache();
     renderAccountPanel(content);
   } else if (mode === 'signin') {
     renderSignInForm(content);
@@ -227,15 +231,15 @@ function renderCreateAccountForm(content) {
   renderCreateAccountAuthForm(content, {
     tarnService,
     bookishApiUrl: BOOKISH_API,
-    onCreated: ({ email, accountKey }) => completePostCreateAccount(content, { email, accountKey }),
+    onCreated: ({ email, displayName, accountKey }) => completePostCreateAccount(content, { email, displayName, accountKey }),
     onSwitchToSignIn: () => renderSignInForm(content),
     onWarn: (...args) => console.warn(...args),
     onError: (...args) => console.error(...args),
   });
 }
 
-function completePostCreateAccount(content, { email, accountKey }) {
-  tarnService.displayName(email.split('@')[0]);
+async function completePostCreateAccount(content, { email, displayName, accountKey }) {
+  await saveInitialDisplayName({ email, displayName });
   localStorage.setItem('bookish.hasHadAccount', 'true');
 
   transientState.justCreated = true;
@@ -342,6 +346,34 @@ function renderAccountPanel(content) {
   renderAccountHub(content, accountHubViewDeps(content));
 }
 
+function optionalTarnMethod(name) {
+  return Object.prototype.hasOwnProperty.call(tarnService, name) && typeof tarnService[name] === 'function'
+    ? tarnService[name]
+    : null;
+}
+
+async function hydrateDisplayNameCache(fallback) {
+  const hydrateDisplayName = optionalTarnMethod('hydrateDisplayName');
+  if (hydrateDisplayName) {
+    return hydrateDisplayName(fallback ? { fallback } : {});
+  }
+  return tarnService.displayName() || fallback || tarnService.getEmail()?.split('@')[0] || 'User';
+}
+
+async function saveInitialDisplayName({ email, displayName }) {
+  const fallback = email.split('@')[0] || 'User';
+  const saveDisplayName = optionalTarnMethod('saveDisplayName');
+  if (saveDisplayName) {
+    try {
+      await saveDisplayName(displayName, { fallback });
+      return;
+    } catch (err) {
+      console.warn('[Bookish:AccountUI] display name profile save failed:', err?.message || err);
+    }
+  }
+  tarnService.displayName(displayName || fallback);
+}
+
 function getAccountIdentity() {
   const email = tarnService.getEmail() || '';
   const displayName = tarnService.displayName() || email.split('@')[0] || 'User';
@@ -351,6 +383,7 @@ function getAccountIdentity() {
 
 function showAccountSecurityView(content) {
   renderAccountSecurityAccountView(content, {
+    identity: getAccountIdentity(),
     onBack: () => renderAccountPanel(content),
     onAfterRender: wireAccountSecuritySection,
   });
@@ -391,8 +424,6 @@ function accountHubViewDeps(content) {
       closeAccountModal();
       await performLogout();
     },
-    getEmail: () => tarnService.getEmail() || '',
-    setDisplayName: name => tarnService.displayName(name),
     onError: (...args) => console.error(...args),
     setTimeoutRef: setTimeout,
   }
@@ -435,6 +466,8 @@ function escapeHtml(s) {
  * @param {HTMLElement} content
  */
 function wireAccountSecuritySection(content) {
+  wireDisplayNameSettings(content);
+
   const viewBtn = content.querySelector('#viewAccountKeyBtn');
   const replaceBtn = content.querySelector('#replaceAccountKeyBtn');
   if (viewBtn) {
@@ -457,6 +490,76 @@ function wireAccountSecuritySection(content) {
   hydratePasskeysSection(content).catch(err =>
     console.warn('[AccountUI] passkeys hydrate failed:', err?.message || err)
   );
+}
+
+function wireDisplayNameSettings(content) {
+  const changeBtn = content.querySelector('#changeDisplayNameBtn');
+  const edit = content.querySelector('#accountDisplayNameEdit');
+  const input = content.querySelector('#accountDisplayNameInput');
+  const valueEl = content.querySelector('#accountDisplayNameValue');
+  const saveBtn = content.querySelector('#saveDisplayNameBtn');
+  const cancelBtn = content.querySelector('#cancelDisplayNameBtn');
+  const errorEl = content.querySelector('#accountDisplayNameError');
+  if (!changeBtn || !edit || !input || !valueEl || !saveBtn || !cancelBtn) return;
+
+  const hideError = () => {
+    if (!errorEl) return;
+    errorEl.hidden = true;
+    errorEl.textContent = '';
+  };
+
+  const closeEditor = () => {
+    hideError();
+    edit.hidden = true;
+    changeBtn.hidden = false;
+    input.value = valueEl.textContent.trim();
+  };
+
+  const openEditor = () => {
+    hideError();
+    edit.hidden = false;
+    changeBtn.hidden = true;
+    input.value = valueEl.textContent.trim();
+    input.focus({ preventScroll: true });
+    input.select();
+  };
+
+  const save = async () => {
+    hideError();
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+    try {
+      const fallback = tarnService.getEmail()?.split('@')[0] || 'User';
+      const saveDisplayName = optionalTarnMethod('saveDisplayName');
+      const next = saveDisplayName
+        ? await saveDisplayName(input.value, { fallback })
+        : tarnService.displayName(input.value || fallback);
+      valueEl.textContent = next;
+      closeEditor();
+    } catch (err) {
+      if (errorEl) {
+        errorEl.hidden = false;
+        errorEl.textContent = 'Display name could not be saved. Try again.';
+      }
+      console.warn('[Bookish:AccountUI] display name save failed:', err?.message || err);
+    } finally {
+      saveBtn.disabled = false;
+      cancelBtn.disabled = false;
+    }
+  };
+
+  changeBtn.addEventListener('click', openEditor);
+  cancelBtn.addEventListener('click', closeEditor);
+  saveBtn.addEventListener('click', save);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      save();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeEditor();
+    }
+  });
 }
 
 // ----------------------------------------------------------------------------
