@@ -33,20 +33,19 @@
 import { formatMonthYearDisplay } from '../core/id_core.js';
 import { READING_STATUS, normalizeReadingStatus } from '../core/book_repository.js';
 
-// --- Generated cover color palette (kept in lockstep with the historical
-// app.js list — these palette colors are part of the design system and
-// shouldn't drift between Library and friend's-shelf). ---
+// Generated covers should feel like quiet shelf objects, not generic color
+// tiles. Keep this palette muted and bookish; the CSS adds the cover frame.
 const COVER_PALETTE = [
-  'linear-gradient(145deg,#6b2137 0%,#4a1528 100%)', // burgundy
-  'linear-gradient(145deg,#1e3a5f 0%,#152a45 100%)', // navy
-  'linear-gradient(145deg,#2d4a3e 0%,#1c332b 100%)', // forest
-  'linear-gradient(145deg,#5b4a3f 0%,#3d312a 100%)', // umber
-  'linear-gradient(145deg,#4a3b6b 0%,#332852 100%)', // plum
-  'linear-gradient(145deg,#3a5043 0%,#263830 100%)', // sage
-  'linear-gradient(145deg,#5a3e3e 0%,#3d2929 100%)', // clay
-  'linear-gradient(145deg,#2a4a5a 0%,#1c3340 100%)', // slate
-  'linear-gradient(145deg,#5a4a2a 0%,#3d3220 100%)', // olive
-  'linear-gradient(145deg,#4a2a4a 0%,#331e33 100%)', // aubergine
+  'linear-gradient(160deg,#5b4637 0%,#241c17 100%)', // walnut
+  'linear-gradient(160deg,#3f4b3e 0%,#1d241f 100%)', // moss
+  'linear-gradient(160deg,#5a2e33 0%,#241719 100%)', // oxblood
+  'linear-gradient(160deg,#604821 0%,#2a2114 100%)', // ochre
+  'linear-gradient(160deg,#38434a 0%,#171c20 100%)', // smoke
+  'linear-gradient(160deg,#5a5548 0%,#29261f 100%)', // linen shadow
+  'linear-gradient(160deg,#5a382d 0%,#241915 100%)', // terracotta
+  'linear-gradient(160deg,#2f4a43 0%,#162320 100%)', // evergreen
+  'linear-gradient(160deg,#333a4f 0%,#171a23 100%)', // ink
+  'linear-gradient(160deg,#47354a 0%,#211a24 100%)', // mulberry
 ];
 
 export function generatedCoverColor(title) {
