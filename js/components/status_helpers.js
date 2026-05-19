@@ -97,7 +97,7 @@ export function showUpdateReadyToast(options = {}) {
   const toast = createToast({
     className: 'toast status-toast status-toast-with-action pwa-update-toast',
     role: 'status',
-    html: '<span class="toast-message">Update ready</span><button type="button" class="toast-action-btn">Refresh</button>',
+    html: '<span class="toast-message">New version ready</span><button type="button" class="toast-action-btn">Update</button>',
     documentRef: options.document,
   });
 
@@ -105,7 +105,7 @@ export function showUpdateReadyToast(options = {}) {
     const btn = toast.querySelector('.toast-action-btn');
     if (btn) {
       btn.disabled = true;
-      btn.textContent = 'Refreshing...';
+      btn.textContent = 'Updating...';
     }
     options.onRefresh?.();
   });

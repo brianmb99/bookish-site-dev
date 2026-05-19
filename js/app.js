@@ -1579,7 +1579,7 @@ function render(){
       if(headline) headline.textContent = 'Syncing your books\u2026';
       if(subtext) subtext.textContent = 'Fetching your library from the cloud.';
       if(emptySlot) emptySlot.style.display = 'none';
-      if(illustration) illustration.textContent = '\u23F3';
+      if(illustration) illustration.dataset.state = 'syncing';
       showShelfSkeletons(6);
       emptyEl.style.display='none';
       // While syncing we don't surface the empty-state slot - keep the
@@ -1587,10 +1587,10 @@ function render(){
       setOmniboxLocation('header');
       setOmniboxVisible(true);
     } else {
-      if(headline) headline.textContent = 'Your reading journey starts here';
-      if(subtext) subtext.textContent = 'Track what you read. Keep it forever. Access it anywhere.';
+      if(headline) headline.textContent = 'Build a shelf worth keeping';
+      if(subtext) subtext.textContent = 'Search for a book, then keep your reading list private, portable, and yours.';
       if(emptySlot) emptySlot.style.display = '';
-      if(illustration) illustration.textContent = '\uD83D\uDCDA';
+      if(illustration) delete illustration.dataset.state;
       if(cardsEl.children.length > 0) cardsEl.replaceChildren();
       emptyEl.style.display='block';
       // Relocate the real omnibox into the empty-state slot. Idempotent -

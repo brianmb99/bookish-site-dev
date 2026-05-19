@@ -141,7 +141,7 @@
   </div>
   <div id="omniboxAddSection" class="omnibox-section" style="display:none">
     <div class="omnibox-section-label">Add a new book</div>
-    <button type="button" id="omniboxManualAdd" class="omnibox-manual-add" style="display:none">+ Add a book manually</button>
+    <button type="button" id="omniboxManualAdd" class="omnibox-manual-add" style="display:none">Add manually</button>
     <div id="omniboxAddResults" class="omnibox-results"></div>
   </div>
 </div>
@@ -162,9 +162,14 @@
 </div>
 <div id="cards" class="cards"></div>
 <div id="empty" class="empty-state" style="display:none">
-  <div class="empty-illustration">📚</div>
-  <h2 class="empty-headline">Your reading journey starts here</h2>
-  <p class="empty-subtext">Track what you read. Keep it forever. Access it anywhere.</p>
+  <div class="empty-illustration" aria-hidden="true">
+    <span class="empty-book empty-book-one"></span>
+    <span class="empty-book empty-book-two"></span>
+    <span class="empty-book empty-book-three"></span>
+    <span class="empty-shelf-line"></span>
+  </div>
+  <h2 class="empty-headline">Build a shelf worth keeping</h2>
+  <p class="empty-subtext">Search for a book, then keep your reading list private, portable, and yours.</p>
   <!-- #144: real omnibox is relocated here in the empty branch via app.js.
        The slot starts empty; app.js detaches #omniboxWrap from the header
        and appends it here when the shelf is empty. -->
@@ -176,7 +181,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.306</div>
+  <div class="footer-meta">Alpha &bull; v0.2.308</div>
 </footer>
 </div>
 
@@ -331,8 +336,10 @@
  function showInstallPopover(){
    let existing=document.getElementById('installPopover');if(existing){existing.remove();}
    const pop=document.createElement('div');pop.id='installPopover';pop.className='install-popover';
-   const msg=isIOS?'Tap <strong>Share</strong> \u25a1\u2191 then <strong>Add to Home Screen</strong>':'Tap <strong>Menu</strong> \u22ee then <strong>Add to Home Screen</strong>';
-   pop.innerHTML='<div class="install-popover-arrow"></div><div class="install-popover-body">'+msg+'<button class="install-popover-dismiss" title="Dismiss">\u00d7</button></div>';
+   const msg=isIOS
+     ? '<div class="install-popover-title">Add Bookish to your Home Screen</div><div class="install-popover-copy">In Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</div>'
+     : '<div class="install-popover-title">Install Bookish</div><div class="install-popover-copy">Open the browser <strong>menu</strong>, then choose <strong>Add to Home Screen</strong>.</div>';
+   pop.innerHTML='<div class="install-popover-arrow"></div><div class="install-popover-body"><button class="install-popover-dismiss" title="Dismiss" aria-label="Dismiss install instructions">\u00d7</button>'+msg+'</div>';
    installBtn.parentElement.style.position='relative';installBtn.parentElement.appendChild(pop);
    const dismiss=()=>{pop.remove();localStorage.setItem('bookish.installDismissed','true');installBtn.style.display='none';};
    pop.querySelector('.install-popover-dismiss').addEventListener('click',(e)=>{e.stopPropagation();dismiss();});
