@@ -71,13 +71,16 @@ export function renderOmniboxShelfResults({
     const coverHtml = coverDataUrl
       ? `<img src="${coverDataUrl}">`
       : `<div class="omnibox-result-mini" style="background:${generatedCoverColor(entry.title || '')}">${escapeHtml((entry.title || '').slice(0, 20))}</div>`;
+    const statusHtml = statusLabel
+      ? `<span class="omnibox-result-status ${statusClass}">${statusLabel}</span>`
+      : '';
     return `<div class="omnibox-result" data-shelf-key="${escapeHtml(key)}">
       <div class="omnibox-result-cover">${coverHtml}</div>
       <div class="omnibox-result-info">
         <div class="omnibox-result-title">${escapeHtml(entry.title || 'Untitled')}</div>
         <div class="omnibox-result-author">${escapeHtml(entry.author || '')}</div>
       </div>
-      <span class="omnibox-result-status ${statusClass}">${statusLabel}</span>
+      ${statusHtml}
     </div>`;
   }).join('');
 }
@@ -105,6 +108,7 @@ export function renderOmniboxApiResults({ results = [], refs = {}, onAfterRender
     const meta = [result.year, result.publisher, result.duration].filter(Boolean).join(' \u00B7 ');
     const workKey = (result.work_key && typeof result.work_key === 'string') ? result.work_key : '';
     const wkAttr = workKey ? ` data-work-key='${escapeHtml(workKey)}'` : '';
+    const addLabel = result.title ? `Add ${result.title}` : 'Add book';
     return `<div class="omnibox-result" data-add-json='${encodeURIComponent(JSON.stringify(result))}'${wkAttr}>
       <div class="omnibox-result-cover">${coverHtml}</div>
       <div class="omnibox-result-info">
@@ -112,7 +116,7 @@ export function renderOmniboxApiResults({ results = [], refs = {}, onAfterRender
         <div class="omnibox-result-author">${escapeHtml(result.author || '')}</div>
         ${meta ? `<div class="omnibox-result-meta">${escapeHtml(meta)}</div>` : ''}
       </div>
-      <button type="button" class="omnibox-result-add">+ Add</button>
+      <button type="button" class="omnibox-result-add" aria-label="${escapeHtml(addLabel)}">Add</button>
     </div>`;
   }).join('');
   onAfterRender();

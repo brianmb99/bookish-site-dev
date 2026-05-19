@@ -825,7 +825,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   box-sizing:border-box;
   transition:border-color .2s,box-shadow .2s,background .2s;
 }
-#omniboxInput:focus{outline:none;border-color:var(--color-primary);box-shadow:0 0 0 2px var(--color-primary-muted);background:var(--color-bg-base)}
+#omniboxInput:focus{outline:none;border-color:rgba(245,158,11,.68);box-shadow:0 0 0 2px var(--color-accent-muted);background:var(--color-bg-base)}
 #omniboxInput::placeholder{color:var(--color-text-muted)}
 .omnibox-clear{
   position:absolute;right:6px;
@@ -900,10 +900,10 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   left:max(16px,env(safe-area-inset-left));
   right:max(16px,env(safe-area-inset-right));
   max-width:640px;
-  background:var(--color-bg-elevated);
-  border:1px solid var(--color-border-default);
+  background:rgba(24,29,36,.98);
+  border:1px solid var(--color-border-subtle);
   border-radius:10px;
-  box-shadow:0 14px 28px -18px rgba(0,0,0,.72);
+  box-shadow:0 12px 24px -18px rgba(0,0,0,.7);
   max-height:60vh;
   overflow-y:auto;
   z-index:1001;
@@ -927,7 +927,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   font-size:.65rem;
   font-weight:600;
   text-transform:uppercase;
-  letter-spacing:.08em;
+  letter-spacing:.06em;
   color:var(--color-text-muted);
   padding:6px 8px 4px;
 }
@@ -938,25 +938,40 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   gap:10px;
   padding:8px;
   border-radius:8px;
+  border:1px solid transparent;
   cursor:pointer;
-  transition:background .15s;
+  transition:background .15s,border-color .15s;
 }
-.omnibox-result:hover{background:var(--color-bg-surface)}
+.omnibox-result:hover{background:rgba(28,34,42,.72);border-color:var(--color-border-subtle)}
 .omnibox-result-cover{
   width:36px;height:54px;
-  border-radius:4px;
+  border-radius:6px;
   overflow:hidden;
   flex-shrink:0;
   background:var(--color-bg-deep);
+  border:1px solid var(--color-border-subtle);
   display:flex;align-items:center;justify-content:center;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.03);
 }
 .omnibox-result-cover img{width:100%;height:100%;object-fit:cover}
 .omnibox-result-mini{
   width:100%;height:100%;
+  position:relative;
   display:flex;align-items:center;justify-content:center;
-  font-size:.45rem;font-weight:600;
-  color:rgba(255,255,255,.7);
-  text-align:center;padding:2px;
+  overflow:hidden;
+  font-family:var(--font-display);
+  font-size:.44rem;font-weight:500;
+  line-height:1.15;
+  color:rgba(247,245,242,.76);
+  text-align:center;padding:4px 4px 4px 7px;
+}
+.omnibox-result-mini::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-left:5px solid rgba(15,17,20,.28);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1),inset -10px 0 18px rgba(15,17,20,.14);
+  pointer-events:none;
 }
 .omnibox-result-info{flex:1;min-width:0}
 .omnibox-result-title{
@@ -978,25 +993,26 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   font-size:.6rem;font-weight:600;
   padding:2px 8px;
   border-radius:10px;
+  border:1px solid var(--color-border-subtle);
   white-space:nowrap;
   flex-shrink:0;
 }
-.omnibox-result-status.status-read{background:var(--color-primary-muted);color:var(--color-primary-hover)}
-.omnibox-result-status.status-reading{background:var(--color-accent-muted);color:var(--color-accent)}
-.omnibox-result-status.status-wtr{background:rgba(16,185,129,.15);color:var(--color-success)}
+.omnibox-result-status.status-read{background:rgba(201,197,190,.1);color:var(--color-text-secondary)}
+.omnibox-result-status.status-reading{background:var(--color-accent-muted);color:var(--color-accent);border-color:rgba(245,158,11,.24)}
+.omnibox-result-status.status-wtr{background:rgba(201,197,190,.08);color:var(--color-text-secondary)}
 .omnibox-result-add{
   font-size:.65rem;font-weight:600;
   padding:4px 10px;
   border-radius:6px;
-  background:var(--color-primary-muted);
-  color:var(--color-primary-hover);
-  border:none;cursor:pointer;
+  background:rgba(15,17,20,.24);
+  color:var(--color-text-secondary);
+  border:1px solid var(--color-border-subtle);cursor:pointer;
   white-space:nowrap;flex-shrink:0;
-  transition:background .15s;
+  transition:background .15s,border-color .15s,color .15s;
   min-height:auto!important;
   box-shadow:none!important;
 }
-.omnibox-result-add:hover{background:var(--color-primary);color:#fff}
+.omnibox-result-add:hover{background:var(--color-bg-surface);border-color:var(--color-border-default);color:var(--color-text-primary)}
 .omnibox-manual-add{
   display:flex;
   align-items:center;
@@ -1037,15 +1053,15 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   display:flex;align-items:center;gap:10px;padding:8px;
 }
 .omnibox-skeleton-cover{
-  width:36px;height:54px;border-radius:4px;
-  background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);
+  width:36px;height:54px;border-radius:6px;
+  background:linear-gradient(90deg,#1c222a 0%,#252b33 50%,#1c222a 100%);
   background-size:200% 100%;
   animation:shimmer 1.5s ease-in-out infinite;
 }
 .omnibox-skeleton-text{flex:1;display:flex;flex-direction:column;gap:6px}
 .omnibox-skeleton-line{
   height:10px;border-radius:4px;
-  background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);
+  background:linear-gradient(90deg,#1c222a 0%,#252b33 50%,#1c222a 100%);
   background-size:200% 100%;
   animation:shimmer 1.5s ease-in-out infinite;
 }
@@ -5321,7 +5337,7 @@ body.modal-open{overscroll-behavior-y:contain}
    cover edge. The `friend-pip-overlay--inline` modifier overrides the
    absolute positioning the Library card layout uses, and inserts a
    margin-left:auto so the pips group to the right of the row, just before
-   the "+ Add" button. The pip element itself is unchanged: same 14px
+   the Add button. The pip element itself is unchanged: same 14px
    circle, same color derivation, same tap-to-open-modal behavior. */
 .friend-pip-overlay--inline{
   position:static;
