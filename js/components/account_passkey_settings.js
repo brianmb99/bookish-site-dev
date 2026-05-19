@@ -172,7 +172,7 @@ export async function refreshPasskeysList(content, deps = {}) {
           <div class="account-passkeys-row-label">${escapeHtml(labelText)}</div>
           ${metaLine ? `<div class="account-passkeys-row-meta">${escapeHtml(metaLine)}</div>` : ''}
         </div>
-        <button type="button" class="account-panel-sub-btn account-panel-sub-btn-secondary account-passkeys-remove" data-action="remove-passkey">Remove</button>
+        <button type="button" class="account-passkeys-remove" data-action="remove-passkey">Remove</button>
       </li>
     `;
   }).join('');

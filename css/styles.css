@@ -3271,12 +3271,12 @@ form.inline label.toggle-switch{display:flex}
   border-top:1px solid var(--color-border-default);
   display:flex;
   flex-direction:column;
-  gap:14px;
+  gap:12px;
 }
 .account-security-block{
   display:flex;
   flex-direction:column;
-  gap:9px;
+  gap:8px;
 }
 /* #144: visual grouping — second-and-subsequent blocks get a margin gap
    and divider above them so they read as siblings within the Account &
@@ -3306,11 +3306,15 @@ form.inline label.toggle-switch{display:flex}
   display:flex;
   gap:8px;
   flex-wrap:wrap;
-  margin-top:2px;
+  align-items:center;
+  margin-top:4px;
 }
 .account-security-actions .account-panel-sub-btn{
-  flex:1 1 0;
-  min-width:140px;
+  flex:0 1 auto;
+  width:auto;
+  min-width:0;
+  margin-top:0;
+  align-self:flex-start;
 }
 .account-display-name-summary{
   display:grid;
@@ -3321,10 +3325,11 @@ form.inline label.toggle-switch{display:flex}
   align-items:center;
   gap:2px 12px;
   min-height:0;
-  padding:11px 12px;
-  background:rgba(15,17,20,.36);
+  padding:12px;
+  background:rgba(15,17,20,.24);
   border:1px solid var(--color-border-subtle);
   border-radius:8px;
+  box-shadow:none;
   font-size:.8rem;
   color:var(--color-text-muted);
 }
@@ -3345,25 +3350,36 @@ form.inline label.toggle-switch{display:flex}
   text-overflow:ellipsis;
   white-space:nowrap;
 }
-.account-display-name-change{
-  grid-area:action;
-  justify-self:end;
-  font-size:.78rem;
-  min-height:32px;
+.account-security-tertiary-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:34px;
   padding:0 10px;
   border:1px solid var(--color-border-subtle);
   border-radius:6px;
-  color:var(--color-text-secondary);
-  text-decoration:none;
   background:transparent;
+  color:var(--color-text-secondary);
   box-shadow:none!important;
+  cursor:pointer;
+  font:inherit;
+  font-size:.78rem;
+  font-weight:600;
+  line-height:1;
+  text-decoration:none;
+  transition:background .15s,border-color .15s,color .15s;
 }
-.account-display-name-change:hover,
-.account-display-name-change:focus-visible{
+.account-security-tertiary-btn:hover,
+.account-security-tertiary-btn:focus-visible{
   color:var(--color-text-primary);
+  background:rgba(28,34,42,.58);
   border-color:var(--color-border-default);
   outline:none;
   text-decoration:none;
+}
+.account-display-name-change{
+  grid-area:action;
+  justify-self:end;
 }
 .account-display-name-edit{
   display:flex;
@@ -3417,7 +3433,7 @@ form.inline label.toggle-switch{display:flex}
 }
 .account-inline-cancel-btn{
   min-height:40px;
-  padding:0 6px;
+  padding:0 12px;
   font-size:.82rem;
 }
 .account-security-error{
@@ -3429,25 +3445,13 @@ form.inline label.toggle-switch{display:flex}
   border:1px solid var(--color-border-subtle);
   border-radius:6px;
 }
-/* Item 3: Replace account key — visually demoted text-link below
-   the prominent View action. Single-line, muted, aligned left. */
+/* Item 3: Replace account key — visually demoted action below the
+   prominent View action. It stays button-shaped enough to avoid the
+   global underlined text-link treatment in dense mobile rows. */
 .account-security-replace-link{
   align-self:flex-start;
   font-size:.8rem;
-  margin-top:4px;
-  min-height:32px;
-  padding:0 2px;
-  border-radius:6px;
-  color:var(--color-text-secondary);
-  text-decoration:none;
-  background:transparent!important;
-  box-shadow:none!important;
-}
-.account-security-replace-link:hover,
-.account-security-replace-link:focus-visible{
-  color:var(--color-text-primary);
-  text-decoration:none;
-  outline:none;
+  margin-top:2px;
 }
 /* Item 5: Passkey-added success affirmation. Calm green tint,
    transient sibling above the passkey list. */
@@ -3485,25 +3489,29 @@ form.inline label.toggle-switch{display:flex}
   padding:0;
   display:flex;
   flex-direction:column;
-  gap:8px;
+  gap:7px;
 }
 .account-passkeys-loading,
 .account-passkeys-empty{
   font-size:.78rem;
   color:var(--color-text-muted);
-  padding:6px 0;
-}
-.account-passkeys-row{
-  display:flex;
-  align-items:flex-start;
-  gap:10px;
-  padding:10px 12px;
+  padding:9px 11px;
   border:1px solid var(--color-border-subtle);
   border-radius:8px;
-  background:rgba(15,17,20,.36);
+  background:rgba(15,17,20,.18);
+}
+.account-passkeys-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:8px 12px;
+  padding:11px 12px;
+  border:1px solid var(--color-border-subtle);
+  border-radius:8px;
+  background:rgba(15,17,20,.24);
+  box-shadow:none;
 }
 .account-passkeys-row-main{
-  flex:1 1 auto;
   min-width:0;
   display:flex;
   flex-direction:column;
@@ -3520,13 +3528,34 @@ form.inline label.toggle-switch{display:flex}
 .account-passkeys-row-meta{
   font-size:.74rem;
   color:var(--color-text-secondary);
+  line-height:1.35;
 }
 .account-passkeys-remove{
-  flex:0 0 auto;
-  align-self:center;
   width:auto;
-  min-width:88px;
+  min-width:74px;
+  min-height:36px;
+  justify-self:end;
+  padding:0 10px;
+  border:1px solid var(--color-border-subtle);
+  border-radius:6px;
+  background:transparent;
+  color:var(--color-text-secondary);
+  box-shadow:none!important;
+  cursor:pointer;
+  font:inherit;
+  font-size:.78rem;
+  font-weight:600;
+  line-height:1;
   margin-top:0;
+  text-decoration:none;
+  transition:background .15s,border-color .15s,color .15s;
+}
+.account-passkeys-remove:hover,
+.account-passkeys-remove:focus-visible{
+  color:var(--color-text-primary);
+  background:rgba(28,34,42,.58);
+  border-color:var(--color-border-default);
+  outline:none;
 }
 .account-passkeys-unsupported{
   /* Inherits from .account-security-desc — adds a tiny extra top margin
@@ -3794,11 +3823,15 @@ form.inline label.toggle-switch{display:flex}
   justify-content: center;
 }
 @media (pointer:coarse){
-  .modal.account-modal:has(.account-hub),
-  .modal.account-modal:has(.account-subview){
+  .modal.account-modal:has(.account-hub){
     height:auto;
     max-height:calc(100dvh - max(42px, env(safe-area-inset-top)));
     padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+  }
+  .modal.account-modal:has(.account-subview){
+    height:auto;
+    max-height:calc(100dvh - max(24px, env(safe-area-inset-top)));
+    padding:16px 18px calc(16px + env(safe-area-inset-bottom));
   }
   .account-hub .account-panel-header{
     padding-right:46px;
@@ -3814,24 +3847,23 @@ form.inline label.toggle-switch{display:flex}
     min-height:48px;
   }
   .account-subview{
-    gap:14px;
+    gap:12px;
   }
   .account-subview-heading{
-    padding-bottom:12px;
+    padding-bottom:10px;
   }
   .account-subview .account-security-block + .account-security-block{
-    margin-top:20px;
-    padding-top:18px;
+    margin-top:16px;
+    padding-top:15px;
   }
-  .account-passkeys-row{
-    flex-direction:column;
-    align-items:stretch;
-    gap:10px;
+  .account-security-actions .account-panel-sub-btn{
+    align-self:stretch;
+    width:100%;
   }
   .account-passkeys-remove{
-    width:100%;
-    min-height:42px;
-    align-self:stretch;
+    justify-self:start;
+    min-height:38px;
+    width:auto;
   }
   .account-display-name-edit-row{
     flex-wrap:wrap;
