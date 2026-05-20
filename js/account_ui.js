@@ -122,13 +122,16 @@ export async function initAccountUI() {
 // MODAL MANAGEMENT
 // ============================================================================
 
-export async function openAccountModal(mode) {
+export function openAccountModal(mode) {
   const modal = document.getElementById('accountModal');
   const content = document.getElementById('accountModalContent');
   if (!modal || !content) return;
+  if (modal.style.display === 'flex') {
+    if (mode) renderAccountModalContent(content, mode);
+    return;
+  }
 
   modal.dataset.allowClose = 'false';
-  await renderAccountModalContent(content, mode);
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
   document.body.classList.add('modal-open');
@@ -161,6 +164,13 @@ export async function openAccountModal(mode) {
   }
 
   pushOverlayState('account');
+
+  try {
+    renderAccountModalContent(content, mode);
+  } catch (err) {
+    console.error('[Bookish:AccountUI] account modal render failed:', err?.message || err);
+    content.innerHTML = '<div class="auth-form"><div class="error-box visible">Account could not load. Close and try again.</div></div>';
+  }
 
   requestAnimationFrame(() => {
     modal.dataset.allowClose = 'true';
@@ -212,10 +222,18 @@ function setupAccountModalListeners() {
 // CONTENT RENDERING
 // ============================================================================
 
-async function renderAccountModalContent(content, mode) {
+function renderAccountModalContent(content, mode) {
   if (tarnService.isLoggedIn()) {
-    await hydrateDisplayNameCache();
     renderAccountPanel(content);
+    hydrateDisplayNameCache().then(() => {
+      const modal = document.getElementById('accountModal');
+      if (modal?.style.display !== 'flex') return;
+      // Only refresh the hub if the user is still on it; do not disrupt a
+      // subview opened before profile hydration finishes.
+      if (content.querySelector('.account-hub')) renderAccountPanel(content);
+    }).catch(err =>
+      console.warn('[Bookish:AccountUI] display name hydrate failed:', err?.message || err)
+    );
   } else if (mode === 'signin') {
     renderSignInForm(content);
   } else {
