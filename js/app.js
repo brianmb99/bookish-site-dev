@@ -2131,6 +2131,17 @@ document.addEventListener('keydown', (ev)=>{
 const SPINE_COLORS = 8;
 const SPINE_TONE_CACHE = new Map();
 const SPINE_TONE_PENDING = new Map();
+const SPINE_FALLBACK_TONES = {
+  0: { top: '#3c3029', bottom: '#26211e' },
+  1: { top: '#38322a', bottom: '#25231f' },
+  2: { top: '#31363a', bottom: '#22272a' },
+  3: { top: '#3e2f28', bottom: '#28211d' },
+  4: { top: '#3a3038', bottom: '#272229' },
+  5: { top: '#30382f', bottom: '#222821' },
+  6: { top: '#3f332b', bottom: '#29231f' },
+  7: { top: '#37372e', bottom: '#25251f' },
+  undated: { top: '#343434', bottom: '#242424' },
+};
 
 function clamp(n, min, max){
   return Math.max(min, Math.min(max, n));
@@ -2181,15 +2192,41 @@ function rgbToHex({ r, g, b }){
   return `#${part(r)}${part(g)}${part(b)}`;
 }
 
-function mutedSpineToneFromRgb(r, g, b){
-  const { h, s, l } = rgbToHsl(r, g, b);
-  const clothS = clamp(s < 0.08 ? 0.12 : s * 0.58, 0.12, 0.36);
-  const clothL = clamp(l < 0.12 ? 0.20 : l, 0.18, 0.33);
+function hexToRgb(hex){
+  const clean = String(hex || '').replace('#', '');
+  if(!/^[0-9a-fA-F]{6}$/.test(clean)) return { r: 48, g: 44, b: 40 };
   return {
-    top: rgbToHex(hslToRgb(h, clothS, clamp(clothL + 0.08, 0.24, 0.40))),
-    bottom: rgbToHex(hslToRgb(h, clothS * 0.88, clamp(clothL - 0.05, 0.13, 0.28))),
-    activeTop: rgbToHex(hslToRgb(h, clamp(clothS * 1.14, 0.16, 0.42), clamp(clothL + 0.15, 0.31, 0.48))),
-    activeBottom: rgbToHex(hslToRgb(h, clamp(clothS * 1.02, 0.14, 0.38), clamp(clothL + 0.02, 0.21, 0.35))),
+    r: parseInt(clean.slice(0, 2), 16),
+    g: parseInt(clean.slice(2, 4), 16),
+    b: parseInt(clean.slice(4, 6), 16),
+  };
+}
+
+function mixRgb(a, b, amount){
+  return {
+    r: a.r + (b.r - a.r) * amount,
+    g: a.g + (b.g - a.g) * amount,
+    b: a.b + (b.b - a.b) * amount,
+  };
+}
+
+function mutedSpineToneFromRgb(r, g, b, toneKey){
+  const { h, s, l } = rgbToHsl(r, g, b);
+  const fallback = SPINE_FALLBACK_TONES[toneKey] || SPINE_FALLBACK_TONES[0];
+  const fallbackTop = hexToRgb(fallback.top);
+  const fallbackBottom = hexToRgb(fallback.bottom);
+  const clothS = clamp(s < 0.08 ? 0.08 : s * 0.28, 0.06, 0.18);
+  const clothL = clamp(l < 0.12 ? 0.18 : l, 0.17, 0.27);
+  const coverTop = hslToRgb(h, clothS, clamp(clothL + 0.04, 0.21, 0.31));
+  const coverBottom = hslToRgb(h, clothS * 0.82, clamp(clothL - 0.04, 0.12, 0.21));
+  const top = mixRgb(fallbackTop, coverTop, 0.34);
+  const bottom = mixRgb(fallbackBottom, coverBottom, 0.30);
+  const warmEdge = { r: 196, g: 154, b: 88 };
+  return {
+    top: rgbToHex(top),
+    bottom: rgbToHex(bottom),
+    activeTop: rgbToHex(mixRgb(mixRgb(top, { r: 244, g: 236, b: 216 }, 0.08), warmEdge, 0.10)),
+    activeBottom: rgbToHex(mixRgb(bottom, { r: 244, g: 236, b: 216 }, 0.05)),
   };
 }
 
@@ -2257,8 +2294,7 @@ function sampleCoverSpineTone(entry){
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if(!ctx){ resolve(null); return; }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const rgb = pickCoverRgb(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
-        resolve(rgb ? mutedSpineToneFromRgb(rgb.r, rgb.g, rgb.b) : null);
+        resolve(pickCoverRgb(ctx.getImageData(0, 0, canvas.width, canvas.height).data));
       } catch {
         resolve(null);
       }
@@ -2286,8 +2322,10 @@ function applyCoverSpineTone(book, tone){
 
 function hydrateCoverSpineTone(book, entry){
   if(!entry?.coverImage) return;
-  sampleCoverSpineTone(entry).then(tone => {
-    if(book.isConnected) applyCoverSpineTone(book, tone);
+  const toneKey = book.dataset.bookTone || '0';
+  sampleCoverSpineTone(entry).then(rgb => {
+    if(!book.isConnected || !rgb) return;
+    applyCoverSpineTone(book, mutedSpineToneFromRgb(rgb.r, rgb.g, rgb.b, toneKey));
   });
 }
 

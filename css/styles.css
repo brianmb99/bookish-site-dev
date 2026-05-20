@@ -1491,14 +1491,18 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   border-radius:3px 3px 1px 1px;
   box-shadow:inset 1px 0 0 rgba(255,255,255,.045),inset -1px 0 0 rgba(0,0,0,.24),0 3px 8px -7px rgba(0,0,0,.9);
   position:relative;
+  transition:background .25s ease,filter .15s ease;
 }
 .spine-book::before{
   content:'';
   position:absolute;
-  inset:5px 2px 7px;
+  inset:4px 2px 6px;
   border-left:1px solid rgba(255,255,255,.055);
   border-right:1px solid rgba(0,0,0,.22);
-  opacity:.58;
+  background:
+    linear-gradient(180deg,transparent 0 17%,rgba(255,255,255,.04) 17% 19%,transparent 19% 66%,rgba(0,0,0,.14) 66% 68%,transparent 68%),
+    linear-gradient(90deg,rgba(255,255,255,.035),transparent 44%,rgba(0,0,0,.14));
+  opacity:.7;
 }
 .spine-book::after{
   content:'';
@@ -1551,7 +1555,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 /* Selected cluster: pulled forward, warm, and legible without extra labels. */
 .spine-btn[aria-selected="true"]{
   transform:translateY(-5px);
-  filter:brightness(1.1);
+  filter:brightness(1.04);
   opacity:1;
   z-index:1;
 }
