@@ -2380,10 +2380,7 @@ function spineHash(value){
 }
 
 function spineVisibleBookCount(count){
-  if(count <= 1) return 1;
-  if(count <= 3) return 2;
-  if(count <= 6) return 3;
-  return 4;
+  return clamp(Math.round(count || 0), 1, 4);
 }
 
 function spineBookLayout(year, count){
@@ -2415,13 +2412,15 @@ function renderSpineBooks(year, count, colorOffset, entries = []){
   const books = spineBookLayout(year, count);
   for(let j = 0; j < books.length; j++){
     const { width, shortness } = books[j];
+    const entry = entries[j];
     const book = document.createElement('span');
     book.className = 'spine-book';
     book.dataset.bookTone = year === 'Undated' ? 'undated' : String((colorOffset + j) % SPINE_COLORS);
+    if(entry?.txid || entry?.id) book.dataset.sourceEntry = entry.txid || entry.id;
     book.style.setProperty('--spine-book-width', `${width}px`);
     book.style.setProperty('--spine-book-height', `${58 - shortness}px`);
     group.appendChild(book);
-    hydrateCoverSpineTone(book, entries[j]);
+    hydrateCoverSpineTone(book, entry);
   }
 
   return group;

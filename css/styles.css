@@ -1465,7 +1465,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   overflow:visible;
   box-sizing:border-box;
   padding:0 1px;
-  opacity:.56;
+  opacity:.48;
 }
 
 /* Visible book cluster inside a wider, ergonomic tap target. */
@@ -1500,18 +1500,21 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   border-left:1px solid rgba(255,255,255,.055);
   border-right:1px solid rgba(0,0,0,.22);
   background:
-    linear-gradient(180deg,transparent 0 17%,rgba(255,255,255,.04) 17% 19%,transparent 19% 66%,rgba(0,0,0,.14) 66% 68%,transparent 68%),
-    linear-gradient(90deg,rgba(255,255,255,.035),transparent 44%,rgba(0,0,0,.14));
-  opacity:.7;
+    linear-gradient(180deg,transparent 0 14%,rgba(255,255,255,.055) 14% 16%,transparent 16% 29%,rgba(0,0,0,.13) 29% 31%,transparent 31% 66%,rgba(0,0,0,.14) 66% 68%,transparent 68%),
+    linear-gradient(90deg,rgba(255,255,255,.04),transparent 42%,rgba(0,0,0,.15));
+  opacity:.72;
 }
 .spine-book::after{
   content:'';
   position:absolute;
-  top:0;
+  top:1px;
+  bottom:2px;
   left:2px;
   right:2px;
-  height:1px;
-  background:rgba(214,177,101,.14);
+  background:
+    linear-gradient(180deg,rgba(226,203,160,.16) 0 1px,transparent 1px calc(100% - 2px),rgba(0,0,0,.18) calc(100% - 2px) 100%);
+  border-radius:2px 2px 1px 1px;
+  pointer-events:none;
 }
 
 /* Horizontal year label centered over the visible spine cluster. */
@@ -1533,7 +1536,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 }
 
 .spine-btn:hover{
-  opacity:.78;
+  opacity:.72;
   filter:brightness(1.08);
 }
 .spine-btn:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
@@ -1550,6 +1553,10 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 .spine-book[data-book-tone="undated"]{background:linear-gradient(180deg,#343434,#242424)}
 .spine-book[data-cover-tone="true"]{
   background:linear-gradient(180deg,var(--spine-tone-top),var(--spine-tone-bottom));
+}
+
+.spine-btn:not([aria-selected="true"]) .spine-book{
+  filter:saturate(.74) brightness(.82);
 }
 
 /* Selected cluster: warm and legible while staying on the same shelf baseline. */
@@ -1591,7 +1598,8 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   font-weight:700;
 }
 .spine-btn[aria-selected="true"] .spine-book::after{
-  background:rgba(214,177,101,.18);
+  background:
+    linear-gradient(180deg,rgba(226,203,160,.2) 0 1px,transparent 1px calc(100% - 2px),rgba(0,0,0,.2) calc(100% - 2px) 100%);
 }
 
 /* Spine scroll fade indicators */
