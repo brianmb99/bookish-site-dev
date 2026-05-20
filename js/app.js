@@ -2131,6 +2131,11 @@ document.addEventListener('keydown', (ev)=>{
 const SPINE_COLORS = 8;
 const SPINE_TONE_CACHE = new Map();
 const SPINE_TONE_PENDING = new Map();
+const SPINE_COVER_BLEND_TOP = 0.46;
+const SPINE_COVER_BLEND_BOTTOM = 0.42;
+const SPINE_COVER_SATURATION_FACTOR = 0.40;
+const SPINE_COVER_SATURATION_MIN = 0.08;
+const SPINE_COVER_SATURATION_MAX = 0.24;
 const SPINE_FALLBACK_TONES = {
   0: { top: '#3c3029', bottom: '#26211e' },
   1: { top: '#38322a', bottom: '#25231f' },
@@ -2215,18 +2220,22 @@ function mutedSpineToneFromRgb(r, g, b, toneKey){
   const fallback = SPINE_FALLBACK_TONES[toneKey] || SPINE_FALLBACK_TONES[0];
   const fallbackTop = hexToRgb(fallback.top);
   const fallbackBottom = hexToRgb(fallback.bottom);
-  const clothS = clamp(s < 0.08 ? 0.08 : s * 0.28, 0.06, 0.18);
+  const clothS = clamp(
+    s < SPINE_COVER_SATURATION_MIN ? SPINE_COVER_SATURATION_MIN : s * SPINE_COVER_SATURATION_FACTOR,
+    SPINE_COVER_SATURATION_MIN,
+    SPINE_COVER_SATURATION_MAX,
+  );
   const clothL = clamp(l < 0.12 ? 0.18 : l, 0.17, 0.27);
   const coverTop = hslToRgb(h, clothS, clamp(clothL + 0.04, 0.21, 0.31));
   const coverBottom = hslToRgb(h, clothS * 0.82, clamp(clothL - 0.04, 0.12, 0.21));
-  const top = mixRgb(fallbackTop, coverTop, 0.34);
-  const bottom = mixRgb(fallbackBottom, coverBottom, 0.30);
+  const top = mixRgb(fallbackTop, coverTop, SPINE_COVER_BLEND_TOP);
+  const bottom = mixRgb(fallbackBottom, coverBottom, SPINE_COVER_BLEND_BOTTOM);
   const warmEdge = { r: 196, g: 154, b: 88 };
   return {
     top: rgbToHex(top),
     bottom: rgbToHex(bottom),
-    activeTop: rgbToHex(mixRgb(mixRgb(top, { r: 244, g: 236, b: 216 }, 0.08), warmEdge, 0.10)),
-    activeBottom: rgbToHex(mixRgb(bottom, { r: 244, g: 236, b: 216 }, 0.05)),
+    activeTop: rgbToHex(mixRgb(mixRgb(top, { r: 244, g: 236, b: 216 }, 0.10), warmEdge, 0.07)),
+    activeBottom: rgbToHex(mixRgb(bottom, { r: 244, g: 236, b: 216 }, 0.08)),
   };
 }
 

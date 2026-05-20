@@ -1555,7 +1555,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 /* Selected cluster: pulled forward, warm, and legible without extra labels. */
 .spine-btn[aria-selected="true"]{
   transform:translateY(-5px);
-  filter:brightness(1.04);
+  filter:brightness(1.08);
   opacity:1;
   z-index:1;
 }
@@ -1572,6 +1572,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 }
 .spine-btn[aria-selected="true"] .spine-book[data-cover-tone="true"]{
   background:linear-gradient(180deg,var(--spine-tone-active-top),var(--spine-tone-active-bottom));
+  box-shadow:inset 1px 0 0 rgba(255,248,223,.11),inset -1px 0 0 rgba(0,0,0,.22),0 8px 16px -10px rgba(0,0,0,.9),0 0 0 1px rgba(226,178,82,.1);
 }
 .spine-btn[aria-selected="true"] .spine-label{
   color:#f8eddb;
