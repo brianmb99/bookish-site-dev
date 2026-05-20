@@ -289,7 +289,6 @@ import { buildOLEditions, insertByRank, buildCoverEdition, fetchAndValidateCover
     if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers…'; }
     if(titleInput) titleInput.value = cleanTitle(payload.title || '');
     if(authorInput) authorInput.value = payload.author || '';
-    form.format.value='audio';
     markDirty();
     const hasWorkKey = payload.olWorkKeys && payload.olWorkKeys.length;
     console.info('[Bookish:Covers] selectItunes: title=%s, hasWorkKey=%s, olWorkKeys=%o', payload.title, hasWorkKey, payload.olWorkKeys);

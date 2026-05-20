@@ -1925,7 +1925,6 @@ function openOmniboxApiResult(meta){
     } else {
       if(titleInput) titleInput.value = meta.title || '';
       if(authorInput) authorInput.value = meta.author || '';
-      if(meta.source === 'itunes') form.format.value = 'audio';
       form.dispatchEvent(new Event('input', {bubbles:true}));
     }
     resetMobileBookSheetViewport();
