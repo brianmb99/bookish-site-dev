@@ -881,11 +881,15 @@ function _renderSummaryRow(){
     if(finishedSeg) segs.push(finishedSeg);
   }
   if(!segs.length){
-    summaryRowEl.style.display='none';
     summaryRowEl.innerHTML='';
+    summaryRowEl.classList.add('is-empty');
+    summaryRowEl.setAttribute('aria-hidden', 'true');
+    summaryRowEl.style.display='flex';
     return;
   }
   summaryRowEl.innerHTML = segs.join('<span class="summary-sep">·</span>');
+  summaryRowEl.classList.remove('is-empty');
+  summaryRowEl.removeAttribute('aria-hidden');
   summaryRowEl.style.display='flex';
 }
 

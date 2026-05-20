@@ -4672,8 +4672,8 @@ body.modal-open{overscroll-behavior-y:contain}
   transition:opacity .2s;
   margin-top:-8px;
 }
-.status-microcopy:not(.visible){display:none}
-.status-microcopy.visible{display:block;opacity:.85}
+.status-microcopy:not(.visible){visibility:hidden;pointer-events:none}
+.status-microcopy.visible{display:block;visibility:visible;opacity:.85}
 
 /* Status pill pulse confirmation */
 .status-option.pulse{animation:status-pulse .45s ease-out}
@@ -4690,6 +4690,12 @@ body.modal-open{overscroll-behavior-y:contain}
   font-size:.8rem;color:var(--color-text-secondary);
   margin-top:-4px;
   padding:4px 0;
+  min-height:52px;
+  align-items:center;
+}
+.summary-row.is-empty{
+  visibility:hidden;
+  pointer-events:none;
 }
 .summary-row .summary-seg{
   cursor:pointer;
