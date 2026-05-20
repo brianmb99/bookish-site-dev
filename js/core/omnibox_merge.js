@@ -150,6 +150,55 @@ export function stripCredentials(author) {
     .replace(/\s+/g, ' ').trim();
 }
 
+// Title-language heuristic for #212. iTunes doesn't expose a language field
+// in its search response, so foreign-language audiobook editions slip past
+// the OL-only filter from #206. We detect them by stopword frequency: a
+// title is "likely foreign" if it contains 2+ non-English stopwords AND
+// zero English stopwords, OR contains non-Latin-script characters
+// (Cyrillic / Greek / Arabic / CJK / Hebrew). The filter only applies when
+// the query itself looks English — a user who actually types a Spanish or
+// Italian title should still get Spanish/Italian results.
+
+// English stopwords likely to appear in real titles.
+const _ENGLISH_STOPWORDS = new Set([
+  'the','of','and','an','in','on','to','for','with','at','from','is','by','but','or'
+]);
+
+// Stopwords from the major translation languages observed in iTunes results
+// (Spanish, Italian, German, French). Deduped where languages overlap.
+const _FOREIGN_STOPWORDS = new Set([
+  // Spanish
+  'y','el','la','los','las','de','del','un','una','con','sus','sobre',
+  // Italian (extras beyond what's already in Spanish)
+  'e','il','lo','gli','della','sul','di','che','sull','sulla','col','che',
+  // German
+  'der','die','das','und','mit','für','von','zu','ist','ungekürzt','folge','ungek',
+  // French (extras beyond what's already covered)
+  'le','du','et','dans','sur','ou'
+]);
+
+// Unicode ranges for non-Latin scripts we want to flag as foreign:
+// Cyrillic (0400-04FF), Cyrillic Supplement (0500-052F), Greek (0370-03FF),
+// Arabic (0600-06FF), Syriac (0700-074F), Hebrew (0590-05FF), Hiragana
+// (3040-309F), Katakana (30A0-30FF), CJK ext A (3400-4DBF), CJK Unified
+// (4E00-9FFF), Hangul (AC00-D7AF).
+const _NON_LATIN_RE = /[Ѐ-ԯͰ-Ͽ֐-ۿ܀-ݏ぀-ヿ㐀-鿿가-힯]/;
+
+export function isLikelyForeign(text) {
+  if (!text) return false;
+  if (_NON_LATIN_RE.test(text)) return true;
+  const tokens = text.toLowerCase()
+    .replace(/[^a-zà-ÿ\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  let en = 0, fr = 0;
+  for (const t of tokens) {
+    if (_ENGLISH_STOPWORDS.has(t)) en++;
+    else if (_FOREIGN_STOPWORDS.has(t)) fr++;
+  }
+  return fr >= 2 && en === 0;
+}
+
 // Quality gate for the post-merge rerank (#210). iTunes entries always pass.
 // OL entries fail when the data is sparse enough that letting them rank into
 // the visible top-of-dropdown would surface noise: empty/whitespace author,
@@ -318,10 +367,21 @@ export function mergeOmniboxResults({ itunesResults = [], olResults = [], query 
     }
   }
   // #206: drop OL entries whose language array contains only non-English values.
-  // iTunes entries always pass (audiobook catalog is implicitly English-targeted
-  // for our audience and doesn't expose language reliably). OL entries with no
-  // language data are kept (conservative — isEnglish returns true on undefined).
-  const filtered = combined.filter(e => e.source !== 'ol' || isEnglish(e));
+  // iTunes entries pass this filter (audiobook catalog doesn't expose language
+  // reliably); their language is handled by the #212 title heuristic below.
+  // OL entries with no language data are kept (conservative — isEnglish
+  // returns true on undefined).
+  let filtered = combined.filter(e => e.source !== 'ol' || isEnglish(e));
+
+  // #212: title-language heuristic for entries whose language wasn't caught
+  // by #206 (iTunes audiobooks, or OL entries with missing/sparse language
+  // data). Only applies when (a) a query was passed AND (b) the query
+  // itself doesn't look foreign — a user typing "la vida del lazarillo
+  // de tormes" should still see Spanish editions. No-op when called
+  // without a query (preserves backward compat).
+  if (query && !isLikelyForeign(query)) {
+    filtered = filtered.filter(e => !isLikelyForeign(e.title || ''));
+  }
 
   // #210: score-based rerank with quality filter. Bubbles exact-title matches
   // above iTunes's native order, but enforces a hard top-5 cap on low-quality
