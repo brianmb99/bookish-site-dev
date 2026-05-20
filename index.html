@@ -94,12 +94,14 @@
 </header>
 <div id="accountNudgeBanner" class="nudge-banner" style="display:none;">
   <div class="nudge-content">
-    <span class="nudge-icon">💡</span>
+    <span class="nudge-mark" aria-hidden="true">
+      <span></span><span></span><span></span>
+    </span>
     <div class="nudge-text">
-      <div class="nudge-headline">Your books, safe on any device.</div>
-      <div class="nudge-subtext">Save and own your data in the cloud.</div>
+      <div class="nudge-headline">Keep your shelf on every device.</div>
+      <div class="nudge-subtext">Create an account when you're ready to sync this library.</div>
     </div>
-    <button id="nudgeCreateAccountBtn" class="nudge-cta">Create Account →</button>
+    <button id="nudgeCreateAccountBtn" class="nudge-cta">Create account</button>
   </div>
   <button id="nudgeDismissBtn" class="nudge-dismiss" title="Dismiss">×</button>
 </div>
@@ -176,12 +178,14 @@
   <div id="emptyOmniboxSlot" class="empty-omnibox-slot"></div>
 </div>
 <div id="celebrationToast" class="toast celebration-toast" style="display:none;">
-  <span class="toast-icon">🎉</span>
-  <span class="toast-message">First book added! You're on your way.</span>
+  <span class="toast-icon toast-icon-book" aria-hidden="true">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h6.5a1.5 1.5 0 0 1 1.5 1.5v9.5H6.5A1.5 1.5 0 0 0 5 16V3.5Z"/><path d="M5 3.5H4A1.5 1.5 0 0 0 2.5 5v9.5A1.5 1.5 0 0 0 4 16h2.5"/><path d="M7 7h4"/></svg>
+  </span>
+  <span class="toast-message">First book saved to your shelf.</span>
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.315</div>
+  <div class="footer-meta">Alpha &bull; v0.2.316</div>
 </footer>
 </div>
 

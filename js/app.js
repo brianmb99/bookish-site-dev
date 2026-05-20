@@ -191,7 +191,7 @@ function deactivateField(name){
   if(wasShownByDefault){
     setFieldPref(name, false);
     const label = name.charAt(0).toUpperCase() + name.slice(1);
-    showStatusToast(`${label} hidden by default. Use "+ Add detail" to show it again.`);
+    showStatusToast(`${label} hidden by default. Use the detail chips to show it again.`);
   }
 }
 function initOptionalFields(entry){
@@ -2625,20 +2625,20 @@ async function initCacheLayer(){
     if(emptyEl) {
       emptyEl.style.display='block';
       emptyEl.innerHTML = `
-        <div style="max-width:600px;margin:40px auto;padding:32px;background:#1e293b;border:2px solid #dc2626;border-radius:12px;text-align:left;">
-          <h2 style="color:#dc2626;margin:0 0 16px 0;font-size:1.5rem;">⚠️ Local Storage Error</h2>
-          <p style="font-size:1rem;line-height:1.6;margin-bottom:8px;">
+        <div class="storage-error-panel">
+          <h2 class="storage-error-title"><span class="storage-error-mark" aria-hidden="true">!</span>Local storage error</h2>
+          <p class="storage-error-copy">
             <strong>Local storage is unavailable.</strong> Bookish requires it to function.
           </p>
-          <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin-bottom:16px;">
+          <p class="storage-error-copy">
             If you have a Bookish account, your published books are safe — they're stored permanently and will re-sync when this is fixed.
           </p>
-          <p style="font-size:.875rem;line-height:1.6;opacity:.9;margin-bottom:24px;">
-            <strong>Error:</strong> ${err.message || 'Internal error opening backing store for indexedDB.open'}
+          <p class="storage-error-detail">
+            <strong>Error:</strong> ${escapeHtml(err.message || 'Internal error opening backing store for indexedDB.open')}
           </p>
-          <div style="background:#0f172a;padding:16px;border-radius:6px;border-left:3px solid #3b82f6;margin-bottom:20px;">
-            <p style="font-size:.875rem;font-weight:600;margin:0 0 12px 0;">💡 Try these solutions:</p>
-            <ol style="font-size:.875rem;line-height:1.8;margin:0;padding-left:20px;opacity:.9;">
+          <div class="storage-error-help">
+            <p class="storage-error-help-title">Try these fixes</p>
+            <ol class="storage-error-list">
               <li><strong>Restart your browser</strong> - browser updates can corrupt IndexedDB until restart</li>
               <li><strong>Clear site data:</strong> DevTools (F12) → Application → Clear Storage → "Clear site data"</li>
               <li><strong>Try private/incognito mode</strong> to rule out browser profile corruption</li>
@@ -2647,9 +2647,7 @@ async function initCacheLayer(){
               <li><strong>Disable browser extensions</strong> that might block storage</li>
             </ol>
           </div>
-          <button onclick="location.reload()" class="btn" style="width:100%;padding:12px;font-size:1rem;">
-            🔄 Retry (Reload Page)
-          </button>
+          <button onclick="location.reload()" class="btn secondary storage-error-retry">Reload page</button>
         </div>
       `;
     }

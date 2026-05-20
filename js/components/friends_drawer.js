@@ -36,6 +36,7 @@ import { setHideFriendsFromHeader } from './friend_glyph_trigger.js';
 import { hydrateRecentFinishes } from './recent_finishes.js';
 import { openFriendOverflowMenu } from './friend_overflow_menu.js';
 import { openConfirmDialog } from './confirm_dialog.js';
+import { showStatusToast } from './status_helpers.js';
 
 const OVERLAY_ID = 'friendsOverlay';
 const DRAWER_ID = 'friendsDrawer';
@@ -105,27 +106,8 @@ function handleHideFromHeader() {
   closeFriendsDrawer();
 }
 
-/**
- * Lightweight toast — same shape as showStatusToast in app.js (deliberately
- * inlined so the drawer stays self-contained and doesn't import app.js).
- * Lives 3.5s, slightly longer than the default 2s to give the user time to
- * register the "Re-enable in Account" wayfinding hint.
- */
 function showHideConfirmationToast() {
-  if (typeof document === 'undefined') return;
-  const existing = document.getElementById('bookishStatusToast');
-  if (existing) existing.remove();
-  const toast = document.createElement('div');
-  toast.id = 'bookishStatusToast';
-  toast.className = 'toast status-toast';
-  toast.setAttribute('role', 'status');
-  toast.innerHTML = `<span class="toast-message">Friends hidden. Re-enable in Account.</span>`;
-  toast.style.cssText = 'position:fixed;top:calc(var(--header-height) + env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:9001;';
-  document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.classList.add('hiding');
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
+  showStatusToast('Friends hidden. Re-enable in Account.', { durationMs: 3500 });
 }
 
 /**
@@ -325,29 +307,8 @@ async function handleRemove(connection, label) {
   ]);
 }
 
-/**
- * Lightweight inline toast for mute / unmute / remove failures. Same shape
- * as the hide-confirmation toast above. Self-contained so the drawer
- * doesn't need to import from app.js.
- */
 function showFriendsToast(message) {
-  if (typeof document === 'undefined') return;
-  const existing = document.getElementById('bookishStatusToast');
-  if (existing) existing.remove();
-  const toast = document.createElement('div');
-  toast.id = 'bookishStatusToast';
-  toast.className = 'toast status-toast';
-  toast.setAttribute('role', 'status');
-  const span = document.createElement('span');
-  span.className = 'toast-message';
-  span.textContent = message;
-  toast.appendChild(span);
-  toast.style.cssText = 'position:fixed;top:calc(var(--header-height) + env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:9001;';
-  document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.classList.add('hiding');
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  showStatusToast(message, { durationMs: 3000 });
 }
 
 /**

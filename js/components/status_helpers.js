@@ -28,7 +28,7 @@ function createToast({ className, html, role, documentRef }) {
   const toast = doc.createElement('div');
   toast.id = STATUS_TOAST_ID;
   toast.className = className;
-  if (role) toast.setAttribute('role', role);
+  toast.setAttribute('role', role || 'status');
   toast.innerHTML = html;
   toast.setAttribute('style', STATUS_TOAST_STYLE);
   doc.body.appendChild(toast);
