@@ -2,7 +2,7 @@
 // Lightweight module to search OpenLibrary and populate the entry form
 import { cleanTitle, filterCoverMatches, extractISBN10s, amazonCoverUrl, olCoverByISBN, coverFitMode, coverSortComparator, convertISBN13to10 } from './core/search_core.js';
 import { resizeImageToBase64, cropAndResizeImageToBase64 } from './core/image_utils.js';
-import { buildOLEditions, insertByRank, buildCoverEdition, fetchAndValidateCover } from './core/cover_pipeline.js';
+import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdition, fetchAndValidateCover } from './core/cover_pipeline.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
   const titleInput=form.elements?.namedItem('title');
@@ -210,8 +210,12 @@ import { buildOLEditions, insertByRank, buildCoverEdition, fetchAndValidateCover
     }catch(err){ console.warn('[Bookish:Covers] OL editions fetch failed:', err?.message||err); paintItunesFallback(); return; }
     // Build OL cover editions (non-Amazon)
     const { editions: baseEditions, seenCovers } = buildOLEditions(rawEntries);
-    // Extract ISBN-10s and fetch Amazon covers progressively
-    const isbn10s=extractISBN10s(rawEntries);
+    // Extract ISBN-10s and fetch Amazon covers progressively.
+    // #209: pull ISBNs only from English-language editions so Amazon doesn't
+    // surface foreign-language covers (the highest-ranked Amazon hit would
+    // otherwise win the top slot even when the user typed an English query).
+    const englishRaw=filterEnglishRawEditions(rawEntries);
+    const isbn10s=extractISBN10s(englishRaw);
     console.info('[Bookish:Covers] OL editions: %d entries, %d OL covers, %d ISBN-10s', rawEntries.length, baseEditions.filter(e=>e.cover_url).length, isbn10s.length);
     const seenFingerprints=new Set();
     const amazonPromises=isbn10s.map(isbn=>{
@@ -468,8 +472,11 @@ import { buildOLEditions, insertByRank, buildCoverEdition, fetchAndValidateCover
           clearTimeout(edTimeout);
           if(edR.ok){
             const edJ=await edR.json();
-            isbn10s=extractISBN10s(edJ.entries||[]);
-            console.info('[Bookish:Covers] findCovers: %d editions, %d ISBN-10s for Amazon fetch', (edJ.entries||[]).length, isbn10s.length);
+            // #209: English-filter raw editions before ISBN extraction so Amazon
+            // doesn't pull foreign-language covers via foreign editions.
+            const englishRaw=filterEnglishRawEditions(edJ.entries||[]);
+            isbn10s=extractISBN10s(englishRaw);
+            console.info('[Bookish:Covers] findCovers: %d editions (%d English), %d ISBN-10s for Amazon fetch', (edJ.entries||[]).length, englishRaw.length, isbn10s.length);
           }
         }catch(err){ console.warn('[Bookish:Covers] findCovers editions/Amazon fetch error:', err?.message||err); }
       }

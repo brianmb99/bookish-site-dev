@@ -41,6 +41,40 @@ export function editionCoverSort(a, b) {
 }
 
 /**
+ * Filter raw OL edition entries (shape from /works/{id}/editions.json) to
+ * English-language editions. Same conservative semantics as buildOLEditions:
+ * if no entries declare a language, return all (best-effort — we don't drop
+ * everything when language data is missing). If SOME declare English, return
+ * those. If languages are declared but none are English, return all
+ * (no-English-found fallback so the user still gets a cover).
+ *
+ * Used by both the cover-edition list AND the ISBN-extraction path so
+ * Amazon doesn't surface foreign-language covers via foreign editions (#209).
+ *
+ * @param {Array} rawEntries - Raw entries from OL /works/{id}/editions.json
+ * @returns {Array} Filtered subset of rawEntries
+ */
+export function filterEnglishRawEditions(rawEntries) {
+  if (!rawEntries || !rawEntries.length) return rawEntries || [];
+  const english = rawEntries.filter(e => {
+    if (!e.languages || !e.languages.length) return true; // conservative
+    return e.languages.some(l => {
+      const code = (l && l.key ? l.key : '').replace('/languages/', '');
+      return code === 'eng' || code === 'en' || code === 'English';
+    });
+  });
+  // If no edition declared language AND we kept everything via the conservative
+  // include, english === rawEntries (same content). Same length, no-op.
+  // If some declared language and at least one was English, english is the
+  // English subset plus any no-language entries — that's our target.
+  // If declared languages exist but none are English, english is empty after
+  // the strict filter — but the conservative branch keeps no-language entries.
+  // If the result is still empty (every entry declared a non-English language),
+  // fall back to the full set so the user gets *some* cover.
+  return english.length ? english : rawEntries;
+}
+
+/**
  * Build normalized OL edition objects from raw API entries.
  * Filters to English editions (falls back to all if none found),
  * deduplicates by cover URL, sorts covers first.
