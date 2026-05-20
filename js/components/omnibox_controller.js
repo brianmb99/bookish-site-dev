@@ -456,7 +456,7 @@ export function createOmniboxController({
 
     function mergeAndShow() {
       if (isStale()) return;
-      renderApiResults(mergeOmniboxResults({ itunesResults: itResults, olResults }));
+      renderApiResults(mergeOmniboxResults({ itunesResults: itResults, olResults, query }));
     }
 
     fetchImpl(olUrl, { signal }).then(r => r.json()).then(json => {

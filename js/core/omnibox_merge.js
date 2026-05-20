@@ -48,6 +48,13 @@
 // Dead Souls) that survive dedup because their author keys are character-
 // disjoint from Latin spellings. Requires `language` in the OL search
 // fields= param (set in omnibox_controller.js). iTunes entries always pass.
+// #210 adds a score-based rerank as the final pipeline stage when a query
+// is passed. Exact-title matches bubble above iTunes's native order
+// (catches "iTunes returned the marketing-subtitle variant at top"
+// patterns the dedup passes can't fix). Quality filter prevents low-data
+// OL entries from leapfrogging into top-5 just because their bare title
+// happens to be string-equal to the query — they can still appear in
+// the dropdown but not above visible canonical results.
 // Cost is the rare informative paren (e.g. "(Annotated)") — accepted as
 // the price of collapsing the duplicate-row noise that dominates the long
 // tail.
@@ -57,7 +64,7 @@
 // mapping time inside normalizeItunesItem — that asymmetry predates the
 // audit-driven cleanup and is intentionally preserved.
 
-import { stripNoise, normalizeAuthorKey, isEnglish } from './search_core.js';
+import { stripNoise, normalizeAuthorKey, isEnglish, scoreDocument, tokenize } from './search_core.js';
 
 // Dash-prefixed format-marker stoplist. iTunes regularly returns titles
 // of the form "Dead Souls - Audiobook" (the format marker appears after a
@@ -141,6 +148,23 @@ export function stripCredentials(author) {
   return (author || '')
     .replace(/,?\s*(M\.?\s*D\.?|Ph\.?\s*D\.?|MD|PhD|Esq\.?|Jr\.?|Sr\.?|III|II|IV|MBA|MSW|RN|MS|MA|BA)\b/gi, '')
     .replace(/\s+/g, ' ').trim();
+}
+
+// Quality gate for the post-merge rerank (#210). iTunes entries always pass.
+// OL entries fail when the data is sparse enough that letting them rank into
+// the visible top-of-dropdown would surface noise: empty/whitespace author,
+// missing work_key, or "author" string that looks like a publisher / summary
+// outfit rather than a real author. Used to enforce a hard top-5 cap so the
+// rerank can bubble canonical exact-title matches without also boosting
+// sketchy OL editions just because they happen to be string-equal to the query.
+export function isHighQualityForRerank(entry) {
+  if (!entry || entry.source !== 'ol') return true;
+  if (!entry.author || !entry.author.trim()) return false;
+  if (!entry.work_key) return false;
+  const a = entry.author.toLowerCase();
+  if (a.includes('summaries') || a.includes('summary')
+      || a.includes('study guide') || a.includes('bright bright')) return false;
+  return true;
 }
 
 // First-initial + surname key for the SECONDARY dedupe pass. Looser than the
@@ -256,7 +280,7 @@ export function omniboxDedupeKey(entry) {
  *
  * Pure: no DOM, no fetch, no app state.
  */
-export function mergeOmniboxResults({ itunesResults = [], olResults = [] } = {}) {
+export function mergeOmniboxResults({ itunesResults = [], olResults = [], query = '' } = {}) {
   const combined = [];
   const seen = new Map();
   for (const r of [...itunesResults, ...olResults]) {
@@ -297,5 +321,41 @@ export function mergeOmniboxResults({ itunesResults = [], olResults = [] } = {})
   // iTunes entries always pass (audiobook catalog is implicitly English-targeted
   // for our audience and doesn't expose language reliably). OL entries with no
   // language data are kept (conservative — isEnglish returns true on undefined).
-  return combined.filter(e => e.source !== 'ol' || isEnglish(e));
+  const filtered = combined.filter(e => e.source !== 'ol' || isEnglish(e));
+
+  // #210: score-based rerank with quality filter. Bubbles exact-title matches
+  // above iTunes's native order, but enforces a hard top-5 cap on low-quality
+  // OL entries so sparse-data noise can't displace canonical results just
+  // because their bare title string-matches the query.
+  // No-op when caller doesn't pass `query` (preserves backward compat for any
+  // test or internal call that doesn't carry the search term).
+  if (!query) return filtered;
+  const queryTokens = tokenize(query);
+  const scored = filtered.map((e, idx) => {
+    const result = scoreDocument({
+      title: e.title || '',
+      subtitle: '',
+      author: e.author || '',
+      queryTokens,
+      queryString: query,
+      sortMode: 'relevance',
+      year: 0,
+    });
+    return { e, idx, s: result.score, hq: isHighQualityForRerank(e) };
+  });
+  // Sort by score desc; preserve stability via original index on ties.
+  scored.sort((a, b) => b.s - a.s || a.idx - b.idx);
+  // Hard top-5 cap: high-quality entries fill the first 5 positions in score
+  // order; everything else streams after (also in score order). When fewer
+  // than 5 HQ entries exist, LQ fills the remainder of top-5.
+  const hq = scored.filter(x => x.hq);
+  const lq = scored.filter(x => !x.hq);
+  const out = [];
+  let hi = 0, li = 0;
+  for (let pos = 0; pos < scored.length; pos++) {
+    if (pos < 5 && hi < hq.length) out.push(hq[hi++]);
+    else if (li < lq.length) out.push(lq[li++]);
+    else if (hi < hq.length) out.push(hq[hi++]);
+  }
+  return out.map(x => x.e);
 }
