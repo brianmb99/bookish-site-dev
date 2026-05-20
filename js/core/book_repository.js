@@ -27,6 +27,8 @@ export const READING_STATUS = {
   READ: 'read'
 };
 
+const DEFAULT_EDIT_UPLOAD_DEBOUNCE_MS = 2500;
+
 export function normalizeReadingStatus(entry) {
   const s = entry?.readingStatus;
   if (s === READING_STATUS.WANT_TO_READ || s === READING_STATUS.READING || s === READING_STATUS.READ) return s;
@@ -118,12 +120,14 @@ export class BookRepository {
    * @param {Object} deps.tarnService - tarn_service module
    * @param {Function} [deps.deriveBookId] - async (payload) => string
    * @param {Function} [deps.onDirty] - () => void; signals sync manager
+   * @param {number} [deps.editUploadDelayMs] - debounce before uploading edits to Tarn
    */
-  constructor({ cache, tarnService, deriveBookId, onDirty }) {
+  constructor({ cache, tarnService, deriveBookId, onDirty, editUploadDelayMs = DEFAULT_EDIT_UPLOAD_DEBOUNCE_MS }) {
     this._cache = cache;
     this._tarnService = tarnService;
     this._deriveBookId = deriveBookId;
     this._onDirty = onDirty || (() => {});
+    this._editUploadDelayMs = Math.max(0, Number(editUploadDelayMs) || 0);
 
     this._entries = [];
     this._editQueue = new Map();
@@ -243,7 +247,7 @@ export class BookRepository {
     if (!old) throw new Error('Entry not found');
 
     const entryKey = old.bookId || old.id;
-    const queueEntry = this._editQueue.get(entryKey);
+    const wasRemoteBacked = old.seenRemote === true || (old.bookId && old.id === old.bookId);
 
     const snapshot = { ...old };
     Object.assign(old, payload);
@@ -257,18 +261,14 @@ export class BookRepository {
     this._onDirty();
     this._emitChange();
 
-    if (queueEntry?.uploading) {
-      queueEntry.hasPendingEdit = true;
-      return;
-    }
-
-    this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
-    await this._doEditUpload(entryKey, old, snapshot);
+    if (wasRemoteBacked) this._scheduleEditUpload(entryKey, old, snapshot);
   }
 
   async delete(id) {
     const entry = this.getById(id);
     if (!entry) return;
+    const entryKey = entry.bookId || entry.id;
+    this._clearQueuedEdit(entryKey);
 
     entry._deleting = true;
     entry._committed = false;
@@ -340,17 +340,8 @@ export class BookRepository {
 
     if (entry.bookId && entry.seenRemote) {
       const entryKey = entry.bookId || entry.id;
-      const queueEntry = this._editQueue.get(entryKey);
-
-      if (queueEntry?.uploading) {
-        queueEntry.hasPendingEdit = true;
-      } else {
-        this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
-        const snapshot = { ...entry };
-        this._doEditUpload(entryKey, entry, snapshot).catch(() => {
-          this._emitError('status-update-failed', 'Status update failed');
-        });
-      }
+      const snapshot = { ...entry, readingStatus: previousStatus };
+      this._scheduleEditUpload(entryKey, entry, snapshot);
     }
 
     return { entry, previousStatus, toastMessage };
@@ -372,17 +363,7 @@ export class BookRepository {
 
     if (entry.bookId && entry.seenRemote) {
       const entryKey = entry.bookId || entry.id;
-      const queueEntry = this._editQueue.get(entryKey);
-
-      if (queueEntry?.uploading) {
-        queueEntry.hasPendingEdit = true;
-      } else {
-        this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
-        const snapshotEntry = { ...entry };
-        this._doEditUpload(entryKey, entry, snapshotEntry).catch(() => {
-          this._emitError('status-update-failed', 'Status update failed');
-        });
-      }
+      this._scheduleEditUpload(entryKey, entry, { ...entry, ...snapshot });
     }
 
     return { entry };
@@ -407,14 +388,7 @@ export class BookRepository {
     for (const entry of changed) {
       if (!entry.bookId || !entry.seenRemote) continue;
       const entryKey = entry.bookId || entry.id;
-      const queueEntry = this._editQueue.get(entryKey);
-      if (queueEntry?.uploading) {
-        queueEntry.hasPendingEdit = true;
-      } else {
-        this._editQueue.set(entryKey, { uploading: true, hasPendingEdit: false });
-        const snapshot = { ...entry };
-        this._doEditUpload(entryKey, entry, snapshot).catch(() => {});
-      }
+      this._scheduleEditUpload(entryKey, entry, { ...entry });
     }
   }
 
@@ -433,13 +407,14 @@ export class BookRepository {
       this._purged = false;
     }
 
-    await this.replayPending();
-
     if (!this._tarnService.isLoggedIn()) {
       this._entries = await this._cache.getAllActive();
       this._emitChange();
       return;
     }
+
+    await this.flushPendingEdits();
+    await this.replayPending();
 
     debugLog('[BookRepository] Syncing from Tarn...');
     try {
@@ -576,27 +551,150 @@ export class BookRepository {
     }
   }
 
-  // --- Internal: edit upload chain ---
+  // --- Internal: deferred edit upload chain ---
 
-  async _doEditUpload(entryKey, entry, snapshot) {
-    if (!entry.bookId) {
-      this._editQueue.delete(entryKey);
-      return;
+  _clearQueuedEdit(entryKey) {
+    const queueEntry = this._editQueue.get(entryKey);
+    if (queueEntry?.timer) clearTimeout(queueEntry.timer);
+    this._editQueue.delete(entryKey);
+  }
+
+  _scheduleEditUpload(entryKey, entry, snapshot, opts = {}) {
+    if (!entry?.bookId) return;
+
+    const existing = this._editQueue.get(entryKey) || {
+      uploading: false,
+      uploadPromise: null,
+      hasPendingEdit: false,
+      timer: null,
+      snapshot: snapshot ? { ...snapshot } : { ...entry },
+      entry,
+    };
+
+    if (!existing.snapshot) existing.snapshot = snapshot ? { ...snapshot } : { ...entry };
+    existing.entry = entry;
+    existing.hasPendingEdit = true;
+
+    if (existing.timer) {
+      clearTimeout(existing.timer);
+      existing.timer = null;
     }
 
+    this._editQueue.set(entryKey, existing);
+
+    if (this._cache?.queueOp) {
+      this._cache.queueOp({ type: 'edit', bookId: entry.bookId }).catch(err => {
+        console.warn('[BookRepository] edit queue marker failed:', err.message);
+      });
+    }
+
+    if (existing.uploading) return;
+
+    const delay = opts.immediate ? 0 : this._editUploadDelayMs;
+    if (delay <= 0) {
+      existing.timer = null;
+      Promise.resolve().then(() => this._flushEditEntry(entryKey)).catch(() => {});
+    } else {
+      existing.timer = setTimeout(() => {
+        const queued = this._editQueue.get(entryKey);
+        if (queued) queued.timer = null;
+        this._flushEditEntry(entryKey).catch(() => {});
+      }, delay);
+    }
+  }
+
+  async flushPendingEdits() {
+    const keys = [...this._editQueue.keys()];
+    for (const key of keys) {
+      await this._flushEditEntry(key, { force: true });
+    }
+  }
+
+  async _flushEditEntry(entryKey, opts = {}) {
+    const queueEntry = this._editQueue.get(entryKey);
+    if (!queueEntry) return false;
+
+    if (queueEntry.uploading) {
+      if (queueEntry.uploadPromise) await queueEntry.uploadPromise;
+      if (opts.force && this._editQueue.has(entryKey)) {
+        return this._flushEditEntry(entryKey, opts);
+      }
+      return false;
+    }
+
+    if (queueEntry.timer) {
+      clearTimeout(queueEntry.timer);
+      queueEntry.timer = null;
+    }
+
+    const entry = queueEntry.entry || this.getById(entryKey);
+    if (!entry?.bookId) {
+      this._editQueue.delete(entryKey);
+      return false;
+    }
+
+    const baselineSnapshot = queueEntry.snapshot || { ...entry };
+    const uploadEntry = { ...entry };
+    const uploadStartedModifiedAt = entry.modifiedAt;
+
+    queueEntry.uploading = true;
+    queueEntry.hasPendingEdit = false;
+    queueEntry.uploadPromise = this._uploadEditSnapshot(entryKey, entry, uploadEntry, baselineSnapshot, uploadStartedModifiedAt);
+    const uploaded = await queueEntry.uploadPromise;
+
+    const latest = this._editQueue.get(entryKey);
+    if (!latest) return uploaded;
+
+    latest.uploading = false;
+    latest.uploadPromise = null;
+
+    if (!uploaded) {
+      this._editQueue.delete(entryKey);
+      return false;
+    }
+
+    const changedDuringUpload = latest.hasPendingEdit || entry.modifiedAt !== uploadStartedModifiedAt;
+    if (changedDuringUpload) {
+      latest.snapshot = uploadEntry;
+      latest.entry = entry;
+      latest.hasPendingEdit = true;
+      if (opts.force) {
+        return this._flushEditEntry(entryKey, opts);
+      }
+      this._scheduleEditUpload(entryKey, entry, uploadEntry);
+      return true;
+    }
+
+    this._editQueue.delete(entryKey);
+    return true;
+  }
+
+  async _uploadEditSnapshot(entryKey, liveEntry, uploadEntry, snapshot, uploadStartedModifiedAt) {
+    if (!uploadEntry.bookId) return false;
+
     try {
+      if (!this._tarnService.isLoggedIn()) throw new Error('Not logged in');
       const client = await this._tarnService.getClient();
-      const payload = buildPayloadFromEntry(entry);
+      const payload = buildPayloadFromEntry(uploadEntry);
       const { bookId: _bookId, ...patch } = payload;
-      await client.books.update(entry.bookId, patch);
+      await client.books.update(uploadEntry.bookId, patch);
 
-      entry.pending = false; entry.status = 'confirmed'; entry.seenRemote = true;
-      // bookId is the canonical id now; align local id.
-      entry.id = entry.bookId;
+      const queueEntry = this._editQueue.get(entryKey);
+      const changedDuringUpload = queueEntry?.hasPendingEdit || liveEntry.modifiedAt !== uploadStartedModifiedAt;
+      if (!changedDuringUpload) {
+        liveEntry.pending = false;
+        liveEntry.status = 'confirmed';
+        liveEntry.seenRemote = true;
+        // bookId is the canonical id now; align local id.
+        liveEntry.id = liveEntry.bookId;
 
-      if (this._cache) await this._cache.replaceProvisional(entry.id, entry);
+        if (this._cache) await this._cache.replaceProvisional(liveEntry.id, liveEntry);
+        this._emitChange();
+      }
+
+      if (this._cache?.removeEditOp) await this._cache.removeEditOp(uploadEntry.bookId);
+
       this._emitError(null, null);
-      this._emitChange();
 
       // Share-log fan-out:
       //   - was public, stays public: re-share (re-publishes new tx_id)
@@ -604,31 +702,26 @@ export class BookRepository {
       //   - was private, now public: share with all (fresh publish)
       //   - was private, stays private: no-op
       const wasPrivate = snapshot && snapshot.is_private === true;
-      const isPrivate = entry.is_private === true;
+      const isPrivate = uploadEntry.is_private === true;
       if (!wasPrivate && !isPrivate) {
-        shareToFriends(client, entry.bookId).then(() => friends.invalidateFriendLibraryCache());
+        shareToFriends(client, uploadEntry.bookId).then(() => friends.invalidateFriendLibraryCache());
       } else if (!wasPrivate && isPrivate) {
-        unshareFromAllFriends(client, entry.bookId).then(() => friends.invalidateFriendLibraryCache());
+        unshareFromAllFriends(client, uploadEntry.bookId).then(() => friends.invalidateFriendLibraryCache());
       } else if (wasPrivate && !isPrivate) {
-        shareToFriends(client, entry.bookId).then(() => friends.invalidateFriendLibraryCache());
+        shareToFriends(client, uploadEntry.bookId).then(() => friends.invalidateFriendLibraryCache());
       }
 
-      const queueEntry = this._editQueue.get(entryKey);
-      if (queueEntry?.hasPendingEdit) {
-        queueEntry.hasPendingEdit = false;
-        await this._doEditUpload(entryKey, entry, snapshot);
-      } else {
-        this._editQueue.delete(entryKey);
-      }
+      return true;
     } catch (e) {
       console.warn('[BookRepository] Edit upload failed:', e.message);
-      this._editQueue.delete(entryKey);
 
-      // Queue for retry. Key on bookId now.
-      const pending = { type: 'edit', bookId: entry.bookId };
+      // Queue for retry. Key on bookId now. Replay reads the latest local
+      // snapshot, so the queued op intentionally carries only the book id.
+      const pending = { type: 'edit', bookId: uploadEntry.bookId };
       if (this._cache) await this._cache.queueOp(pending);
 
       this._emitError('save-failed', 'Could not save to cloud — will retry on next sync');
+      return false;
     }
   }
 }

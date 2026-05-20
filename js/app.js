@@ -104,6 +104,7 @@ const isPrivateInput = document.getElementById('isPrivateInput');
 const summaryRowEl = document.getElementById('summaryRow');
 const statusMicrocopyEl = document.getElementById('statusMicrocopy');
 const autosaveMicrocopyEl = document.getElementById('autosaveMicrocopy');
+const addBookCommitBtn = document.getElementById('addBookCommitBtn');
 const dateReadLabelEl = document.getElementById('dateReadLabel');
 const formatRow = document.querySelector('.detail-row[data-field="format"]');
 const dateRow = document.querySelector('.detail-row[data-field="dateRead"]');
@@ -697,24 +698,32 @@ function _hasRequiredTitle(){
   return !!(titleInput?.value || '').trim();
 }
 
+function _addCommitLabel(status){
+  if(status === READING_STATUS.READING) return 'Add as Reading';
+  if(status === READING_STATUS.READ) return 'Add as Read';
+  return 'Add to Want to Read';
+}
+
+function _syncAddCommitCta(){
+  if(!addBookCommitBtn) return;
+  const isAddMode = _isAddMode();
+  const status = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
+  addBookCommitBtn.textContent = _addCommitLabel(status);
+  addBookCommitBtn.disabled = !isAddMode || !_hasRequiredTitle() || _formSubmitting;
+}
+
 function _syncStatusSelectorMode(){
   if(!statusSelector) return;
   const isAddMode = _isAddMode();
-  const isDisabled = isAddMode && (!_hasRequiredTitle() || _formSubmitting);
-  statusSelector.classList.toggle('status-commit-actions', isAddMode);
-  statusSelector.setAttribute('role', isAddMode ? 'group' : 'radiogroup');
-  statusSelector.setAttribute('aria-label', isAddMode ? 'Add book as' : 'Reading status');
+  const isDisabled = _formSubmitting;
+  statusSelector.setAttribute('role', 'radiogroup');
+  statusSelector.setAttribute('aria-label', isAddMode ? 'Initial reading status' : 'Reading status');
   statusSelector.querySelectorAll('.status-option').forEach(btn => {
     btn.disabled = isDisabled;
-    if(isAddMode){
-      btn.classList.remove('active');
-      btn.removeAttribute('role');
-      btn.removeAttribute('aria-checked');
-    } else {
-      btn.setAttribute('role', 'radio');
-      btn.setAttribute('aria-checked', btn.classList.contains('active') ? 'true' : 'false');
-    }
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', btn.classList.contains('active') ? 'true' : 'false');
   });
+  _syncAddCommitCta();
 }
 
 function _stampStatusTransitionDates(newStatus, prevStatus){
@@ -729,12 +738,11 @@ function _stampStatusTransitionDates(newStatus, prevStatus){
 
 function setReadingStatus(status, opts){
   const prev = readingStatusInput?.value;
-  const isAddMode = _isAddMode();
   if(readingStatusInput) readingStatusInput.value = status;
   statusSelector?.querySelectorAll('.status-option').forEach(btn => {
     const active = btn.dataset.status === status;
-    btn.classList.toggle('active', !isAddMode && active);
-    if(!isAddMode) btn.setAttribute('aria-checked', active ? 'true' : 'false');
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-checked', active ? 'true' : 'false');
   });
   applyIntentUI(status);
   _syncStatusSelectorMode();
@@ -829,17 +837,11 @@ function _renderSummaryDateSegment(kind, label, value){
 
 function _renderSummaryRow(){
   if(!summaryRowEl) return;
-  if(_isAddMode()){
-    summaryRowEl.style.display='none';
-    summaryRowEl.innerHTML='';
-    _summaryDateEditing = null;
-    return;
-  }
   const status = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
   const isWtr = status === READING_STATUS.WANT_TO_READ;
   const segs = [];
   const rating = parseInt(ratingInput?.value)||0;
-  if(!isWtr && rating>=1 && rating<=5){
+  if(!_isAddMode() && !isWtr && rating>=1 && rating<=5){
     const stars = '★★★★★'.slice(0,rating) + '☆☆☆☆☆'.slice(0,5-rating);
     segs.push(`<span class="summary-seg summary-stars" data-edit="rating" tabindex="0" role="button" aria-label="Edit rating">${stars}</span>`);
   }
@@ -865,7 +867,6 @@ function _renderSummaryRow(){
 }
 
 function _startSummaryDateEdit(which){
-  if(_isAddMode()) return;
   const status = readingStatusInput?.value || READING_STATUS.WANT_TO_READ;
   const canEditStarted = which === 'started' && status === READING_STATUS.READING;
   const canEditFinished = which === 'finished' && status === READING_STATUS.READ;
@@ -887,7 +888,8 @@ function _commitSummaryDateInput(input){
   }
   _summaryDateEditing = null;
   _renderSummaryRow();
-  _autoSaveIfDirty();
+  _syncAddCommitCta();
+  if(!_isAddMode()) _autoSaveIfDirty();
 }
 
 function _formatDayMonth(ms){
@@ -902,6 +904,9 @@ function _formatDayMonth(ms){
 function _finalizeCloseModal(fromPopstate){
   if(resetModalSwipe) resetModalSwipe();
   if(detachKeyboard) detachKeyboard();
+  if(form.priorTxid.value && bookRepo?.flushPendingEdits){
+    bookRepo.flushPendingEdits().catch(err => console.warn('[Bookish] flush pending edits failed:', err?.message || err));
+  }
   modal.classList.remove('active');
   document.body.classList.remove('modal-open');
   const inner=modal.querySelector('.modal-inner');
@@ -911,7 +916,8 @@ function _finalizeCloseModal(fromPopstate){
   coverPreview.style.display='none';
   if(coverRemoveBtn) coverRemoveBtn.style.display='none';
   delete form.dataset.orig;
-  if(statusSelector){ statusSelector.style.display='none'; statusSelector.classList.remove('status-commit-actions'); }
+  if(statusSelector){ statusSelector.style.display='none'; }
+  if(addBookCommitBtn){ addBookCommitBtn.textContent='Add to Want to Read'; addBookCommitBtn.disabled=true; }
   // Reset placard dimensions
   if(placardTitle){ placardTitle.style.height=''; placardTitle.style.width=''; placardTitle.style.overflowY=''; }
   if(placardAuthor){ placardAuthor.style.height=''; placardAuthor.style.width=''; placardAuthor.style.overflowY=''; }
@@ -999,6 +1005,7 @@ function updateDirty(){
   const orig=form.dataset.orig||'';
   const cur=currentFormState();
   _syncStatusSelectorMode();
+  _syncAddCommitCta();
 }
 if(!form._dirtyBound){
   form._dirtyBound=true;
@@ -2317,7 +2324,6 @@ statusSelector?.addEventListener('click', (ev)=>{
     _stampStatusTransitionDates(newStatus, prevStatus);
     setReadingStatus(newStatus, { silent: true });
     updateDirty();
-    commitEntryForm();
     return;
   }
   if(newStatus === prevStatus) return;
@@ -2391,6 +2397,16 @@ async function deleteServerless(priorTxid) {
   uiStatusManager.refresh();
   await bookRepo.delete(priorTxid);
 }
+
+function flushPendingBookEdits(){
+  if(!bookRepo?.flushPendingEdits) return;
+  bookRepo.flushPendingEdits().catch(err => console.warn('[Bookish] flush pending edits failed:', err?.message || err));
+}
+
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'hidden') flushPendingBookEdits();
+});
+window.addEventListener('pagehide', flushPendingBookEdits);
 
 // --- Form handlers ---
 let _formSubmitting = false;

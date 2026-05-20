@@ -99,6 +99,14 @@ import { debugLog } from './core/debug_log.js';
 
   // --- Ops queue (minimal) ---
   async function queueOp(op){
+    if(op?.type === 'edit' && op.bookId){
+      const ops = await listOps();
+      const existing = ops.find(o => o.type === 'edit' && o.bookId === op.bookId);
+      if(existing){
+        op.id = existing.id;
+        op.createdAt = existing.createdAt;
+      }
+    }
     if(!op.id) op.id='op-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     op.createdAt=op.createdAt||Date.now();
     await withStore('readwrite', OPS_STORE, store=> store.put(op));
@@ -108,6 +116,12 @@ import { debugLog } from './core/debug_log.js';
     return withStore('readonly', OPS_STORE, store=> new Promise(r=>{ const out=[]; const req=store.openCursor(); req.onsuccess=e=>{ const cur=e.target.result; if(cur){ out.push(cur.value); cur.continue(); } else { out.sort((a,b)=>a.createdAt-b.createdAt); r(out); } }; }));
   }
   async function removeOp(id){ if(!id) return; return withStore('readwrite', OPS_STORE, store=> store.delete(id)); }
+  async function removeEditOp(bookId){
+    if(!bookId) return;
+    const ops = await listOps();
+    const edits = ops.filter(op => op.type === 'edit' && op.bookId === bookId);
+    for(const op of edits){ await removeOp(op.id); }
+  }
   async function clearAll(){
     return withStore('readwrite', ENTRY_STORE, store=> new Promise(r=>{
       const req=store.clear();
@@ -118,6 +132,6 @@ import { debugLog } from './core/debug_log.js';
 
   window.bookishCache={
     initCache,getAllActive,putEntry,bulkPut,applyRemote,findByTxid,markTombstoned,removeOldTombstones,listAllRaw,computeContentHash,detectDuplicate,deleteById,compactDuplicates,replaceProvisional,
-    queueOp,listOps,removeOp,clearAll
+    queueOp,listOps,removeOp,removeEditOp,clearAll
   };
 })();

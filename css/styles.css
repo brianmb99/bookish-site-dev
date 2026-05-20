@@ -1744,39 +1744,6 @@ html.modal-transitioning::view-transition-new(root){
 .status-selector{display:flex;gap:0;background:var(--color-bg-deep);border-radius:10px;padding:3px;margin-bottom:16px}
 .status-option{flex:1;padding:10px 8px;font-size:.75rem;font-weight:600;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--color-text-muted);transition:all .2s;min-height:40px;font-family:var(--font-body);box-shadow:none;white-space:nowrap}
 .status-option.active{background:var(--color-bg-elevated);color:var(--color-text-primary);box-shadow:0 1px 4px rgba(0,0,0,.2)}
-.status-selector.status-commit-actions{
-  gap:10px;
-  background:transparent;
-  padding:0;
-  margin-bottom:14px;
-}
-.status-selector.status-commit-actions .status-option{
-  background:rgba(15,17,20,.24);
-  border:1px solid var(--color-border-subtle);
-  color:var(--color-text-primary);
-  box-shadow:none;
-  min-height:44px;
-}
-.status-selector.status-commit-actions .status-option:hover:not(:disabled){
-  border-color:var(--color-border-strong);
-  background:var(--color-bg-elevated);
-  color:var(--color-text-primary);
-  transform:none;
-}
-.status-selector.status-commit-actions .status-option:focus-visible{
-  border-color:var(--color-border-strong);
-  background:var(--color-bg-elevated);
-  color:var(--color-text-primary);
-  transform:none;
-  outline:2px solid var(--color-accent-muted);
-  outline-offset:2px;
-}
-.status-selector.status-commit-actions .status-option:disabled{
-  cursor:not-allowed;
-  opacity:.42;
-  box-shadow:none;
-  transform:none;
-}
 @media(max-width:399px){.status-option{padding:8px 6px;font-size:.7rem}}
 
 /* Status toast */
@@ -4842,6 +4809,37 @@ body.modal-open{overscroll-behavior-y:contain}
 }
 .autosave-microcopy.visible{opacity:.85}
 .autosave-microcopy.error{color:var(--color-error);opacity:1;cursor:pointer}
+.add-commit-bar{
+  width:100%;
+  max-width:460px;
+  margin:2px auto 0;
+}
+.add-commit-btn{
+  width:100%;
+  min-height:48px;
+  border:1px solid var(--color-border-default);
+  border-radius:10px;
+  background:var(--color-bg-deep);
+  color:var(--color-text-primary);
+  font-family:var(--font-body);
+  font-size:.9rem;
+  font-weight:700;
+  box-shadow:0 8px 18px -14px rgba(0,0,0,.8);
+  cursor:pointer;
+  transition:background .15s,border-color .15s,opacity .15s,transform .15s;
+}
+.add-commit-btn:hover:not(:disabled),
+.add-commit-btn:focus-visible:not(:disabled){
+  background:var(--color-bg-elevated);
+  border-color:var(--color-border-strong);
+  outline:none;
+}
+.add-commit-btn:active:not(:disabled){transform:translateY(1px)}
+.add-commit-btn:disabled{
+  cursor:not-allowed;
+  opacity:.45;
+  box-shadow:none;
+}
 
 /* Add/edit visibility toggles */
 .modal-inner:not(.add-mode) .add-only{display:none}
@@ -4867,6 +4865,7 @@ body.modal-open{overscroll-behavior-y:contain}
       "cover details"
       "cover optional"
       "cover privacy"
+      "cover addcommit"
       "cover autosave"
       "delete delete";
     column-gap:28px;
@@ -4916,6 +4915,11 @@ body.modal-open{overscroll-behavior-y:contain}
   }
   .privacy-add-toggle{
     grid-area:privacy;
+  }
+  .add-commit-bar{
+    grid-area:addcommit;
+    max-width:none;
+    margin:0;
   }
   .autosave-microcopy{
     grid-area:autosave;
@@ -5016,6 +5020,16 @@ body.modal-open{overscroll-behavior-y:contain}
   .modal-inner.book-detail-page.add-mode .privacy-add-toggle{
     margin-top:0;
     padding:8px 10px;
+  }
+  .modal-inner.book-detail-page.add-mode .add-commit-bar{
+    position:sticky;
+    bottom:0;
+    padding-top:6px;
+    margin-top:auto;
+    background:linear-gradient(to bottom, rgba(36,43,53,0), var(--color-bg-surface) 35%);
+  }
+  .modal-inner.book-detail-page.add-mode .add-commit-btn{
+    min-height:46px;
   }
 }
 
