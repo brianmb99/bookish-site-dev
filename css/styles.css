@@ -1696,9 +1696,9 @@ html.modal-transitioning::view-transition-new(root){
 .wtr-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:5000;animation:fadeIn .2s ease-out}
 .wtr-drawer{position:fixed;background:var(--color-bg-base);z-index:5001;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;box-sizing:border-box}
 .wtr-drawer-handle{display:none}
-/* Peek-drawer pattern — uses pointer:coarse for touch, not max-width (design guideline) */
+/* Full-height touch drawer pattern — uses pointer:coarse for touch, not max-width (design guideline) */
 @media (pointer: coarse){
-  .wtr-drawer{bottom:0;left:0;right:0;max-height:85vh;border-radius:16px 16px 0 0;padding:20px 16px max(20px,env(safe-area-inset-bottom));animation:slideUpDrawer .3s ease-out;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
+  .wtr-drawer{top:0;bottom:0;left:0;right:0;height:100%;max-height:none;border-radius:16px 16px 0 0;padding:20px 16px max(20px,env(safe-area-inset-bottom));animation:slideUpDrawer .3s ease-out;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
   .wtr-drawer-handle{display:block;width:32px;height:4px;border-radius:2px;background:var(--color-border-strong);margin:0 auto 12px;flex-shrink:0;touch-action:none;position:relative;cursor:grab}
   .wtr-drawer-handle::before{content:'';position:absolute;inset:-20px -40px}
 }
@@ -4946,12 +4946,12 @@ body.modal-open{overscroll-behavior-y:contain}
   .modal-inner.book-detail-page .modal-close-btn{
     display:flex;
     top:max(12px, env(safe-area-inset-top));
-    right:auto;
-    left:max(12px, env(safe-area-inset-left));
+    right:max(12px, env(safe-area-inset-right));
+    left:auto;
   }
   .modal-inner.book-detail-page .privacy-toggle-btn{
     top:max(12px, env(safe-area-inset-top));
-    right:max(12px, env(safe-area-inset-right));
+    right:max(52px, calc(env(safe-area-inset-right) + 52px));
   }
   .modal-inner.book-detail-page .book-detail-hero{
     padding-right:0;
@@ -5334,8 +5334,9 @@ body.modal-open{overscroll-behavior-y:contain}
 .friends-drawer-handle{display:none}
 @media (pointer: coarse){
   .friends-drawer{
-    bottom:0;left:0;right:0;
-    max-height:75vh;
+    top:0;bottom:0;left:0;right:0;
+    height:100%;
+    max-height:none;
     border-radius:16px 16px 0 0;
     border-top:1px solid var(--color-border-default);
     padding:20px 16px max(20px,env(safe-area-inset-bottom));
