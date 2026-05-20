@@ -3202,6 +3202,17 @@ form.inline label.toggle-switch{display:flex}
   margin-right: auto;
   display: block;
 }
+.auth-submit.primary:disabled,
+.auth-submit.primary:disabled:hover,
+.auth-submit.primary:disabled:active{
+  background:var(--color-bg-surface);
+  border-color:var(--color-border-subtle);
+  color:var(--color-text-muted);
+  box-shadow:none;
+  opacity:.72;
+  transform:none;
+  filter:none;
+}
 .auth-form .auth-passkey-btn {
   width: 100%;
   max-width: 380px;
