@@ -1658,7 +1658,10 @@ function render(){
   });
   _lastYearGroups = yearGroups;
 
-  const yearList = getYearList(yearGroups);
+  const yearList = getYearList(yearGroups).map(item => ({
+    ...item,
+    entries: (yearGroups.get(item.year) || []).slice(0, 4),
+  }));
 
   if(isSearching){
     if(yearHeader) yearHeader.style.display = 'none';
@@ -2126,6 +2129,167 @@ document.addEventListener('keydown', (ev)=>{
 
 // --- Spine navigator rendering ---
 const SPINE_COLORS = 8;
+const SPINE_TONE_CACHE = new Map();
+const SPINE_TONE_PENDING = new Map();
+
+function clamp(n, min, max){
+  return Math.max(min, Math.min(max, n));
+}
+
+function rgbToHsl(r, g, b){
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+  if(max !== min){
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if(max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if(max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+  }
+  return { h, s, l };
+}
+
+function hslToRgb(h, s, l){
+  if(s === 0){
+    const v = Math.round(l * 255);
+    return { r: v, g: v, b: v };
+  }
+  const hueToRgb = (p, q, t)=>{
+    if(t < 0) t += 1;
+    if(t > 1) t -= 1;
+    if(t < 1 / 6) return p + (q - p) * 6 * t;
+    if(t < 1 / 2) return q;
+    if(t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return {
+    r: Math.round(hueToRgb(p, q, h + 1 / 3) * 255),
+    g: Math.round(hueToRgb(p, q, h) * 255),
+    b: Math.round(hueToRgb(p, q, h - 1 / 3) * 255),
+  };
+}
+
+function rgbToHex({ r, g, b }){
+  const part = v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0');
+  return `#${part(r)}${part(g)}${part(b)}`;
+}
+
+function mutedSpineToneFromRgb(r, g, b){
+  const { h, s, l } = rgbToHsl(r, g, b);
+  const clothS = clamp(s < 0.08 ? 0.12 : s * 0.58, 0.12, 0.36);
+  const clothL = clamp(l < 0.12 ? 0.20 : l, 0.18, 0.33);
+  return {
+    top: rgbToHex(hslToRgb(h, clothS, clamp(clothL + 0.08, 0.24, 0.40))),
+    bottom: rgbToHex(hslToRgb(h, clothS * 0.88, clamp(clothL - 0.05, 0.13, 0.28))),
+    activeTop: rgbToHex(hslToRgb(h, clamp(clothS * 1.14, 0.16, 0.42), clamp(clothL + 0.15, 0.31, 0.48))),
+    activeBottom: rgbToHex(hslToRgb(h, clamp(clothS * 1.02, 0.14, 0.38), clamp(clothL + 0.02, 0.21, 0.35))),
+  };
+}
+
+function pickCoverRgb(rgba){
+  const bins = new Map();
+  let fallbackR = 0, fallbackG = 0, fallbackB = 0, fallbackN = 0;
+  for(let i = 0; i < rgba.length; i += 4){
+    const a = rgba[i + 3];
+    if(a < 160) continue;
+    const r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const sat = (max - min) / 255;
+    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    fallbackR += r; fallbackG += g; fallbackB += b; fallbackN++;
+    if(lum > 0.94 && sat < 0.14) continue;
+    if(lum < 0.04 && sat < 0.16) continue;
+    let weight = 1 + sat * 3;
+    if(lum < 0.12) weight *= 0.38;
+    if(lum > 0.82) weight *= 0.45;
+    const key = `${r >> 4},${g >> 4},${b >> 4}`;
+    const bin = bins.get(key) || { score: 0, r: 0, g: 0, b: 0 };
+    bin.score += weight;
+    bin.r += r * weight;
+    bin.g += g * weight;
+    bin.b += b * weight;
+    bins.set(key, bin);
+  }
+  let best = null;
+  for(const bin of bins.values()){
+    if(!best || bin.score > best.score) best = bin;
+  }
+  if(best && best.score > 0){
+    return {
+      r: best.r / best.score,
+      g: best.g / best.score,
+      b: best.b / best.score,
+    };
+  }
+  if(fallbackN > 0){
+    return { r: fallbackR / fallbackN, g: fallbackG / fallbackN, b: fallbackB / fallbackN };
+  }
+  return null;
+}
+
+function spineToneCacheKey(entry){
+  const cover = entry?.coverImage || '';
+  if(!cover) return '';
+  return `${entry.txid || entry.id || ''}:${cover.length}:${cover.slice(0, 48)}`;
+}
+
+function sampleCoverSpineTone(entry){
+  const key = spineToneCacheKey(entry);
+  if(!key) return Promise.resolve(null);
+  if(SPINE_TONE_CACHE.has(key)) return Promise.resolve(SPINE_TONE_CACHE.get(key));
+  if(SPINE_TONE_PENDING.has(key)) return SPINE_TONE_PENDING.get(key);
+
+  const promise = new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try{
+        const canvas = document.createElement('canvas');
+        canvas.width = 16;
+        canvas.height = 24;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if(!ctx){ resolve(null); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const rgb = pickCoverRgb(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
+        resolve(rgb ? mutedSpineToneFromRgb(rgb.r, rgb.g, rgb.b) : null);
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = `data:${entry.mimeType || 'image/jpeg'};base64,${entry.coverImage}`;
+  }).then(tone => {
+    SPINE_TONE_CACHE.set(key, tone);
+    SPINE_TONE_PENDING.delete(key);
+    return tone;
+  });
+
+  SPINE_TONE_PENDING.set(key, promise);
+  return promise;
+}
+
+function applyCoverSpineTone(book, tone){
+  if(!book || !tone) return;
+  book.style.setProperty('--spine-tone-top', tone.top);
+  book.style.setProperty('--spine-tone-bottom', tone.bottom);
+  book.style.setProperty('--spine-tone-active-top', tone.activeTop);
+  book.style.setProperty('--spine-tone-active-bottom', tone.activeBottom);
+  book.dataset.coverTone = 'true';
+}
+
+function hydrateCoverSpineTone(book, entry){
+  if(!entry?.coverImage) return;
+  sampleCoverSpineTone(entry).then(tone => {
+    if(book.isConnected) applyCoverSpineTone(book, tone);
+  });
+}
 
 function spineHash(value){
   const s = String(value);
@@ -2162,7 +2326,7 @@ function spineWidth(year, count){
   return Math.max(32, Math.ceil(Math.max(bookWidth + 4, labelWidth + 6)));
 }
 
-function renderSpineBooks(year, count, colorOffset){
+function renderSpineBooks(year, count, colorOffset, entries = []){
   const group = document.createElement('span');
   group.className = 'spine-books';
   group.setAttribute('aria-hidden', 'true');
@@ -2176,6 +2340,7 @@ function renderSpineBooks(year, count, colorOffset){
     book.style.setProperty('--spine-book-width', `${width}px`);
     book.style.setProperty('--spine-book-height', `${58 - shortness}px`);
     group.appendChild(book);
+    hydrateCoverSpineTone(book, entries[j]);
   }
 
   return group;
@@ -2186,7 +2351,7 @@ function renderSpineNav(yearList, activeYear){
   spineStrip.innerHTML = '';
   let prevDecade = null;
   for(let i = 0; i < yearList.length; i++){
-    const { year, count } = yearList[i];
+    const { year, count, entries: yearEntries = [] } = yearList[i];
     const isNumericYear = /^\d{4}$/.test(year);
 
     // Insert decade divider between decade groups
@@ -2212,7 +2377,7 @@ function renderSpineNav(yearList, activeYear){
     const colorKey = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
     btn.dataset.spineColor = colorKey;
     btn.style.width = `${spineWidth(year, count)}px`;
-    btn.appendChild(renderSpineBooks(year, count, i));
+    btn.appendChild(renderSpineBooks(year, count, i, yearEntries));
 
     // Year text — horizontal, centered over the visible spine cluster.
     const txt = document.createElement('span');

@@ -1544,6 +1544,9 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 .spine-book[data-book-tone="6"]{background:linear-gradient(180deg,#3f332b,#29231f)}  /* clay */
 .spine-book[data-book-tone="7"]{background:linear-gradient(180deg,#37372e,#25251f)}  /* olive */
 .spine-book[data-book-tone="undated"]{background:linear-gradient(180deg,#343434,#242424)}
+.spine-book[data-cover-tone="true"]{
+  background:linear-gradient(180deg,var(--spine-tone-top),var(--spine-tone-bottom));
+}
 
 /* Selected cluster: pulled forward, warm, and legible without extra labels. */
 .spine-btn[aria-selected="true"]{
@@ -1562,6 +1565,9 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 }
 .spine-btn[aria-selected="true"] .spine-book:nth-child(even){
   background:linear-gradient(180deg,#5d492f,#392f22);
+}
+.spine-btn[aria-selected="true"] .spine-book[data-cover-tone="true"]{
+  background:linear-gradient(180deg,var(--spine-tone-active-top),var(--spine-tone-active-bottom));
 }
 .spine-btn[aria-selected="true"] .spine-label{
   color:#f8eddb;
