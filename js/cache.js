@@ -99,9 +99,9 @@ import { debugLog } from './core/debug_log.js';
 
   // --- Ops queue (minimal) ---
   async function queueOp(op){
-    if(op?.type === 'edit' && op.bookId){
+    if((op?.type === 'edit' || op?.type === 'delete') && op.bookId){
       const ops = await listOps();
-      const existing = ops.find(o => o.type === 'edit' && o.bookId === op.bookId);
+      const existing = ops.find(o => o.type === op.type && o.bookId === op.bookId);
       if(existing){
         op.id = existing.id;
         op.createdAt = existing.createdAt;
@@ -122,6 +122,12 @@ import { debugLog } from './core/debug_log.js';
     const edits = ops.filter(op => op.type === 'edit' && op.bookId === bookId);
     for(const op of edits){ await removeOp(op.id); }
   }
+  async function removeDeleteOp(bookId){
+    if(!bookId) return;
+    const ops = await listOps();
+    const deletes = ops.filter(op => op.type === 'delete' && op.bookId === bookId);
+    for(const op of deletes){ await removeOp(op.id); }
+  }
   async function clearAll(){
     return withStore('readwrite', ENTRY_STORE, store=> new Promise(r=>{
       const req=store.clear();
@@ -132,6 +138,6 @@ import { debugLog } from './core/debug_log.js';
 
   window.bookishCache={
     initCache,getAllActive,putEntry,bulkPut,applyRemote,findByTxid,markTombstoned,removeOldTombstones,listAllRaw,computeContentHash,detectDuplicate,deleteById,compactDuplicates,replaceProvisional,
-    queueOp,listOps,removeOp,removeEditOp,clearAll
+    queueOp,listOps,removeOp,removeEditOp,removeDeleteOp,clearAll
   };
 })();

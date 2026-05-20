@@ -73,6 +73,21 @@ function buildPayloadFromEntry(entry) {
   return payload;
 }
 
+function isRemoteBackedEntry(entry) {
+  return !!(
+    entry?.bookId &&
+    (entry.remoteBacked === true || entry.seenRemote === true || entry.id === entry.bookId)
+  );
+}
+
+function isAlreadyDeletedError(err) {
+  const message = String(err?.message || err || '').toLowerCase();
+  return message.includes('no record with primarykey') ||
+    message.includes('no record') ||
+    message.includes('not found') ||
+    message.includes('404');
+}
+
 /**
  * Best-effort share-on-save: publish to every non-muted connection.
  * Fire-and-forget; the SDK returns per-connection failures but we don't
@@ -220,7 +235,7 @@ export class BookRepository {
         const oldId = rec.id;
         // bookId is now the canonical id; drop the local-id sentinel.
         rec.id = rec.bookId;
-        rec.pending = false; rec.status = 'confirmed'; rec.seenRemote = true;
+        rec.pending = false; rec.status = 'confirmed'; rec.seenRemote = true; rec.remoteBacked = true;
         if (this._cache) await this._cache.replaceProvisional(oldId, rec);
         this._emitError(null, null);
         this._emitChange();
@@ -247,7 +262,7 @@ export class BookRepository {
     if (!old) throw new Error('Entry not found');
 
     const entryKey = old.bookId || old.id;
-    const wasRemoteBacked = old.seenRemote === true || (old.bookId && old.id === old.bookId);
+    const wasRemoteBacked = isRemoteBackedEntry(old);
 
     const snapshot = { ...old };
     Object.assign(old, payload);
@@ -255,7 +270,8 @@ export class BookRepository {
     old.modifiedAt = Date.now();
     old.pending = true;
     old.status = 'pending';
-    old.seenRemote = false;
+    old.seenRemote = wasRemoteBacked ? true : false;
+    if (wasRemoteBacked) old.remoteBacked = true;
     old._committed = false;
     if (this._cache) await this._cache.putEntry(old);
     this._onDirty();
@@ -268,7 +284,9 @@ export class BookRepository {
     const entry = this.getById(id);
     if (!entry) return;
     const entryKey = entry.bookId || entry.id;
+    const remoteBacked = isRemoteBackedEntry(entry);
     this._clearQueuedEdit(entryKey);
+    if (entry.bookId && this._cache?.removeEditOp) await this._cache.removeEditOp(entry.bookId);
 
     entry._deleting = true;
     entry._committed = false;
@@ -276,7 +294,7 @@ export class BookRepository {
 
     // Local-only entry — just remove from cache. No bookId means it never
     // made it to Tarn; nothing to tombstone or unshare.
-    if (!entry.bookId || entry.status === 'pending' && !entry.seenRemote) {
+    if (!entry.bookId || !remoteBacked) {
       if (this._cache) await this._cache.deleteById(entry.id);
       this._entries = this._entries.filter(e => e !== entry);
       this._emitChange();
@@ -291,27 +309,40 @@ export class BookRepository {
       return;
     }
 
-    // Entry on Tarn — send tombstone via the typed namespace.
+    // Entry on Tarn — hide locally immediately, then send tombstone via the
+    // typed namespace. Queue the delete before the network call so refreshes
+    // or crashes cannot resurrect the record from stale remote data.
+    entry.status = 'tombstoned';
+    entry.tombstonedAt = Date.now();
+    entry.pending = true;
+    entry.seenRemote = true;
+    entry.remoteBacked = true;
+    entry._deleting = false;
+    if (this._cache) {
+      await this._cache.putEntry(entry);
+      await this._cache.queueOp?.({ type: 'delete', bookId: entry.bookId });
+    }
+    this._entries = this._entries.filter(e => e !== entry);
+    this._onDirty();
+    this._emitChange();
+
     try {
       const client = await this._tarnService.getClient();
-      await client.books.delete(entry.bookId);
+      try {
+        await client.books.delete(entry.bookId);
+      } catch (err) {
+        if (!isAlreadyDeletedError(err)) throw err;
+      }
 
-      entry.status = 'tombstoned';
-      entry.tombstonedAt = Date.now();
-      if (this._cache) await this._cache.putEntry(entry);
-      this._entries = this._entries.filter(e => e.status !== 'tombstoned');
+      if (this._cache?.removeDeleteOp) await this._cache.removeDeleteOp(entry.bookId);
       this._emitError(null, null);
-      this._onDirty();
-      this._emitChange();
       // Retroactively unshare from every connection. Idempotent on the SDK
       // side; non-blocking. Private books were never shared, but unshare
       // on a never-shared content_id is a benign no-op for our purposes.
       unshareFromAllFriends(client, entry.bookId).then(() => friends.invalidateFriendLibraryCache());
     } catch (e) {
       console.warn('[BookRepository] books.delete failed:', e.message);
-      entry._deleting = false;
-      this._emitChange();
-      this._emitError('delete-failed', 'Delete failed — will retry on next sync');
+      this._emitError('delete-queued', 'Delete queued — will retry when sync is available');
     }
   }
 
@@ -338,7 +369,7 @@ export class BookRepository {
       : newStatus === READING_STATUS.READ ? 'Finished! Added to your shelf'
       : 'Moved to Want to Read';
 
-    if (entry.bookId && entry.seenRemote) {
+    if (isRemoteBackedEntry(entry)) {
       const entryKey = entry.bookId || entry.id;
       const snapshot = { ...entry, readingStatus: previousStatus };
       this._scheduleEditUpload(entryKey, entry, snapshot);
@@ -361,7 +392,7 @@ export class BookRepository {
     this._onDirty();
     this._emitChange();
 
-    if (entry.bookId && entry.seenRemote) {
+    if (isRemoteBackedEntry(entry)) {
       const entryKey = entry.bookId || entry.id;
       this._scheduleEditUpload(entryKey, entry, { ...entry, ...snapshot });
     }
@@ -386,7 +417,7 @@ export class BookRepository {
     this._emitChange();
 
     for (const entry of changed) {
-      if (!entry.bookId || !entry.seenRemote) continue;
+      if (!isRemoteBackedEntry(entry)) continue;
       const entryKey = entry.bookId || entry.id;
       this._scheduleEditUpload(entryKey, entry, { ...entry });
     }
@@ -419,7 +450,14 @@ export class BookRepository {
     debugLog('[BookRepository] Syncing from Tarn...');
     try {
       const client = await this._tarnService.getClient();
-      const remoteRecords = await client.books.list();
+      const pendingOps = this._cache.listOps ? await this._cache.listOps() : [];
+      const pendingDeleteBookIds = new Set(pendingOps.filter(op => op.type === 'delete' && op.bookId).map(op => op.bookId));
+      const localAll = this._cache.listAllRaw ? await this._cache.listAllRaw() : await this._cache.getAllActive();
+      const localTombstoneBookIds = new Set(localAll.filter(e => e.status === 'tombstoned' && e.bookId).map(e => e.bookId));
+      const remoteRecords = (await client.books.list()).filter(data =>
+        !pendingDeleteBookIds.has(data.bookId) &&
+        !localTombstoneBookIds.has(data.bookId)
+      );
       debugLog('[BookRepository] Fetched', remoteRecords.length, 'records from Tarn');
 
       // The SDK returns fully-decoded records validated against the schema.
@@ -430,9 +468,10 @@ export class BookRepository {
         status: 'confirmed',
         seenRemote: true,
         _committed: true,
+        remoteBacked: true,
       }));
 
-      const local = await this._cache.getAllActive();
+      const local = localAll.filter(e => e.status !== 'tombstoned');
       const localPending = local.filter(e => !e.seenRemote || e.status === 'pending');
 
       // Deduplicate by bookId; remote wins.
@@ -449,8 +488,13 @@ export class BookRepository {
 
       // Add local pending entries that aren't yet on remote.
       for (const pending of localPending) {
-        const alreadyRemote = pending.bookId && merged.some(e => e.bookId === pending.bookId);
-        if (!alreadyRemote) merged.push(pending);
+        if (pending.bookId) {
+          const existingIndex = merged.findIndex(e => e.bookId === pending.bookId);
+          if (existingIndex >= 0) merged[existingIndex] = pending;
+          else merged.push(pending);
+        } else {
+          merged.push(pending);
+        }
       }
 
       // Sort: newest first (by dateRead, then createdAt).
@@ -507,7 +551,7 @@ export class BookRepository {
             await client.books.create(payload);
             const oldId = local.id;
             local.id = local.bookId;
-            local.pending = false; local.status = 'confirmed'; local.seenRemote = true;
+            local.pending = false; local.status = 'confirmed'; local.seenRemote = true; local.remoteBacked = true;
             await this._cache.replaceProvisional(oldId, local);
             await this._cache.removeOp(op.id);
             this._emitChange();
@@ -529,7 +573,7 @@ export class BookRepository {
             // Partial-merge path: pass the full payload minus the primary key.
             const { bookId: _bookId, ...patch } = payload;
             await client.books.update(local.bookId, patch);
-            local.pending = false; local.status = 'confirmed'; local.seenRemote = true;
+            local.pending = false; local.status = 'confirmed'; local.seenRemote = true; local.remoteBacked = true;
             await this._cache.replaceProvisional(local.id, local);
             await this._cache.removeOp(op.id);
             this._emitChange();
@@ -542,6 +586,21 @@ export class BookRepository {
             }
           } catch (e) {
             console.warn('[BookRepository] Replay edit failed:', e.message);
+            break;
+          }
+        } else if (op.type === 'delete') {
+          if (!op.bookId) { await this._cache.removeOp(op.id); continue; }
+          try {
+            try {
+              await client.books.delete(op.bookId);
+            } catch (err) {
+              if (!isAlreadyDeletedError(err)) throw err;
+            }
+            await this._cache.removeOp(op.id);
+            this._emitError(null, null);
+            unshareFromAllFriends(client, op.bookId).then(() => friends.invalidateFriendLibraryCache());
+          } catch (e) {
+            console.warn('[BookRepository] Replay delete failed:', e.message);
             break;
           }
         }
