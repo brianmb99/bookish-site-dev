@@ -4,8 +4,8 @@
   <meta charset="utf-8"/>
   <title>About Bookish — A Private, Permanent Reading List</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <meta name="description" content="Bookish is a reading list app that saves your books permanently and privately. Pay once, keep it forever."/>
-  <meta name="theme-color" content="#2563eb"/>
+  <meta name="description" content="Bookish is a reading list app that saves your books permanently and privately. Start free, then subscribe for $10/year when your shelf grows."/>
+  <meta name="theme-color" content="#0f1114"/>
   <meta name="view-transition" content="same-origin"/>
   <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-192.png"/>
   <link rel="preload" href="fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -118,11 +118,29 @@
       margin-bottom: 80px;
     }
 
-    .hero-icon {
-      font-size: 3.5rem;
-      margin-bottom: 24px;
-      display: block;
+    .hero-shelf-mark {
+      width: 72px;
+      height: 58px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 5px;
+      border-bottom: 1px solid var(--color-border-default);
     }
+
+    .hero-shelf-mark span {
+      width: 12px;
+      border: 1px solid rgba(245, 158, 11, 0.28);
+      border-bottom: none;
+      border-radius: 3px 3px 0 0;
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    .hero-shelf-mark span:nth-child(1) { height: 34px; }
+    .hero-shelf-mark span:nth-child(2) { height: 48px; }
+    .hero-shelf-mark span:nth-child(3) { height: 40px; }
+    .hero-shelf-mark span:nth-child(4) { height: 26px; }
 
     .hero h1 {
       font-family: var(--font-display);
@@ -150,19 +168,18 @@
       font-weight: 600;
       padding: 16px 36px;
       border-radius: 10px;
-      border: none;
-      background: linear-gradient(135deg, var(--color-primary) 0%, #2563eb 100%);
+      border: 1px solid var(--color-primary);
+      background: var(--color-primary);
       color: #fff;
       text-decoration: none;
-      box-shadow: 0 4px 16px -4px rgba(59, 130, 246, 0.5);
-      transition: all 0.2s ease;
+      box-shadow: none;
+      transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
       cursor: pointer;
     }
 
     .hero-cta:hover {
-      background: linear-gradient(135deg, var(--color-primary-hover) 0%, #3b82f6 100%);
-      box-shadow: 0 6px 20px -4px rgba(59, 130, 246, 0.6);
-      transform: translateY(-2px);
+      background: var(--color-primary-hover);
+      border-color: var(--color-primary-hover);
     }
 
     /* Value propositions */
@@ -185,11 +202,27 @@
       border-color: var(--color-border-default);
     }
 
-    .value-icon {
-      font-size: 1.75rem;
+    .value-mark {
+      width: 34px;
+      height: 28px;
       margin-bottom: 12px;
-      display: block;
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      border-bottom: 1px solid var(--color-border-default);
     }
+
+    .value-mark span {
+      width: 7px;
+      border: 1px solid rgba(245, 158, 11, 0.24);
+      border-bottom: none;
+      border-radius: 2px 2px 0 0;
+      background: rgba(245, 158, 11, 0.08);
+    }
+
+    .value-mark span:nth-child(1) { height: 15px; }
+    .value-mark span:nth-child(2) { height: 23px; }
+    .value-mark span:nth-child(3) { height: 18px; }
 
     .value-card h3 {
       font-family: var(--font-display);
@@ -380,28 +413,28 @@
 
   <!-- Hero -->
   <section class="hero">
-    <span class="hero-icon" aria-hidden="true">📚</span>
+    <span class="hero-shelf-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
     <h1>A private, permanent reading list</h1>
-    <p>Track what you read. Keep it forever. Your data is encrypted and yours alone — no subscriptions, no ads, no snooping.</p>
+    <p>Track what you read. Keep it forever. Your data is encrypted and yours alone. Start free, then subscribe for $10/year when your shelf grows.</p>
     <a href="/" class="hero-cta">Try Bookish</a>
   </section>
 
   <!-- Value Props -->
   <section class="values">
     <div class="value-card">
-      <span class="value-icon" aria-hidden="true">🔒</span>
+      <span class="value-mark" aria-hidden="true"><span></span><span></span><span></span></span>
       <h3>Private</h3>
       <p>Your reading list is encrypted before it leaves your device. You control who has access — and unless you share it, that's no one but you.</p>
     </div>
     <div class="value-card">
-      <span class="value-icon" aria-hidden="true">♾️</span>
+      <span class="value-mark" aria-hidden="true"><span></span><span></span><span></span></span>
       <h3>Permanent</h3>
       <p>Stored forever on a permanent network — not on servers that can shut down, get acquired, or lose your data.</p>
     </div>
     <div class="value-card">
-      <span class="value-icon" aria-hidden="true">💰</span>
-      <h3>No subscription</h3>
-      <p>Pay once, keep it forever. No monthly fees. No surprise price increases. Your reading list is yours for life.</p>
+      <span class="value-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+      <h3>Simple annual price</h3>
+      <p>Start with five books for free. Subscribe for $10/year when you want an unlimited shelf. No ads, no surprise tiers.</p>
     </div>
   </section>
 

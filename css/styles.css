@@ -220,18 +220,18 @@ button, .btn{
   font-size:.875rem;
   padding:10px 18px;
   border-radius:8px;
-  border:none;
+  border:1px solid var(--color-border-default);
   cursor:pointer;
-  transition:all .2s ease;
+  transition:background .2s ease,color .2s ease,border-color .2s ease,transform .2s ease,box-shadow .2s ease;
   position:relative;
   overflow:hidden;
   display:inline-flex;
   align-items:center;
   justify-content:center;
   gap:6px;
-  background:linear-gradient(135deg,var(--color-primary) 0%,#2563eb 100%);
-  color:#fff;
-  box-shadow:0 2px 8px -2px rgba(59,130,246,.4);
+  background:var(--color-bg-elevated);
+  color:var(--color-text-secondary);
+  box-shadow:none;
 }
 button:disabled, .btn:disabled{opacity:.5;cursor:default}
 button:active, .btn:active{transform:scale(.98)}
@@ -1643,14 +1643,30 @@ html.modal-transitioning::view-transition-new(root){
   font-size:.9rem;
 }
 .year-empty-icon{
-  font-size:1.8rem;
+  display:inline-flex;
+  align-items:flex-end;
+  justify-content:center;
+  gap:3px;
+  width:36px;
+  height:30px;
   margin-bottom:8px;
-  opacity:.5;
+  opacity:.62;
+  border-bottom:1px solid var(--color-border-default);
 }
+.year-empty-icon span{
+  width:7px;
+  border:1px solid rgba(245,158,11,.24);
+  border-bottom:none;
+  border-radius:2px 2px 0 0;
+  background:rgba(245,158,11,.1);
+}
+.year-empty-icon span:nth-child(1){height:18px}
+.year-empty-icon span:nth-child(2){height:25px}
+.year-empty-icon span:nth-child(3){height:15px}
 
 /* WTR drawer overlay */
 .wtr-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:5000;animation:fadeIn .2s ease-out}
-.wtr-drawer{position:fixed;background:var(--color-bg-base);z-index:5001;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column}
+.wtr-drawer{position:fixed;background:var(--color-bg-base);z-index:5001;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;box-sizing:border-box}
 .wtr-drawer-handle{display:none}
 /* Peek-drawer pattern — uses pointer:coarse for touch, not max-width (design guideline) */
 @media (pointer: coarse){
@@ -1784,8 +1800,8 @@ html.modal-transitioning::view-transition-new(root){
 .celebration-toast{background:rgba(36,43,53,.92)}
 
 /* Account nudge banner */
-.nudge-banner{background:rgba(28,34,42,.66);border:1px solid var(--color-border-subtle);border-radius:10px;padding:13px 16px;margin:16px 0;display:flex;align-items:center;justify-content:center;gap:12px;animation:fadeIn .3s ease-out;box-shadow:none}
-@keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+.nudge-banner{background:rgba(28,34,42,.66);border:1px solid var(--color-border-subtle);border-radius:10px;padding:13px 16px;margin:16px 0;display:flex;align-items:center;justify-content:center;gap:12px;animation:feedbackDropIn .3s ease-out;box-shadow:none}
+@keyframes feedbackDropIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 .nudge-content{display:flex;align-items:center;gap:10px}
 .nudge-mark{
   width:34px;
@@ -2018,7 +2034,7 @@ footer{margin-top:40px;text-align:center;padding-bottom:env(safe-area-inset-bott
 .footer-links a:link,.footer-links a:visited{color:var(--color-text-muted);text-decoration:none}
 .footer-links a:hover{color:var(--color-text-secondary)}
 .footer-meta{font-size:.55rem;opacity:.35;margin-top:4px}
-form.inline label{display:block;font-size:.65rem;margin-top:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+form.inline label{display:block;font-size:.72rem;margin-top:10px;font-weight:600;text-transform:none;letter-spacing:0}
 form.inline input,form.inline select,form.inline textarea{
   font-family:var(--font-body);
   font-size:.875rem;
@@ -2502,7 +2518,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 @keyframes pulse-opacity{0%,100%{opacity:.3}50%{opacity:.7}}
 .modal-inner .fields-cluster{flex:1;min-width:0;display:grid;grid-template-columns:1fr;gap:16px}
 .modal-inner .field-block{display:flex;flex-direction:column;gap:4px}
-.modal-inner .field-block label{font-size:.65rem;letter-spacing:.08em;opacity:.85;margin:0;text-transform:uppercase;font-weight:600}
+.modal-inner .field-block label{font-size:.72rem;letter-spacing:0;opacity:.85;margin:0;text-transform:none;font-weight:600}
 .modal-inner .field-block input,.modal-inner .field-block select{background:transparent;border:1px solid var(--color-border-subtle);padding:6px 8px;font-size:.75rem;border-radius:8px;transition:border-color .2s,background .2s}
 .modal-inner .field-block input:focus,.modal-inner .field-block select:focus{outline:none;border-color:#2563eb;background:#192028}
 .modal-inner .field-block.readonly input:not(:focus){border-color:transparent;background:transparent;cursor:text}
@@ -2515,7 +2531,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 
 /* Notes field in entry form */
 .notes-block{width:100%;margin-top:0;position:relative}
-.notes-toggle{display:flex;align-items:center;gap:4px;font-size:.65rem;letter-spacing:.08em;opacity:.85;margin:0 0 4px 0;text-transform:uppercase;font-weight:600;cursor:pointer}
+.notes-toggle{display:flex;align-items:center;gap:4px;font-size:.72rem;letter-spacing:0;opacity:.85;margin:0 0 4px 0;text-transform:none;font-weight:600;cursor:pointer}
 .notes-toggle-icon{font-size:.7rem;opacity:.7}
 .notes-hint{font-weight:400;opacity:.6;text-transform:none;letter-spacing:0}
 .notes-block textarea{width:100%;box-sizing:border-box;background:transparent;border:1px solid var(--color-border-subtle);padding:8px 10px;padding-right:40px;font-size:.75rem;font-family:inherit;border-radius:8px;color:inherit;resize:none;min-height:60px;max-height:none;line-height:1.4;overflow:hidden;transition:border-color .2s,background .2s}
@@ -2543,7 +2559,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .optional-fields-zone{width:100%;margin-top:6px}
 .add-detail-wrap{position:relative;margin-bottom:4px}
 /* Subtle text link, matching .change-cover-link treatment (#101).
-   !important overrides the global button rule (blue gradient + shadow). */
+   !important keeps this as a text affordance instead of a framed control. */
 .add-detail-btn{
   background:none!important;
   border:none!important;
@@ -2602,7 +2618,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   .add-detail-menu{animation:none}
 }
 .optional-field-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.optional-field-header label{font-size:.65rem;letter-spacing:.08em;opacity:.85;margin:0;text-transform:uppercase;font-weight:600}
+.optional-field-header label{font-size:.72rem;letter-spacing:0;opacity:.85;margin:0;text-transform:none;font-weight:600}
 .field-deactivate{
   position:relative;
   background:transparent;
@@ -3426,8 +3442,8 @@ form.inline label.toggle-switch{display:flex}
 .account-display-name-edit label{
   font-size:.72rem;
   color:var(--color-text-muted);
-  text-transform:uppercase;
-  letter-spacing:.08em;
+  text-transform:none;
+  letter-spacing:0;
 }
 .account-display-name-edit-row{
   display:flex;
@@ -4665,7 +4681,7 @@ body.modal-open{overscroll-behavior-y:contain}
 }
 .detail-row:last-child{border-bottom:none}
 .detail-row > label{
-  font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;font-weight:600;
+  font-size:.72rem;letter-spacing:0;text-transform:none;font-weight:600;
   color:var(--color-text-muted);
   margin:0!important;
 }

@@ -1661,7 +1661,7 @@ function render(){
       return;
     }
     // No populated years remain — show empty message
-    cardsEl.innerHTML = `<div class="year-empty"><div class="year-empty-icon">\uD83D\uDCD6</div>No books in ${activeYear === 'Undated' ? 'Undated' : activeYear} yet</div>`;
+    cardsEl.innerHTML = `<div class="year-empty"><div class="year-empty-icon" aria-hidden="true"><span></span><span></span><span></span></div>No books in ${activeYear === 'Undated' ? 'Undated' : activeYear} yet</div>`;
     return;
   }
 
