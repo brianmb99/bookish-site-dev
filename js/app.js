@@ -183,7 +183,7 @@ function activateField(name){
   // Explicit user action: remember this choice for future books (#104).
   setFieldPref(name, true);
 }
-function deactivateField(name){
+function deactivateField(name, opts = {}){
   showOptionalField(name, false);
   // Only update pref + toast if the preference actually changes — avoids
   // confusing "hidden by default" toast when the user dismisses a field
@@ -191,9 +191,31 @@ function deactivateField(name){
   const wasShownByDefault = getFieldPref(name);
   if(wasShownByDefault){
     setFieldPref(name, false);
-    const label = name.charAt(0).toUpperCase() + name.slice(1);
-    showStatusToast(`${label} hidden by default. Use the detail chips to show it again.`);
+    if(!opts.silent){
+      const label = name.charAt(0).toUpperCase() + name.slice(1);
+      showStatusToast(`${label} hidden by default. Use the detail chips to show it again.`);
+    }
   }
+}
+function clearOptionalFieldValue(name){
+  if(name === 'rating'){
+    if(ratingInput) ratingInput.value = '';
+    updateStarDisplay(0);
+  } else if(name === 'owned'){
+    if(ownedToggle) ownedToggle.checked = false;
+    if(ownedLabel) ownedLabel.textContent = 'No';
+  } else if(name === 'tags'){
+    if(tagsInputEl) tagsInputEl.value = '';
+    if(tagsPillsEl) tagsPillsEl.innerHTML = '';
+  } else if(name === 'notes'){
+    if(notesInput) notesInput.value = '';
+    autoGrowNotes();
+  }
+}
+function persistOptionalFieldChange(){
+  updateDirty();
+  _renderSummaryRow();
+  if(!_isAddMode()) _autoSaveIfDirty();
 }
 function initOptionalFields(entry){
   OPTIONAL_FIELDS.forEach(name=>{
@@ -286,14 +308,14 @@ starRatingEl?.addEventListener('click',e=>{
   ratingInput.value=newVal||'';
   updateStarDisplay(newVal);
   if(newVal>0) activateField('rating');
-  updateDirty();
+  persistOptionalFieldChange();
 });
 
 // Owned toggle interaction
 ownedToggle?.addEventListener('change',()=>{
   if(ownedLabel) ownedLabel.textContent=ownedToggle.checked?'Yes':'No';
   if(ownedToggle.checked) activateField('owned');
-  updateDirty();
+  persistOptionalFieldChange();
 });
 
 // Tags interaction
@@ -306,7 +328,7 @@ function addTagPill(text){
   pill.className='tag-pill';
   pill.dataset.tag=tag;
   pill.innerHTML=`${escapeHtml(tag)}<button type="button" class="tag-pill-remove" aria-label="Remove tag ${escapeHtml(tag)}">&times;</button>`;
-  pill.querySelector('.tag-pill-remove').addEventListener('click',()=>{ pill.remove(); updateDirty(); });
+  pill.querySelector('.tag-pill-remove').addEventListener('click',()=>{ pill.remove(); persistOptionalFieldChange(); });
   tagsPillsEl.appendChild(pill);
 }
 tagsInputEl?.addEventListener('keydown',e=>{
@@ -316,12 +338,12 @@ tagsInputEl?.addEventListener('keydown',e=>{
     parts.forEach(t=>addTagPill(t));
     tagsInputEl.value='';
     if(parts.length) activateField('tags');
-    updateDirty();
+    persistOptionalFieldChange();
   }
 });
 tagsInputEl?.addEventListener('blur',()=>{
   const parts=tagsInputEl.value.split(',').map(t=>t.trim()).filter(Boolean);
-  if(parts.length){ parts.forEach(t=>addTagPill(t)); tagsInputEl.value=''; activateField('tags'); updateDirty(); }
+  if(parts.length){ parts.forEach(t=>addTagPill(t)); tagsInputEl.value=''; activateField('tags'); persistOptionalFieldChange(); }
 });
 
 // Optional chips (inline, #114): tap a "+ Rate" chip to expand the field.
@@ -337,8 +359,9 @@ optionalChipsEl?.addEventListener('click', e=>{
 optFieldsZone?.addEventListener('click',e=>{
   const btn=e.target.closest('.field-deactivate');
   if(!btn) return;
-  deactivateField(btn.dataset.field);
-  updateDirty();
+  clearOptionalFieldValue(btn.dataset.field);
+  deactivateField(btn.dataset.field, { silent: true });
+  persistOptionalFieldChange();
 });
 
 if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn,.cover-nav-arrow,.cover-adjust-btn')) return; if(modal.querySelector('.modal-inner')?.classList.contains('adjusting-cover')) return; coverFileInput.click(); }); }
@@ -2762,7 +2785,7 @@ function closeNotesOverlay(fromPopstate = false){
   notesOverlay.style.display = 'none';
   document.body.classList.remove('modal-open');
   autoGrowNotes();
-  updateDirty();
+  persistOptionalFieldChange();
   if(!fromPopstate) popOverlayState();
 }
 notesExpandBtn?.addEventListener('click', openNotesOverlay);

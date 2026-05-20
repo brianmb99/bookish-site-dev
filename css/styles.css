@@ -4959,6 +4959,77 @@ body.modal-open{overscroll-behavior-y:contain}
   .modal-inner.book-detail-page .book-detail-hero{
     padding-right:0;
   }
+  .modal-inner.book-detail-page:not(.add-mode){
+    padding:12px 22px calc(14px + env(safe-area-inset-bottom));
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .book-detail-form{
+    gap:8px;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .book-detail-hero{
+    gap:4px;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .book-detail-hero .tile-cover-wrap{
+    width:56%;
+    max-width:208px;
+    gap:5px;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .book-detail-placards{
+    gap:0;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .placard{
+    padding:1px 6px 2px!important;
+    line-height:1.22;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .cover-edit-link{
+    padding:2px 8px!important;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .status-selector{
+    margin-bottom:2px;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .status-option{
+    min-height:38px;
+    padding:8px 6px;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .summary-row{
+    gap:6px;
+    margin-top:-6px;
+    padding:0;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .summary-row .summary-seg{
+    min-height:30px;
+    padding:4px 3px;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .summary-row .summary-date-seg{
+    padding:4px 8px;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .detail-rows{
+    margin:0 auto;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .detail-row{
+    min-height:38px;
+    padding:6px 0;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .detail-row .detail-value{
+    min-height:32px;
+    padding:4px 6px!important;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .optional-fields-zone{
+    margin-top:0;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .optional-chips{
+    justify-content:center;
+    gap:6px;
+    margin-top:0;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .optional-chip{
+    min-height:30px;
+    padding:5px 8px!important;
+    font-size:.72rem!important;
+  }
+  .modal-inner.book-detail-page:not(.add-mode) .delete-action{
+    margin-top:6px;
+    padding-top:10px;
+  }
   .modal-inner.book-detail-page.add-mode{
     padding:10px 22px calc(12px + env(safe-area-inset-bottom));
   }
