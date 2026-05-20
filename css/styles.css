@@ -34,6 +34,7 @@
   --font-display:'Fraunces',Georgia,serif;
   --font-body:'DM Sans',system-ui,sans-serif;
   --font-mono:'JetBrains Mono',monospace;
+  --mobile-sheet-top-gap:clamp(28px, 4.5%, 48px);
   /* Phase 4: Color System - Warm Palette */
   --color-bg-deep:#0f1114;
   --color-bg-base:#151920;
@@ -1696,9 +1697,9 @@ html.modal-transitioning::view-transition-new(root){
 .wtr-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:5000;animation:fadeIn .2s ease-out}
 .wtr-drawer{position:fixed;background:var(--color-bg-base);z-index:5001;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;box-sizing:border-box}
 .wtr-drawer-handle{display:none}
-/* Full-height touch drawer pattern — uses pointer:coarse for touch, not max-width (design guideline) */
+/* Near-full touch drawer pattern — uses pointer:coarse for touch, not max-width (design guideline) */
 @media (pointer: coarse){
-  .wtr-drawer{top:0;bottom:0;left:0;right:0;height:100%;max-height:none;border-radius:16px 16px 0 0;padding:20px 16px max(20px,env(safe-area-inset-bottom));animation:slideUpDrawer .3s ease-out;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
+  .wtr-drawer{top:var(--mobile-sheet-top-gap);bottom:0;left:0;right:0;height:auto;max-height:none;border-radius:16px 16px 0 0;padding:20px 16px max(20px,env(safe-area-inset-bottom));animation:slideUpDrawer .3s ease-out;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
   .wtr-drawer-handle{display:block;width:32px;height:4px;border-radius:2px;background:var(--color-border-strong);margin:0 auto 12px;flex-shrink:0;touch-action:none;position:relative;cursor:grab}
   .wtr-drawer-handle::before{content:'';position:absolute;inset:-20px -40px}
 }
@@ -1942,7 +1943,7 @@ html.modal-transitioning::view-transition-new(root){
   margin:auto;
   animation:modal-enter .3s ease-out;
 }
-/* Mobile: full-height bottom sheet matching book edit (#100 + #104 followup) */
+/* Mobile: near-full-height bottom sheet matching book edit (#100 + #104 followup) */
 @media (pointer: coarse){
   .modal.account-modal{
     max-width:100% !important;
@@ -1950,9 +1951,9 @@ html.modal-transitioning::view-transition-new(root){
     border-left:none;
     border-right:none;
     border-bottom:none;
-    /* 100% of the visible viewport (parent .modal-overlay is position:fixed;
-       inset:0). box-sizing:border-box so padding is INCLUDED in height. */
-    height:100%;
+    /* Near-full visible overlay height, with a stable top reveal so the
+       sheet still reads as a sheet rather than a new page. */
+    height:calc(100% - var(--mobile-sheet-top-gap));
     max-height:none;
     padding:20px 14px calc(24px + env(safe-area-inset-bottom));
     overflow-y:auto;
@@ -2331,12 +2332,10 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
     padding:20px 14px;
     max-width:100%;
     border-radius:16px 16px 0 0;
-    /* 100% of the visible viewport (parent .modal is position:fixed;
-       inset:0). box-sizing:border-box so padding is INCLUDED in height —
-       otherwise 100% + padding overflows, and with align-items:flex-end
-       the overflow spills above the visible viewport. */
+    /* Near-full visible overlay height. box-sizing:border-box keeps padding
+       inside the sheet instead of overflowing above the viewport. */
     box-sizing:border-box;
-    height:100%;
+    height:calc(100% - var(--mobile-sheet-top-gap));
     overflow-y:auto;
     animation:slideUpSheet .3s ease-out;
   }
@@ -4051,13 +4050,13 @@ form.inline label.toggle-switch{display:flex}
 }
 @media (pointer:coarse){
   .modal.account-modal:has(.account-hub){
-    height:auto;
-    max-height:calc(100dvh - max(42px, env(safe-area-inset-top)));
+    height:calc(100% - var(--mobile-sheet-top-gap));
+    max-height:none;
     padding:20px 18px calc(20px + env(safe-area-inset-bottom));
   }
   .modal.account-modal:has(.account-subview){
-    height:auto;
-    max-height:calc(100dvh - max(24px, env(safe-area-inset-top)));
+    height:calc(100% - var(--mobile-sheet-top-gap));
+    max-height:none;
     padding:16px 18px calc(16px + env(safe-area-inset-bottom));
   }
   .account-hub .account-panel-header{
@@ -4931,8 +4930,8 @@ body.modal-open{overscroll-behavior-y:contain}
 @media (max-width:599px){
   .modal-inner.book-detail-page{padding:16px 14px 24px}
   .modal-inner.book-detail-page.add-mode{
-    height:100dvh;
-    max-height:100dvh;
+    height:calc(100% - var(--mobile-sheet-top-gap));
+    max-height:none;
   }
   .book-detail-form{gap:14px}
   .modal-inner .book-detail-hero .tile-cover-wrap{width:70%;max-width:220px}
@@ -5334,8 +5333,8 @@ body.modal-open{overscroll-behavior-y:contain}
 .friends-drawer-handle{display:none}
 @media (pointer: coarse){
   .friends-drawer{
-    top:0;bottom:0;left:0;right:0;
-    height:100%;
+    top:var(--mobile-sheet-top-gap);bottom:0;left:0;right:0;
+    height:auto;
     max-height:none;
     border-radius:16px 16px 0 0;
     border-top:1px solid var(--color-border-default);
