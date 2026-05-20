@@ -81,7 +81,7 @@ export function renderCreateAccountForm(content, deps = {}) {
   } = deps;
 
   content.innerHTML = `
-    <div class="auth-form">
+    <div class="auth-form auth-form-create">
       <div class="auth-header">
         <div class="auth-icon">${SVG_SHIELD}</div>
         <h2>Create Your Account</h2>

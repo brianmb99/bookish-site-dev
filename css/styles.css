@@ -1965,6 +1965,59 @@ html.modal-transitioning::view-transition-new(root){
     padding:20px 14px calc(24px + env(safe-area-inset-bottom));
   }
 }
+@media (pointer:coarse) and (max-height:700px){
+  .modal.account-modal:has(.auth-form-create){
+    padding:10px 14px max(12px, env(safe-area-inset-bottom));
+  }
+  .modal.account-modal:has(.auth-form-create) .sheet-handle{
+    margin-bottom:6px;
+  }
+  .modal.account-modal .auth-form-create .auth-header{
+    margin-bottom:14px;
+  }
+  .modal.account-modal .auth-form-create .auth-header .auth-icon{
+    width:46px;
+    height:46px;
+    margin-bottom:8px;
+    color:var(--color-accent);
+    box-shadow:none;
+  }
+  .modal.account-modal .auth-form-create .auth-header h2{
+    font-size:1.25rem;
+    margin-bottom:3px;
+  }
+  .modal.account-modal .auth-form-create .auth-header p{
+    font-size:.82rem;
+  }
+  .modal.account-modal .auth-form-create .form-group{
+    margin-bottom:10px;
+  }
+  .modal.account-modal .auth-form-create .form-group label{
+    font-size:.8rem;
+    margin-bottom:4px;
+  }
+  .modal.account-modal .auth-form-create .form-group input[type="text"],
+  .modal.account-modal .auth-form-create .form-group input[type="email"],
+  .modal.account-modal .auth-form-create .form-group input[type="password"]{
+    padding:9px 10px;
+  }
+  .modal.account-modal .auth-form-create .password-strength{
+    margin-top:6px;
+  }
+  .modal.account-modal .auth-form-create .field-match{
+    margin-top:3px;
+  }
+  .modal.account-modal .auth-form-create .auth-note{
+    font-size:.76rem;
+    line-height:1.35;
+    padding:8px 12px;
+    margin-bottom:8px;
+  }
+  .modal.account-modal .auth-form-create .auth-submit{
+    padding:12px;
+    margin-top:2px;
+  }
+}
 /* Account modal close button uses unified .modal-close-btn */
 .account-modal h2{
   margin:0 0 24px 0;
