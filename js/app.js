@@ -2131,11 +2131,12 @@ document.addEventListener('keydown', (ev)=>{
 const SPINE_COLORS = 8;
 const SPINE_TONE_CACHE = new Map();
 const SPINE_TONE_PENDING = new Map();
-const SPINE_COVER_BLEND_TOP = 0.46;
-const SPINE_COVER_BLEND_BOTTOM = 0.42;
-const SPINE_COVER_SATURATION_FACTOR = 0.40;
+const SPINE_COVER_BLEND_TOP = 0.62;
+const SPINE_COVER_BLEND_BOTTOM = 0.56;
+const SPINE_COVER_SATURATION_FACTOR = 0.52;
 const SPINE_COVER_SATURATION_MIN = 0.08;
-const SPINE_COVER_SATURATION_MAX = 0.24;
+const SPINE_COVER_SATURATION_MAX = 0.34;
+const SPINE_LIGHT_COVER_MIN_SHARE = 0.46;
 const SPINE_FALLBACK_TONES = {
   0: { top: '#3c3029', bottom: '#26211e' },
   1: { top: '#38322a', bottom: '#25231f' },
@@ -2215,8 +2216,28 @@ function mixRgb(a, b, amount){
   };
 }
 
-function mutedSpineToneFromRgb(r, g, b, toneKey){
+function paperSpineToneFromRgb(h, s, l){
+  const paperS = clamp(s * 0.42, 0.04, 0.16);
+  const paperL = clamp(l, 0.54, 0.68);
+  const coverTop = hslToRgb(h, paperS, clamp(paperL - 0.03, 0.50, 0.64));
+  const coverBottom = hslToRgb(h, paperS * 0.9, clamp(paperL - 0.22, 0.34, 0.48));
+  const agedTop = { r: 184, g: 170, b: 145 };
+  const agedBottom = { r: 112, g: 96, b: 74 };
+  const top = mixRgb(coverTop, agedTop, 0.24);
+  const bottom = mixRgb(coverBottom, agedBottom, 0.20);
+  const warmEdge = { r: 196, g: 154, b: 88 };
+  return {
+    top: rgbToHex(top),
+    bottom: rgbToHex(bottom),
+    activeTop: rgbToHex(mixRgb(top, warmEdge, 0.12)),
+    activeBottom: rgbToHex(mixRgb(bottom, { r: 244, g: 236, b: 216 }, 0.06)),
+  };
+}
+
+function mutedSpineToneFromRgb(r, g, b, toneKey, kind = 'color'){
   const { h, s, l } = rgbToHsl(r, g, b);
+  if(kind === 'paper') return paperSpineToneFromRgb(h, s, l);
+
   const fallback = SPINE_FALLBACK_TONES[toneKey] || SPINE_FALLBACK_TONES[0];
   const fallbackTop = hexToRgb(fallback.top);
   const fallbackBottom = hexToRgb(fallback.bottom);
@@ -2225,9 +2246,9 @@ function mutedSpineToneFromRgb(r, g, b, toneKey){
     SPINE_COVER_SATURATION_MIN,
     SPINE_COVER_SATURATION_MAX,
   );
-  const clothL = clamp(l < 0.12 ? 0.18 : l, 0.17, 0.27);
-  const coverTop = hslToRgb(h, clothS, clamp(clothL + 0.04, 0.21, 0.31));
-  const coverBottom = hslToRgb(h, clothS * 0.82, clamp(clothL - 0.04, 0.12, 0.21));
+  const clothL = clamp(l < 0.12 ? 0.18 : l * 0.86, 0.17, 0.36);
+  const coverTop = hslToRgb(h, clothS, clamp(clothL + 0.05, 0.22, 0.44));
+  const coverBottom = hslToRgb(h, clothS * 0.84, clamp(clothL - 0.05, 0.12, 0.30));
   const top = mixRgb(fallbackTop, coverTop, SPINE_COVER_BLEND_TOP);
   const bottom = mixRgb(fallbackBottom, coverBottom, SPINE_COVER_BLEND_BOTTOM);
   const warmEdge = { r: 196, g: 154, b: 88 };
@@ -2242,6 +2263,7 @@ function mutedSpineToneFromRgb(r, g, b, toneKey){
 function pickCoverRgb(rgba){
   const bins = new Map();
   let fallbackR = 0, fallbackG = 0, fallbackB = 0, fallbackN = 0;
+  let paperR = 0, paperG = 0, paperB = 0, paperN = 0;
   for(let i = 0; i < rgba.length; i += 4){
     const a = rgba[i + 3];
     if(a < 160) continue;
@@ -2251,11 +2273,14 @@ function pickCoverRgb(rgba){
     const sat = (max - min) / 255;
     const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
     fallbackR += r; fallbackG += g; fallbackB += b; fallbackN++;
-    if(lum > 0.94 && sat < 0.14) continue;
+    if(lum > 0.78 && sat < 0.24){
+      paperR += r; paperG += g; paperB += b; paperN++;
+    }
     if(lum < 0.04 && sat < 0.16) continue;
     let weight = 1 + sat * 3;
     if(lum < 0.12) weight *= 0.38;
-    if(lum > 0.82) weight *= 0.45;
+    if(lum > 0.86 && sat < 0.24) weight *= 0.25;
+    else if(lum > 0.82) weight *= 0.55;
     const key = `${r >> 4},${g >> 4},${b >> 4}`;
     const bin = bins.get(key) || { score: 0, r: 0, g: 0, b: 0 };
     bin.score += weight;
@@ -2268,15 +2293,24 @@ function pickCoverRgb(rgba){
   for(const bin of bins.values()){
     if(!best || bin.score > best.score) best = bin;
   }
+  if(fallbackN > 0 && paperN / fallbackN >= SPINE_LIGHT_COVER_MIN_SHARE){
+    return {
+      r: paperR / paperN,
+      g: paperG / paperN,
+      b: paperB / paperN,
+      kind: 'paper',
+    };
+  }
   if(best && best.score > 0){
     return {
       r: best.r / best.score,
       g: best.g / best.score,
       b: best.b / best.score,
+      kind: 'color',
     };
   }
   if(fallbackN > 0){
-    return { r: fallbackR / fallbackN, g: fallbackG / fallbackN, b: fallbackB / fallbackN };
+    return { r: fallbackR / fallbackN, g: fallbackG / fallbackN, b: fallbackB / fallbackN, kind: 'color' };
   }
   return null;
 }
@@ -2334,7 +2368,7 @@ function hydrateCoverSpineTone(book, entry){
   const toneKey = book.dataset.bookTone || '0';
   sampleCoverSpineTone(entry).then(rgb => {
     if(!book.isConnected || !rgb) return;
-    applyCoverSpineTone(book, mutedSpineToneFromRgb(rgb.r, rgb.g, rgb.b, toneKey));
+    applyCoverSpineTone(book, mutedSpineToneFromRgb(rgb.r, rgb.g, rgb.b, toneKey, rgb.kind));
   });
 }
 
