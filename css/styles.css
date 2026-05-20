@@ -880,6 +880,19 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   .empty-state{
     padding:52px 20px 28px;
   }
+  body.empty-omnibox-active .empty-state{
+    padding:16px 20px 12px;
+    min-height:auto;
+    max-width:560px;
+  }
+  body.empty-omnibox-active .empty-illustration,
+  body.empty-omnibox-active .empty-headline,
+  body.empty-omnibox-active .empty-subtext{
+    display:none;
+  }
+  body.empty-omnibox-active .empty-omnibox-slot{
+    max-width:none;
+  }
   .empty-headline{
     font-size:1.5rem;
   }
@@ -926,6 +939,20 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
     max-width:none;
     max-height:calc(100vh - var(--header-height) - env(safe-area-inset-top) - 4px);
     box-shadow:0 12px 24px -20px rgba(0,0,0,.8);
+  }
+  body.empty-omnibox-active #omniboxAddSection{
+    display:flex;
+    flex-direction:column;
+  }
+  body.empty-omnibox-active #omniboxAddSection .omnibox-section-label{
+    order:1;
+  }
+  body.empty-omnibox-active #omniboxAddResults{
+    order:2;
+  }
+  body.empty-omnibox-active #omniboxManualAdd{
+    order:3;
+    position:static;
   }
 }
 .omnibox-section{padding:0 6px}

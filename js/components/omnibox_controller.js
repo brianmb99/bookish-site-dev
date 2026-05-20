@@ -196,9 +196,36 @@ export function createOmniboxController({
   let selectionMade = false;
   let searchTakeoverActive = false;
   let backdrop = null;
+  let emptySearchRoomTimer = null;
 
   function isEmptyPlacement() {
     return refs.wrap?.classList?.contains('omnibox-in-empty') === true;
+  }
+
+  function getViewportBounds() {
+    const vv = windowRef?.visualViewport;
+    const height = Number.isFinite(vv?.height)
+      ? vv.height
+      : (windowRef?.innerHeight || documentRef?.documentElement?.clientHeight || 0);
+    const top = Number.isFinite(vv?.offsetTop) ? vv.offsetTop : 0;
+    return { top, height, bottom: top + height };
+  }
+
+  function reducedMotion() {
+    return windowRef?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+  }
+
+  function setEmptySearchActive(active) {
+    const shouldActivate = Boolean(active && isTouchDevice && isEmptyPlacement());
+    documentRef?.body?.classList?.toggle('empty-omnibox-active', shouldActivate);
+  }
+
+  function schedulePositionDropdown(delay = 0) {
+    if (emptySearchRoomTimer) windowRef?.clearTimeout?.(emptySearchRoomTimer);
+    emptySearchRoomTimer = windowRef?.setTimeout?.(() => {
+      emptySearchRoomTimer = null;
+      positionDropdown();
+    }, delay) || null;
   }
 
   function nextPlaceholder() {
@@ -256,18 +283,55 @@ export function createOmniboxController({
     if (!refs.dropdown || !refs.wrap) return;
     if (refs.wrap.classList.contains('omnibox-in-empty')) {
       const rect = refs.wrap.getBoundingClientRect();
+      const top = rect.bottom + 4;
+      const viewport = getViewportBounds();
+      const availableHeight = Math.max(120, viewport.bottom - top - 8);
       refs.dropdown.style.top = (rect.bottom + 4) + 'px';
       refs.dropdown.style.left = rect.left + 'px';
       refs.dropdown.style.right = 'auto';
       refs.dropdown.style.width = rect.width + 'px';
       refs.dropdown.style.maxWidth = 'none';
+      refs.dropdown.style.maxHeight = availableHeight + 'px';
     } else {
       refs.dropdown.style.top = '';
       refs.dropdown.style.left = '';
       refs.dropdown.style.right = '';
       refs.dropdown.style.width = '';
       refs.dropdown.style.maxWidth = '';
+      refs.dropdown.style.maxHeight = '';
     }
+  }
+
+  function ensureEmptySearchRoom() {
+    if (!isTouchDevice || !isEmptyPlacement() || !refs.wrap || !refs.dropdown) return;
+    if (refs.dropdown.style.display === 'none') return;
+    const rect = refs.wrap.getBoundingClientRect();
+    const viewport = getViewportBounds();
+    const dropdownTop = rect.bottom + 4;
+    const desiredHeight = Math.min(320, Math.max(220, viewport.height * 0.46));
+    const availableHeight = viewport.bottom - dropdownTop - 8;
+    if (availableHeight >= desiredHeight) return;
+
+    const delta = Math.ceil(desiredHeight - availableHeight);
+    if (typeof windowRef?.scrollBy === 'function') {
+      windowRef.scrollBy({
+        top: delta,
+        behavior: reducedMotion() ? 'auto' : 'smooth',
+      });
+      schedulePositionDropdown(120);
+    } else if (typeof refs.wrap.scrollIntoView === 'function') {
+      refs.wrap.scrollIntoView({
+        behavior: reducedMotion() ? 'auto' : 'smooth',
+        block: 'start',
+      });
+      schedulePositionDropdown(120);
+    }
+  }
+
+  function handleViewportChange() {
+    if (!isEmptyPlacement()) return;
+    positionDropdown();
+    ensureEmptySearchRoom();
   }
 
   windowRef?.addEventListener?.('resize', () => {
@@ -275,11 +339,15 @@ export function createOmniboxController({
       positionDropdown();
     }
   });
+  windowRef?.visualViewport?.addEventListener?.('resize', handleViewportChange);
+  windowRef?.visualViewport?.addEventListener?.('scroll', handleViewportChange);
 
   function showDropdown() {
     if (!refs.dropdown) return;
+    setEmptySearchActive(true);
     refs.dropdown.style.display = '';
     positionDropdown();
+    ensureEmptySearchRoom();
     refs.input?.setAttribute('aria-expanded', 'true');
     if (!backdrop) {
       backdrop = documentRef.createElement('div');
@@ -291,6 +359,7 @@ export function createOmniboxController({
 
   function closeDropdown() {
     if (refs.dropdown) refs.dropdown.style.display = 'none';
+    setEmptySearchActive(false);
     refs.input?.setAttribute('aria-expanded', 'false');
     if (backdrop?.parentNode) backdrop.remove();
   }
@@ -490,7 +559,16 @@ export function createOmniboxController({
   refs.input?.addEventListener('input', handleInput);
   refs.clearBtn?.addEventListener('click', () => clear());
   refs.input?.addEventListener('mousedown', () => { selectionMade = false; });
-  refs.input?.addEventListener('focus', () => { selectionMade = false; });
+  refs.input?.addEventListener('focus', () => {
+    selectionMade = false;
+    setEmptySearchActive(true);
+    schedulePositionDropdown();
+  });
+  refs.input?.addEventListener('blur', () => {
+    windowRef?.setTimeout?.(() => {
+      if (!refs.dropdown || refs.dropdown.style.display === 'none') setEmptySearchActive(false);
+    }, 80);
+  });
   refs.input?.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     event.preventDefault();
