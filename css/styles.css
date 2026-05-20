@@ -1421,38 +1421,40 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 
 .spine-panel-inner{
   position:relative;
-  padding:6px 0 1px;
+  padding:5px 0 1px;
 }
 
 .spine-strip{
   display:flex;
   align-items:flex-end;
-  gap:8px;
+  gap:7px;
   overflow-x:auto;
   scrollbar-width:none;
   justify-content:flex-start;
-  padding:3px 4px 7px;
-  border-bottom:1px solid rgba(155,125,91,.22);
-  background:linear-gradient(to bottom,transparent 70%,rgba(99,75,52,.08) 100%);
-  box-shadow:0 8px 14px -16px rgba(0,0,0,.8);
+  padding:4px 3px 7px;
+  border-bottom:2px solid rgba(99,74,48,.34);
+  background:
+    linear-gradient(to bottom,transparent 66%,rgba(83,58,37,.1) 100%),
+    linear-gradient(to right,rgba(255,255,255,.018),transparent 18%,transparent 82%,rgba(0,0,0,.12));
+  box-shadow:0 8px 14px -16px rgba(0,0,0,.8),inset 0 -1px 0 rgba(210,166,104,.08);
 }
 .spine-strip::-webkit-scrollbar{display:none}
 .spine-strip.overflow-scroll{justify-content:flex-start}
 
 /* Decade divider — subtle gap between decade groups */
 .spine-decade-gap{
-  width:10px;
+  width:8px;
   flex-shrink:0;
   align-self:flex-end;
-  height:42px;
+  height:44px;
   border-right:1px solid rgba(255,255,255,.05);
 }
 
 .spine-btn{
   height:64px;
-  border:1px solid rgba(255,255,255,.055);
-  border-bottom-color:rgba(0,0,0,.5);
-  border-radius:4px 4px 2px 2px;
+  border:0;
+  border-radius:0;
+  background:transparent;
   cursor:pointer;
   display:flex;
   align-items:center;
@@ -1460,87 +1462,112 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   flex-shrink:0;
   transition:filter .15s,box-shadow .15s,opacity .15s,transform .15s;
   position:relative;
-  overflow:hidden;
+  overflow:visible;
   box-sizing:border-box;
-  padding:0 5px;
-  opacity:.46;
+  padding:0 2px;
+  opacity:.56;
 }
 
-/* Horizontal year label inside a single intentional spine. */
+/* Visible book cluster inside a wider, ergonomic tap target. */
+.spine-books{
+  position:absolute;
+  left:50%;
+  bottom:0;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  gap:1px;
+  height:60px;
+  transform:translateX(-50%);
+  pointer-events:none;
+}
+
+.spine-book{
+  width:var(--spine-book-width,8px);
+  height:var(--spine-book-height,58px);
+  box-sizing:border-box;
+  border:1px solid rgba(255,255,255,.06);
+  border-bottom-color:rgba(0,0,0,.58);
+  border-radius:3px 3px 1px 1px;
+  box-shadow:inset 1px 0 0 rgba(255,255,255,.045),inset -1px 0 0 rgba(0,0,0,.24),0 3px 8px -7px rgba(0,0,0,.9);
+  position:relative;
+}
+.spine-book::before{
+  content:'';
+  position:absolute;
+  inset:5px 2px 7px;
+  border-left:1px solid rgba(255,255,255,.055);
+  border-right:1px solid rgba(0,0,0,.22);
+  opacity:.58;
+}
+.spine-book::after{
+  content:'';
+  position:absolute;
+  top:0;
+  left:2px;
+  right:2px;
+  height:1px;
+  background:rgba(214,177,101,.14);
+}
+
+/* Horizontal year label centered over the visible spine cluster. */
 .spine-label{
   font-family:var(--font-body);
-  font-size:.68rem;
-  font-weight:500;
+  font-size:.64rem;
+  font-weight:600;
   letter-spacing:0;
-  color:rgba(245,238,225,.54);
-  text-shadow:0 1px 2px rgba(0,0,0,.4);
+  color:rgba(245,238,225,.58);
+  text-shadow:0 1px 3px rgba(0,0,0,.72);
   white-space:nowrap;
   pointer-events:none;
   line-height:1;
-  position:relative;
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-46%);
   z-index:1;
 }
 
-/* Quiet spine face: one inset highlight, not a miniature book stack. */
-.spine-btn::before{
-  content:'';
-  position:absolute;
-  inset:5px 6px 7px;
-  border-left:1px solid rgba(255,255,255,.06);
-  border-right:1px solid rgba(0,0,0,.26);
-  border-radius:2px;
-  background:linear-gradient(90deg,rgba(255,255,255,.035),transparent 22%,transparent 78%,rgba(0,0,0,.12));
-  opacity:.55;
-  pointer-events:none;
-}
-
-/* Subtle top edge, stronger on the active spine. */
-.spine-btn::after{
-  content:'';
-  position:absolute;
-  top:0;left:5px;right:5px;
-  height:1px;
-  background:rgba(214,177,101,.16);
-  pointer-events:none;
-}
-
 .spine-btn:hover{
-  opacity:.72;
+  opacity:.78;
   filter:brightness(1.08);
 }
 .spine-btn:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
 
 /* Spine color palette — restrained book-cloth variation. */
-.spine-btn[data-spine-color="0"]{background:linear-gradient(180deg,#342d2a,#25211f)}  /* walnut */
-.spine-btn[data-spine-color="1"]{background:linear-gradient(180deg,#302d29,#24221f)}  /* driftwood */
-.spine-btn[data-spine-color="2"]{background:linear-gradient(180deg,#2f3032,#222426)}  /* smoke */
-.spine-btn[data-spine-color="3"]{background:linear-gradient(180deg,#332d27,#25211d)}  /* leather */
-.spine-btn[data-spine-color="4"]{background:linear-gradient(180deg,#302c31,#232126)}  /* dusk */
-.spine-btn[data-spine-color="5"]{background:linear-gradient(180deg,#2d312d,#212521)}  /* moss */
-.spine-btn[data-spine-color="6"]{background:linear-gradient(180deg,#342c29,#25201e)}  /* clay */
-.spine-btn[data-spine-color="7"]{background:linear-gradient(180deg,#30312d,#23241f)}  /* olive */
-.spine-btn[data-spine-color="undated"]{background:linear-gradient(180deg,#303030,#242424)}
+.spine-book[data-book-tone="0"]{background:linear-gradient(180deg,#3c3029,#26211e)}  /* walnut */
+.spine-book[data-book-tone="1"]{background:linear-gradient(180deg,#38322a,#25231f)}  /* driftwood */
+.spine-book[data-book-tone="2"]{background:linear-gradient(180deg,#31363a,#22272a)}  /* smoke */
+.spine-book[data-book-tone="3"]{background:linear-gradient(180deg,#3e2f28,#28211d)}  /* leather */
+.spine-book[data-book-tone="4"]{background:linear-gradient(180deg,#3a3038,#272229)}  /* dusk */
+.spine-book[data-book-tone="5"]{background:linear-gradient(180deg,#30382f,#222821)}  /* moss */
+.spine-book[data-book-tone="6"]{background:linear-gradient(180deg,#3f332b,#29231f)}  /* clay */
+.spine-book[data-book-tone="7"]{background:linear-gradient(180deg,#37372e,#25251f)}  /* olive */
+.spine-book[data-book-tone="undated"]{background:linear-gradient(180deg,#343434,#242424)}
 
-/* Selected spine: pulled forward, warm, and legible without extra labels. */
+/* Selected cluster: pulled forward, warm, and legible without extra labels. */
 .spine-btn[aria-selected="true"]{
   transform:translateY(-5px);
   filter:brightness(1.1);
   opacity:1;
   z-index:1;
-  border-color:rgba(226,178,82,.34);
-  border-bottom-color:rgba(0,0,0,.55);
-  background:linear-gradient(180deg,#6b5638,#453824);
-  box-shadow:0 8px 16px -9px rgba(0,0,0,.85),0 0 0 1px rgba(226,178,82,.08);
+}
+.spine-btn[aria-selected="true"] .spine-book{
+  border-color:rgba(226,178,82,.3);
+  border-bottom-color:rgba(0,0,0,.62);
+  box-shadow:inset 1px 0 0 rgba(255,248,223,.08),inset -1px 0 0 rgba(0,0,0,.25),0 8px 16px -10px rgba(0,0,0,.9),0 0 0 1px rgba(226,178,82,.06);
+}
+.spine-btn[aria-selected="true"] .spine-book:nth-child(odd){
+  background:linear-gradient(180deg,#705936,#453723);
+}
+.spine-btn[aria-selected="true"] .spine-book:nth-child(even){
+  background:linear-gradient(180deg,#5d492f,#392f22);
 }
 .spine-btn[aria-selected="true"] .spine-label{
   color:#f8eddb;
-  font-weight:650;
+  font-weight:700;
 }
-.spine-btn[aria-selected="true"]::before{
-  opacity:.72;
-  border-left-color:rgba(255,248,223,.14);
-}
-.spine-btn[aria-selected="true"]::after{
+.spine-btn[aria-selected="true"] .spine-book::after{
   background:rgba(242,196,107,.55);
 }
 

@@ -2127,9 +2127,44 @@ document.addEventListener('keydown', (ev)=>{
 // --- Spine navigator rendering ---
 const SPINE_COLORS = 8;
 
-/** Spine width: count still affects presence, but the rail stays quiet. */
+/** Spine touch target width: count affects presence, visible books stay slimmer. */
 function spineWidth(count){
-  return Math.max(40, Math.min(34 + count * 4, 76));
+  return Math.max(44, Math.min(38 + count * 2, 58));
+}
+
+function spineHash(value){
+  const s = String(value);
+  let h = 0;
+  for(let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function spineVisibleBookCount(count){
+  if(count <= 1) return 1;
+  if(count <= 3) return 2;
+  if(count <= 6) return 3;
+  return 4;
+}
+
+function renderSpineBooks(year, count, colorOffset){
+  const group = document.createElement('span');
+  group.className = 'spine-books';
+  group.setAttribute('aria-hidden', 'true');
+
+  const visibleCount = spineVisibleBookCount(count);
+  const hash = spineHash(year);
+  for(let j = 0; j < visibleCount; j++){
+    const book = document.createElement('span');
+    book.className = 'spine-book';
+    book.dataset.bookTone = year === 'Undated' ? 'undated' : String((colorOffset + j) % SPINE_COLORS);
+    const width = 7 + ((hash >> (j * 2)) % 4);
+    const shortness = ((hash >> (j * 3 + 2)) % 5);
+    book.style.setProperty('--spine-book-width', `${width}px`);
+    book.style.setProperty('--spine-book-height', `${58 - shortness}px`);
+    group.appendChild(book);
+  }
+
+  return group;
 }
 
 function renderSpineNav(yearList, activeYear){
@@ -2163,8 +2198,9 @@ function renderSpineNav(yearList, activeYear){
     const colorKey = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
     btn.dataset.spineColor = colorKey;
     btn.style.width = `${spineWidth(count)}px`;
+    btn.appendChild(renderSpineBooks(year, count, i));
 
-    // Year text — horizontal, full four-digit year
+    // Year text — horizontal, centered over the visible spine cluster.
     const txt = document.createElement('span');
     txt.className = 'spine-label';
     txt.textContent = year === 'Undated' ? '?' : year;
