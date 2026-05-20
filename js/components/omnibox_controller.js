@@ -445,7 +445,7 @@ export function createOmniboxController({
     const mySearch = ++apiCounter;
     const isStale = () => mySearch !== apiCounter || signal.aborted;
     const term = encodeURIComponent(query);
-    const fields = 'key,title,author_name,cover_i,first_publish_year,isbn,subtitle';
+    const fields = 'key,title,author_name,cover_i,first_publish_year,isbn,subtitle,language';
     const olUrl = `https://openlibrary.org/search.json?q=${term}&limit=15&fields=${fields}`;
     const itUrl = `https://itunes.apple.com/search?media=audiobook&term=${term}&limit=8`;
 

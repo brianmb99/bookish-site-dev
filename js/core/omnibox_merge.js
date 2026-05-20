@@ -38,6 +38,16 @@
 // changed 53.5% of queries, #202 a further 6%, #203 a tail of 2.7%.
 // #204 is a follow-up tail-case fix (dash-prefixed format markers + first-
 // author dedupe key) surfaced by validating the prior fixes on `dead souls`.
+// #205 adds a SECONDARY dedup pass after the primary key match: pairs that
+// share title-key AND first-initial+surname collapse, catching middle-name
+// expansions like "Nikolai Gogol" vs "Nikolai Vasilievich Gogol". Cache-
+// replay validation showed 3.4% of corpus queries affected, all observed
+// collapses were legitimate same-author variants.
+// #206 drops OL entries whose language array contains only non-English
+// values, catching foreign-script editions like "Мертвые души" (Cyrillic
+// Dead Souls) that survive dedup because their author keys are character-
+// disjoint from Latin spellings. Requires `language` in the OL search
+// fields= param (set in omnibox_controller.js). iTunes entries always pass.
 // Cost is the rare informative paren (e.g. "(Annotated)") — accepted as
 // the price of collapsing the duplicate-row noise that dominates the long
 // tail.
@@ -47,7 +57,7 @@
 // mapping time inside normalizeItunesItem — that asymmetry predates the
 // audit-driven cleanup and is intentionally preserved.
 
-import { stripNoise, normalizeAuthorKey } from './search_core.js';
+import { stripNoise, normalizeAuthorKey, isEnglish } from './search_core.js';
 
 // Dash-prefixed format-marker stoplist. iTunes regularly returns titles
 // of the form "Dead Souls - Audiobook" (the format marker appears after a
@@ -133,6 +143,24 @@ export function stripCredentials(author) {
     .replace(/\s+/g, ' ').trim();
 }
 
+// First-initial + surname key for the SECONDARY dedupe pass. Looser than the
+// primary author key (which uses normalizeAuthorKey's sorted-initials) so
+// middle-name variants like "Nikolai Gogol" vs "Nikolai Vasilievich Gogol"
+// produce the SAME key here (both → "ngogol"). Only safe to use in the
+// secondary pass because it requires title-key match too; without that
+// constraint we'd over-collapse distinct authors like "George R. R. Martin"
+// vs "George Martin".
+export function firstInitialKey(author) {
+  const a = stripCredentials(firstAuthorOnly(author || ''));
+  if (!a) return '';
+  const tokens = a.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return '';
+  if (tokens.length === 1) return tokens[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const firstInitial = (tokens[0].replace(/[^a-z0-9]/gi, '')[0] || '').toLowerCase();
+  const lastToken = tokens[tokens.length - 1].replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return firstInitial + lastToken;
+}
+
 // Extract the first author from a multi-author iTunes string. Used ONLY for
 // the dedupe key — the displayed author string remains the full original.
 //
@@ -174,7 +202,11 @@ export function normalizeOLDoc(doc) {
     duration: '',
     source: 'ol',
     work_key: d.key || '',
-    isbn: (d.isbn || [])[0] || ''
+    isbn: (d.isbn || [])[0] || '',
+    // #206: preserve language array so the post-merge filter can drop
+    // foreign-language OL entries that would otherwise survive dedup
+    // because their non-Latin author keys don't collide with Latin spellings.
+    language: Array.isArray(d.language) ? d.language : []
   };
 }
 
@@ -241,5 +273,29 @@ export function mergeOmniboxResults({ itunesResults = [], olResults = [] } = {})
     seen.set(k, entry);
     combined.push(entry);
   }
-  return combined;
+  // Secondary pass (#205): collapse middle-name-variant duplicates that the
+  // primary key missed. Safe because we require title-key match too, so
+  // surname+first-initial collisions only fire when the entries are already
+  // known to be writing about the same canonical work.
+  for (let i = 0; i < combined.length; i++) {
+    const ti = combined[i].title.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const ki = firstInitialKey(combined[i].author);
+    if (!ti || !ki) continue;
+    for (let j = i + 1; j < combined.length; j++) {
+      const tj = combined[j].title.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const kj = firstInitialKey(combined[j].author);
+      if (ti === tj && ki === kj) {
+        const dropped = combined[j];
+        if (dropped.work_key && !combined[i].work_key) combined[i].work_key = dropped.work_key;
+        if (dropped.isbn && !combined[i].isbn) combined[i].isbn = dropped.isbn;
+        combined.splice(j, 1);
+        j--;
+      }
+    }
+  }
+  // #206: drop OL entries whose language array contains only non-English values.
+  // iTunes entries always pass (audiobook catalog is implicitly English-targeted
+  // for our audience and doesn't expose language reliably). OL entries with no
+  // language data are kept (conservative — isEnglish returns true on undefined).
+  return combined.filter(e => e.source !== 'ol' || isEnglish(e));
 }
