@@ -1,8 +1,8 @@
 // book_search.js
 // Lightweight module to search OpenLibrary and populate the entry form
-import { tokenize as coreTokenize, baseTitle as coreBaseTitle, mergeBookResults as coreMerge, enrichWithYear, enrichItunesWithYear, scoreDocument as coreScoreDocument, filterAndSort as coreFilterAndSort, deduplicateByDisplay as coreDedup, deduplicateItunesByDisplay as coreDedupItunes, filterBooksSupersededByItunes as coreBooksMinusItunes, detectISBN, parseAuthorTitle, cleanTitle, filterCoverMatches, extractISBN10s, amazonCoverUrl, olCoverByISBN, rankCover, coverFitMode, coverSortComparator, convertISBN13to10 } from './core/search_core.js';
+import { cleanTitle, filterCoverMatches, extractISBN10s, amazonCoverUrl, olCoverByISBN, coverFitMode, coverSortComparator, convertISBN13to10 } from './core/search_core.js';
 import { resizeImageToBase64, cropAndResizeImageToBase64 } from './core/image_utils.js';
-import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions, insertByRank, buildCoverEdition, fetchAndValidateCover, MIN_COVER_BYTES } from './core/cover_pipeline.js';
+import { buildOLEditions, insertByRank, buildCoverEdition, fetchAndValidateCover } from './core/cover_pipeline.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
   const titleInput=form.elements?.namedItem('title');
@@ -24,10 +24,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     else if(state==='no-cover') ph.innerHTML='<div class="placeholder-icon">'+BOOK_SVG+'<span>Add cover</span></div>';
     else ph.innerHTML='<div class="placeholder-icon">'+BOOK_SVG+'<span>Add cover</span></div>';
   }
-  let sortMode='relevance'; let activeFilter='all';
-  let lastQuery=''; let queryTokens=[]; let strictActive=false;
-  let olDocs=[]; let itunesItems=[];
-  let debounceTimer=null; let currentWork=null; let currentAudio=null; let editions=[]; let editionIndex=0; let coverOnlyMode=false; let itunesCoverState=null;
+  let editions=[]; let editionIndex=0; let coverOnlyMode=false; let itunesCoverState=null;
   // Captured at search-result selection time and read by the form save handler.
   // Reset whenever the search state is cleared. See window.bookSearch.getSearchMeta().
   let currentWorkKey=''; let currentIsbn13='';
@@ -40,97 +37,34 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     }
     return '';
   }
-  let searchCounter=0;
-  let abortController=null;
   function markDirty(){ try{ form.dispatchEvent(new Event('input',{bubbles:true})); }catch{} }
   function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; if(changeCoverLink) changeCoverLink.style.display='none'; if(coverActionsEl) coverActionsEl.style.display='none'; }
   function hideCoverNav(){ prevBtn.style.display='none'; nextBtn.style.display='none'; editionInfo.style.display='none'; }
   function clearSearchState(){
-    if(abortController){ abortController.abort(); abortController=null; }
-    if(debounceTimer){ clearTimeout(debounceTimer); debounceTimer=null; }
-    currentWork=null; currentAudio=null; currentWorkKey=''; currentIsbn13='';
+    currentWorkKey=''; currentIsbn13='';
     editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null;
-    olDocs=[]; itunesItems=[];
     hideCoverNav();
     if(uploadCoverBtn) uploadCoverBtn.style.display='none';
     if(changeCoverLink){ changeCoverLink.style.display='none'; changeCoverLink.setAttribute('aria-expanded','false'); }
     if(coverActionsEl) coverActionsEl.style.display='none';
-    lastQuery=''; queryTokens=[]; strictActive=false; sortMode='relevance'; activeFilter='all';
   }
-  function prepareQuery(q){ lastQuery=q.trim(); queryTokens=coreTokenize(lastQuery); }
-  function showSkeletonCards(){
-    resultsEl.innerHTML='<div class="search-status">Searching\u2026</div>'+
-      '<div class="skeleton-result"><div class="skeleton-title"></div><div class="skeleton-author"></div></div>'.repeat(4);
-  }
-  async function searchTitle(q){ q=q.trim(); if(!q){ clearResults(); return; } prepareQuery(q);
-    if(abortController) abortController.abort();
-    abortController=new AbortController();
-    const signal=abortController.signal;
-    const mySearch=++searchCounter;
-    const isStale=()=>mySearch!==searchCounter||signal.aborted;
-    resultsEl.style.display='block'; showSkeletonCards();
-    const termFull=encodeURIComponent(q); const base=coreBaseTitle(q);
-    const olFields='key,title,subtitle,author_name,cover_i,first_publish_year,isbn,language,physical_format';
-    let titleUrl='https://openlibrary.org/search.json?q='+encodeURIComponent(base)+'&limit=30&fields='+olFields;
-    let broadUrl='https://openlibrary.org/search.json?q='+encodeURIComponent(q)+'&limit=30&fields='+olFields;
-    const itunesUrl='https://itunes.apple.com/search?media=audiobook&term='+termFull+'&limit=25';
-    let skipBroad=false;
-    const isbn=detectISBN(q);
-    if(isbn.isISBN){
-      titleUrl='https://openlibrary.org/search.json?q=isbn:'+isbn.isbn+'&limit=20&fields='+olFields;
-      skipBroad=true;
-    } else {
-      const parsed=parseAuthorTitle(q);
-      if(parsed.author){
-        titleUrl='https://openlibrary.org/search.json?title='+encodeURIComponent(parsed.title)+'&author='+encodeURIComponent(parsed.author)+'&limit=20&fields='+olFields;
-      }
-    }
-    let titleDocs=[]; let broadDocs=[]; let failTitle=false; let failBroad=false;
-    let titleDone=false; let broadDone=skipBroad; let itunesDone=false;
-    const parseOLResponse=parseOLSearchResponse;
-    function mergeAndRender(){ if(isStale()) return; olDocs=coreMerge(titleDocs,broadDocs); computeScoring(); renderCombined({failTitle,failBroad,partial:!titleDone||!broadDone||!itunesDone}); }
-    fetch(titleUrl,{signal}).then(r=>r.json().then(j=>({ok:r.ok,...j})).catch(()=>({ok:false,docs:[]}))).catch(e=>{if(e.name==='AbortError')return null;return{ok:false,docs:[]};})
-      .then(r=>{if(!r||isStale())return;failTitle=!r.ok;titleDocs=parseOLResponse(r);titleDone=true;mergeAndRender();});
-    if(!skipBroad){ fetch(broadUrl,{signal}).then(r=>r.json().then(j=>({ok:r.ok,...j})).catch(()=>({ok:false,docs:[]}))).catch(e=>{if(e.name==='AbortError')return null;return{ok:false,docs:[]};})
-      .then(r=>{if(!r||isStale())return;failBroad=!r.ok;broadDocs=parseOLResponse(r);broadDone=true;mergeAndRender();}); }
-    fetch(itunesUrl,{signal}).then(r=>r.json()).catch(e=>{if(e.name==='AbortError')return null;return{results:[]};})
-      .then(r=>{if(!r||isStale())return;itunesItems=r.results||[];itunesDone=true;mergeAndRender();});
-  }
-  function clearResults(){ resultsEl.innerHTML=''; resultsEl.style.display='none'; }
-  function enrich(){ enrichWithYear(olDocs); enrichItunesWithYear(itunesItems); }
-  function computeScoring(){ if(!queryTokens.length){ strictActive=false; return; } let anyStrict=false;
-    olDocs.forEach(d=>{ const a=(d.author_name&&d.author_name[0])||''; const result = coreScoreDocument({ title: d.title, subtitle: d.subtitle, author: a, queryTokens, queryString: lastQuery, sortMode, year: d._yearComputed||0 }); d._score=result.score; d._coverage=result.coverage; d._strict=result.strict; if(d._strict) anyStrict=true; });
-    itunesItems.forEach(i=>{ const title=i.collectionName||i.trackName||''; const author=i.artistName||''; const result = coreScoreDocument({ title, subtitle: '', author, queryTokens, queryString: lastQuery, sortMode, year: i._yearComputed||0 }); i._score=result.score; i._coverage=result.coverage; i._strict=result.strict; if(i._strict) anyStrict=true; });
-    strictActive=anyStrict; }
-  function highlight(text){ if(!queryTokens.length) return text; let html=text; queryTokens.forEach(t=>{ const re=new RegExp('('+t.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')+')','ig'); html=html.replace(re,'<mark>$1</mark>'); }); return html; }
-  function sorted(){ enrich(); return coreFilterAndSort({ olDocs, itunesItems, activeFilter, sortMode, strictActive }); }
-  function renderCombined(flags){ const failTitle=flags&&flags.failTitle; const failBroad=flags&&flags.failBroad; const partial=flags&&flags.partial; const {ol,it}=sorted();
-    const dedupIt=coreDedupItunes(it);
-    const dedupOL=coreDedup(ol);
-    const booksFiltered=coreBooksMinusItunes(dedupOL, dedupIt);
-    const total=dedupIt.length+booksFiltered.length;
-    if(partial && !total) return;
-    const rows=[]; if(failTitle && failBroad){ rows.push('<div style="opacity:.55;font-size:.7rem;padding:2px 4px;color:#f87171">Book search unavailable (showing audio only / cached broader results if any).</div>'); }
-    if(!total){ if(strictActive){ resultsEl.innerHTML='<div style="opacity:.5">No exact matches.</div>'; return; } resultsEl.innerHTML='<div style="opacity:.5">No results</div>'; return; }
-    if(partial){ rows.push('<div class="search-status">'+total+' result'+(total!==1?'s':'')+', searching for more\u2026</div>'); }
-    if(!strictActive && queryTokens.length){ rows.push('<div style="opacity:.55;font-size:.7rem;padding:2px 4px">No exact title match; showing broader results.</div>'); }
-    if(failTitle && !failBroad){ rows.push('<div style="opacity:.45;font-size:.6rem;padding:2px 4px">Exact title search failed (fallback used).</div>'); }
-    if(!failTitle && failBroad){ rows.push('<div style="opacity:.45;font-size:.6rem;padding:2px 4px">Broad search unavailable (exact only).</div>'); }
-    const safeJson=(obj)=>encodeURIComponent(JSON.stringify(obj)).replace(/'/g,'%27');
-    dedupIt.forEach(item=>{ const title=item._bestTitle||cleanTitle(item.collectionName||item.trackName||''); const author=item._bestAuthor||(item.artistName||''); const safe=highlight(title.replace(/</g,'&lt;')); const safeAuthor=highlight(author.replace(/</g,'&lt;')); const payload={ title, author, year:'', artwork:item.artworkUrl100||'', narrator:author, rawNarrators:author, olWorkKeys:item._olWorkKeys||[], olCoverUrls:item._olCoverUrls||[] }; rows.push(`<div class="res res-itunes" data-src="it" data-json='${safeJson(payload)}'>${safe} <span style="opacity:.6">${safeAuthor}</span></div>`); });
-    booksFiltered.forEach(d=>{ const title=d._bestTitle||cleanTitle(d.title||''); const sub=d.subtitle?(': '+d.subtitle):''; const safe=title.replace(/</g,'&lt;'); const safeSub=sub.replace(/</g,'&lt;'); const combined=highlight(safe+safeSub); const author=d._bestAuthor||((d.author_name&&d.author_name[0])?d.author_name[0]:''); const safeAuthor=highlight(author.replace(/</g,'&lt;')); const metaTitle=title+(d.subtitle?(': '+d.subtitle):''); const isbnList=Array.isArray(d.isbn)?d.isbn:[]; const payload={title:metaTitle,author,cover_url:d.cover_url||'',key:d.key,isbn:isbnList}; rows.push(`<div class="res" data-src="ol" data-work='${d.key}' data-cover='${d.cover_url||''}' data-json='${safeJson(payload)}'>${combined} <span style="opacity:.6">${safeAuthor}</span></div>`); }); if(!rows.length){ resultsEl.innerHTML='<div style="opacity:.5">No results</div>'; return; } resultsEl.innerHTML=rows.slice(0,60).join(''); }
-  function selectWork(meta){ currentAudio=null; currentWork=meta; editions=[]; editionIndex=0; coverOnlyMode=false; hideCoverNav();
+  function selectWork(meta){ editions=[]; editionIndex=0; coverOnlyMode=false; hideCoverNav();
     currentWorkKey=(meta&&typeof meta.key==='string')?meta.key:'';
     currentIsbn13=pickIsbn13(meta&&meta.isbn);
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
     populateFromBasic(meta);
+    if(!currentWorkKey){
+      if(editionInfo) editionInfo.style.display='none';
+      return;
+    }
     // Suppress "Add cover" flash — we're about to load editions. Must run AFTER
     // populateFromBasic because that sets the placeholder back to "Add cover" too.
     const _ph0=document.getElementById('coverPlaceholder');
     if(_ph0){ _ph0.style.display='flex'; _ph0.innerHTML=''; _ph0.classList.add('cover-skeleton-pulse'); }
     if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers…'; }
     loadEditionsFromSearch(meta); }
-  // fetchAndValidateCover and MIN_COVER_BYTES imported from cover_pipeline.js
+  // fetchAndValidateCover imported from cover_pipeline.js; this local wrapper
+  // injects the browser resize dependency used by cover_pipeline.
   // Wrap to inject resizeFn dependency
   function fetchAndValidateCoverLocal(url, source){
     return fetchAndValidateCover(url, source, { resizeFn: resizeImageToBase64 });
@@ -343,8 +277,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
       paintItunesFallback();
     }
   }
-  // isEnglishBook and editionCoverSort imported from cover_pipeline.js
-  async function selectItunes(payload){ currentWork=null; editions=[]; editionIndex=0; hideCoverNav(); currentAudio=payload;
+  async function selectItunes(payload){ editions=[]; editionIndex=0; hideCoverNav();
     currentWorkKey=(payload&&Array.isArray(payload.olWorkKeys)&&payload.olWorkKeys.length)?String(payload.olWorkKeys[0]||''):'';
     currentIsbn13='';
     if(window.bookishApp?.clearCoverPreview) window.bookishApp.clearCoverPreview();
@@ -356,7 +289,7 @@ import { parseOLSearchResponse, isEnglishBook, editionCoverSort, buildOLEditions
     if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers…'; }
     if(titleInput) titleInput.value = cleanTitle(payload.title || '');
     if(authorInput) authorInput.value = payload.author || '';
-    form.format.value=activeFilter==='audiobook'?'audio':'print';
+    form.format.value='audio';
     markDirty();
     const hasWorkKey = payload.olWorkKeys && payload.olWorkKeys.length;
     console.info('[Bookish:Covers] selectItunes: title=%s, hasWorkKey=%s, olWorkKeys=%o', payload.title, hasWorkKey, payload.olWorkKeys);

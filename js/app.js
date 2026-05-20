@@ -1908,10 +1908,6 @@ function openOmniboxApiResult(meta){
   if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers\u2026'; }
 
   setTimeout(()=>{
-    const bsInput = document.getElementById('bookSearchInput');
-    if(bsInput){
-      bsInput.value = meta.title + (meta.author ? ' ' + meta.author : '');
-    }
     if(meta.source === 'itunes' && window.bookSearch?.selectItunes){
       window.bookSearch.selectItunes({
         title: meta.title || '',

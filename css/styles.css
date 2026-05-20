@@ -2753,19 +2753,7 @@ form.inline label.toggle-switch{display:flex}
 .date-picker td.today{outline:1px solid #2563eb}
 .date-picker td:hover{background:#2a323a}
 .date-picker td.selected{background:#2563eb;color:#fff}
-/* iTunes-sourced hits (shown first): subtle emphasis */
-#bookSearchResults .res-itunes{font-weight:600}
-#searchSortToggle .sort-btn{background:#2b333b;border:1px solid #374151;color:#9da6af;font-size:.55rem;padding:4px 6px;border-radius:4px;cursor:pointer;letter-spacing:.04em}
-#searchSortToggle .sort-btn.active{background:#2563eb;border-color:#2563eb;color:#fff}
-#searchSortToggle{justify-content:flex-end}
-#bookSearchResults mark{background:#2563eb33;color:#fff;padding:0 1px;border-radius:2px}
-/* Skeleton loading cards for progressive search */
-.skeleton-result{padding:6px 8px;border-bottom:1px solid #252d35;pointer-events:none}
-.skeleton-title{height:14px;width:60%;background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);background-size:200% 100%;border-radius:3px;margin-bottom:5px;animation:shimmer 1.5s ease-in-out infinite}
-.skeleton-author{height:11px;width:38%;background:linear-gradient(90deg,#2b333b 0%,#363d48 50%,#2b333b 100%);background-size:200% 100%;border-radius:3px;opacity:.6;animation:shimmer 1.5s ease-in-out infinite .15s}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-/* Search status message (progressive loading feedback) */
-.search-status{font-size:.6rem;padding:4px 8px;opacity:.5;border-bottom:1px solid #252d35;pointer-events:none}
 /* Helper modal content used by account/auth sub-flows */
 .modal-content{background:#1e242b;border:1px solid #2b333b;border-radius:16px;padding:20px;width:100%;max-width:420px;position:relative}
 /* Helper modal close button uses unified .modal-close-btn */
