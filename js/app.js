@@ -2127,11 +2127,6 @@ document.addEventListener('keydown', (ev)=>{
 // --- Spine navigator rendering ---
 const SPINE_COLORS = 8;
 
-/** Spine touch target width: count affects presence, visible books stay slimmer. */
-function spineWidth(count){
-  return Math.max(44, Math.min(38 + count * 2, 58));
-}
-
 function spineHash(value){
   const s = String(value);
   let h = 0;
@@ -2146,19 +2141,38 @@ function spineVisibleBookCount(count){
   return 4;
 }
 
+function spineBookLayout(year, count){
+  const visibleCount = spineVisibleBookCount(count);
+  const hash = spineHash(year);
+  const books = [];
+  for(let j = 0; j < visibleCount; j++){
+    books.push({
+      width: 7 + ((hash >> (j * 2)) % 4),
+      shortness: ((hash >> (j * 3 + 2)) % 5),
+    });
+  }
+  return books;
+}
+
+/** Spine target width: hug the visible books while still fitting the year label. */
+function spineWidth(year, count){
+  const books = spineBookLayout(year, count);
+  const bookWidth = books.reduce((sum, book)=>sum + book.width, 0) + Math.max(0, books.length - 1);
+  const labelWidth = year === 'Undated' ? 18 : 24;
+  return Math.max(32, Math.ceil(Math.max(bookWidth + 4, labelWidth + 6)));
+}
+
 function renderSpineBooks(year, count, colorOffset){
   const group = document.createElement('span');
   group.className = 'spine-books';
   group.setAttribute('aria-hidden', 'true');
 
-  const visibleCount = spineVisibleBookCount(count);
-  const hash = spineHash(year);
-  for(let j = 0; j < visibleCount; j++){
+  const books = spineBookLayout(year, count);
+  for(let j = 0; j < books.length; j++){
+    const { width, shortness } = books[j];
     const book = document.createElement('span');
     book.className = 'spine-book';
     book.dataset.bookTone = year === 'Undated' ? 'undated' : String((colorOffset + j) % SPINE_COLORS);
-    const width = 7 + ((hash >> (j * 2)) % 4);
-    const shortness = ((hash >> (j * 3 + 2)) % 5);
     book.style.setProperty('--spine-book-width', `${width}px`);
     book.style.setProperty('--spine-book-height', `${58 - shortness}px`);
     group.appendChild(book);
@@ -2197,7 +2211,7 @@ function renderSpineNav(yearList, activeYear){
     btn.title = `${label} \u00B7 ${count} book${count===1?'':'s'}`;
     const colorKey = year === 'Undated' ? 'undated' : String(i % SPINE_COLORS);
     btn.dataset.spineColor = colorKey;
-    btn.style.width = `${spineWidth(count)}px`;
+    btn.style.width = `${spineWidth(year, count)}px`;
     btn.appendChild(renderSpineBooks(year, count, i));
 
     // Year text — horizontal, centered over the visible spine cluster.

@@ -1427,7 +1427,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 .spine-strip{
   display:flex;
   align-items:flex-end;
-  gap:7px;
+  gap:2px;
   overflow-x:auto;
   scrollbar-width:none;
   justify-content:flex-start;
@@ -1443,7 +1443,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 
 /* Decade divider — subtle gap between decade groups */
 .spine-decade-gap{
-  width:8px;
+  width:6px;
   flex-shrink:0;
   align-self:flex-end;
   height:44px;
@@ -1464,7 +1464,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
   position:relative;
   overflow:visible;
   box-sizing:border-box;
-  padding:0 2px;
+  padding:0 1px;
   opacity:.56;
 }
 
