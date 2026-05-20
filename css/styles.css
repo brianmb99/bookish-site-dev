@@ -1966,7 +1966,7 @@ html.modal-transitioning::view-transition-new(root){
     padding:20px 14px calc(24px + env(safe-area-inset-bottom));
   }
 }
-@media (pointer:coarse) and (max-height:700px){
+@media (pointer:coarse) and (max-height:780px){
   .modal.account-modal:has(.auth-form-create){
     padding:10px 14px max(12px, env(safe-area-inset-bottom));
   }
