@@ -918,6 +918,7 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 /* Mobile: full-screen results below header */
 @media (pointer:coarse){
   .omnibox-dropdown{
+    background:var(--color-bg-elevated);
     border-radius:0;
     border-left:none;
     border-right:none;
