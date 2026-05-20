@@ -48,6 +48,17 @@
 // Dead Souls) that survive dedup because their author keys are character-
 // disjoint from Latin spellings. Requires `language` in the OL search
 // fields= param (set in omnibox_controller.js). iTunes entries always pass.
+// #212 filters non-English iTunes (and OL fallback) titles by stopword
+// heuristic — catches Spanish "Klara y el sol", Italian "Klara e il sole",
+// German "K für Klara", and non-Latin scripts. Only applies when the query
+// itself looks English.
+// #208 adds a tertiary suffix-collapse pass: for pairs sharing author-key
+// where one title is a strict suffix of the other (≥10 chars), collapse
+// them — catches series-prefix variants ("The Lord of the Rings: The
+// Fellowship of the Ring" → "The Fellowship of the Ring") and omnibuses
+// ("Animal Farm / Nineteen Eighty-Four" → "Nineteen Eighty-Four"). Branches
+// on prefix shape: article prefixes ("A ", "The ") keep the LONGER
+// (canonical with article); any other prefix drops the longer.
 // #210 adds a score-based rerank as the final pipeline stage when a query
 // is passed. Exact-title matches bubble above iTunes's native order
 // (catches "iTunes returned the marketing-subtitle variant at top"
@@ -381,6 +392,59 @@ export function mergeOmniboxResults({ itunesResults = [], olResults = [], query 
   // without a query (preserves backward compat).
   if (query && !isLikelyForeign(query)) {
     filtered = filtered.filter(e => !isLikelyForeign(e.title || ''));
+  }
+
+  // #208: tertiary suffix-collapse pass. For pairs sharing author-key, if
+  // one's title-key is a strict suffix of the other's (and the shared
+  // suffix is ≥10 chars after normalization), collapse them. Catches
+  // series-prefix variants ("The Lord of the Rings: The Fellowship of the
+  // Ring" → "The Fellowship of the Ring"), omnibuses ("Animal Farm /
+  // Nineteen Eighty-Four" → "Nineteen Eighty-Four"), and similar shapes.
+  // Word-boundary safeguard in the un-stripped title prevents accidental
+  // matches inside words. Prefix-shape branch:
+  //   - article-only prefix ("A ", "An ", "The "): drop the SHORTER (the
+  //     canonical form has the article; OL sometimes stores titles without
+  //     it as "Bend In The River" vs "A Bend in the River").
+  //   - any other prefix (series tag, edition tag, omnibus): drop the LONGER.
+  const dropForCollapse = new Set();
+  for (let i = 0; i < filtered.length; i++) {
+    if (dropForCollapse.has(i)) continue;
+    const ti = (filtered[i].title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const ki = normalizeAuthorKey(stripCredentials(firstAuthorOnly(filtered[i].author || '')));
+    if (!ti || !ki) continue;
+    for (let j = i + 1; j < filtered.length; j++) {
+      if (dropForCollapse.has(j)) continue;
+      const tj = (filtered[j].title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const kj = normalizeAuthorKey(stripCredentials(firstAuthorOnly(filtered[j].author || '')));
+      if (!kj || kj !== ki) continue;
+
+      let longerIdx, shorterIdx;
+      if (ti.length < tj.length && tj.endsWith(ti) && ti.length >= 10) {
+        shorterIdx = i; longerIdx = j;
+      } else if (tj.length < ti.length && ti.endsWith(tj) && tj.length >= 10) {
+        shorterIdx = j; longerIdx = i;
+      } else continue;
+
+      const longerLower = (filtered[longerIdx].title || '').toLowerCase();
+      const shorterLower = (filtered[shorterIdx].title || '').toLowerCase();
+      const idx = longerLower.lastIndexOf(shorterLower);
+      if (idx <= 0) continue;
+      if (/[a-zà-ÿ]/.test(longerLower[idx - 1])) continue;
+      const prefix = longerLower.slice(0, idx);
+      const isArticlePrefix = /^(a|an|the)\s+$/i.test(prefix);
+      const dropIdx = isArticlePrefix ? shorterIdx : longerIdx;
+      const keepIdx = isArticlePrefix ? longerIdx : shorterIdx;
+
+      const dropped = filtered[dropIdx];
+      const survivor = filtered[keepIdx];
+      if (dropped.work_key && !survivor.work_key) survivor.work_key = dropped.work_key;
+      if (dropped.isbn && !survivor.isbn) survivor.isbn = dropped.isbn;
+      dropForCollapse.add(dropIdx);
+      if (dropIdx === i) break;
+    }
+  }
+  if (dropForCollapse.size) {
+    filtered = filtered.filter((_, idx) => !dropForCollapse.has(idx));
   }
 
   // #210: score-based rerank with quality filter. Bubbles exact-title matches
