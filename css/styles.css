@@ -4905,10 +4905,14 @@ body.modal-open{overscroll-behavior-y:contain}
 }
 @media (pointer:coarse){
   .modal-inner.book-detail-page .modal-close-btn{
-    display:none;
+    display:flex;
+    top:max(12px, env(safe-area-inset-top));
+    right:auto;
+    left:max(12px, env(safe-area-inset-left));
   }
   .modal-inner.book-detail-page .privacy-toggle-btn{
-    right:12px;
+    top:max(12px, env(safe-area-inset-top));
+    right:max(12px, env(safe-area-inset-right));
   }
   .modal-inner.book-detail-page .book-detail-hero{
     padding-right:0;
