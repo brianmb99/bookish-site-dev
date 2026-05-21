@@ -36,12 +36,22 @@ export function normalizeReadingStatus(entry) {
   return READING_STATUS.READ;
 }
 
+function addUnset(unset, field) {
+  if (!unset.includes(field)) unset.push(field);
+}
+
 /**
  * Build the wire-shape payload for `tarn.books.create()` / `update()`.
  * Filters out local-only fields and undefined values; includes only what's
  * declared in bookish_schema.js (the SDK rejects unknown fields).
+ *
+ * For update calls, Tarn supports a separate `{ unset: [...] }` option.
+ * Bookish uses that option whenever the local state means "clear this
+ * optional field" instead of sending empty sentinels that would remain on
+ * the remote record forever.
  */
-function buildPayloadFromEntry(entry) {
+function buildPayloadFromEntry(entry, { forUpdate = false } = {}) {
+  const unset = [];
   const payload = {
     bookId: entry.bookId,
     title: entry.title,
@@ -50,16 +60,34 @@ function buildPayloadFromEntry(entry) {
   };
   if (hasOwn(entry, 'author') && entry.author != null) payload.author = entry.author;
   if (entry.dateRead != null && entry.dateRead !== '') payload.dateRead = entry.dateRead;
+  else if (forUpdate && hasOwn(entry, 'dateRead')) addUnset(unset, 'dateRead');
   if (hasOwn(entry, 'coverImage')) {
-    payload.coverImage = entry.coverImage;
-    if (hasOwn(entry, 'mimeType')) payload.mimeType = entry.mimeType || '';
-    if (hasOwn(entry, 'coverFit')) payload.coverFit = entry.coverFit || '';
+    if (entry.coverImage) {
+      payload.coverImage = entry.coverImage;
+      if (hasOwn(entry, 'mimeType') && entry.mimeType) payload.mimeType = entry.mimeType;
+      if (hasOwn(entry, 'coverFit') && entry.coverFit) payload.coverFit = entry.coverFit;
+    } else if (forUpdate) {
+      addUnset(unset, 'coverImage');
+      addUnset(unset, 'mimeType');
+      addUnset(unset, 'coverFit');
+    }
   }
-  if (hasOwn(entry, 'notes') && entry.notes != null) payload.notes = entry.notes;
-  if (hasOwn(entry, 'rating') && entry.rating != null) payload.rating = entry.rating;
-  if (hasOwn(entry, 'tags') && entry.tags != null) payload.tags = entry.tags;
+  if (hasOwn(entry, 'notes')) {
+    if (entry.notes != null && entry.notes !== '') payload.notes = entry.notes;
+    else if (forUpdate) addUnset(unset, 'notes');
+  }
+  if (hasOwn(entry, 'rating')) {
+    if (entry.rating != null && entry.rating !== '' && Number(entry.rating) > 0) payload.rating = entry.rating;
+    else if (forUpdate) addUnset(unset, 'rating');
+  }
+  if (hasOwn(entry, 'tags')) {
+    const emptyTags = entry.tags == null || entry.tags === '' || (Array.isArray(entry.tags) && entry.tags.length === 0);
+    if (!emptyTags) payload.tags = entry.tags;
+    else if (forUpdate) addUnset(unset, 'tags');
+  }
   if (hasOwn(entry, 'owned') && typeof entry.owned === 'boolean') payload.owned = entry.owned;
   if (entry.readingStartedAt) payload.readingStartedAt = entry.readingStartedAt;
+  else if (forUpdate && hasOwn(entry, 'readingStartedAt')) addUnset(unset, 'readingStartedAt');
   if (entry.createdAt) payload.createdAt = entry.createdAt;
   if (entry.modifiedAt) payload.modifiedAt = entry.modifiedAt;
   if (entry.wtrPosition != null) payload.wtrPosition = entry.wtrPosition;
@@ -71,7 +99,46 @@ function buildPayloadFromEntry(entry) {
   // means the previous `true` survives. Friends would never see the book even
   // after the user toggled it back to public.
   if (typeof entry.is_private === 'boolean') payload.is_private = entry.is_private;
+
+  if (forUpdate) {
+    if (payload.readingStatus !== READING_STATUS.READ) addUnset(unset, 'dateRead');
+    if (payload.readingStatus === READING_STATUS.WANT_TO_READ) addUnset(unset, 'readingStartedAt');
+    return { payload, unset };
+  }
   return payload;
+}
+
+function buildUpdateFromEntry(entry) {
+  const { payload, unset } = buildPayloadFromEntry(entry, { forUpdate: true });
+  const { bookId: _bookId, ...patch } = payload;
+  const opts = unset.length ? { unset } : undefined;
+  return { patch, opts };
+}
+
+async function updateTarnBook(client, bookId, patch, opts) {
+  if (opts) return client.books.update(bookId, patch, opts);
+  return client.books.update(bookId, patch);
+}
+
+function applyStatusDateRules(entry, status) {
+  if (!status) return;
+  if (status === READING_STATUS.WANT_TO_READ) {
+    delete entry.dateRead;
+    delete entry.readingStartedAt;
+    return;
+  }
+  if (status === READING_STATUS.READING) {
+    delete entry.dateRead;
+    if (!entry.readingStartedAt) entry.readingStartedAt = Date.now();
+  }
+}
+
+function markEntryPending(entry, remoteBacked) {
+  entry.pending = true;
+  entry.status = 'pending';
+  entry.seenRemote = remoteBacked ? true : false;
+  if (remoteBacked) entry.remoteBacked = true;
+  entry._committed = false;
 }
 
 function isRemoteBackedEntry(entry) {
@@ -272,12 +339,9 @@ export class BookRepository {
       old.mimeType = '';
       old.coverFit = '';
     }
+    if (hasOwn(payload, 'readingStatus')) applyStatusDateRules(old, payload.readingStatus);
     old.modifiedAt = Date.now();
-    old.pending = true;
-    old.status = 'pending';
-    old.seenRemote = wasRemoteBacked ? true : false;
-    if (wasRemoteBacked) old.remoteBacked = true;
-    old._committed = false;
+    markEntryPending(old, wasRemoteBacked);
     if (this._cache) await this._cache.putEntry(old);
     this._onDirty();
     this._emitChange();
@@ -356,15 +420,16 @@ export class BookRepository {
     if (!entry) return null;
 
     const previousStatus = normalizeReadingStatus(entry);
+    const snapshot = { ...entry };
+    const remoteBacked = isRemoteBackedEntry(entry);
     entry.readingStatus = newStatus;
     entry.modifiedAt = Date.now();
-    if (newStatus === READING_STATUS.READING && previousStatus !== READING_STATUS.READING) {
-      entry.readingStartedAt = Date.now();
-    }
+    applyStatusDateRules(entry, newStatus);
     if (newStatus === READING_STATUS.READ && !entry.dateRead) {
       const now = new Date();
       entry.dateRead = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0);
     }
+    if (remoteBacked) markEntryPending(entry, true);
 
     if (this._cache) await this._cache.putEntry(entry);
     this._onDirty();
@@ -374,9 +439,8 @@ export class BookRepository {
       : newStatus === READING_STATUS.READ ? 'Finished! Added to your shelf'
       : 'Moved to Want to Read';
 
-    if (isRemoteBackedEntry(entry)) {
+    if (remoteBacked) {
       const entryKey = entry.bookId || entry.id;
-      const snapshot = { ...entry, readingStatus: previousStatus };
       this._scheduleEditUpload(entryKey, entry, snapshot);
     }
 
@@ -387,19 +451,23 @@ export class BookRepository {
     const entry = this.getById(key);
     if (!entry) return null;
 
+    const before = { ...entry };
+    const remoteBacked = isRemoteBackedEntry(entry);
     entry.readingStatus = snapshot.readingStatus;
     if (snapshot.dateRead) entry.dateRead = snapshot.dateRead;
     else delete entry.dateRead;
     if (snapshot.readingStartedAt != null) entry.readingStartedAt = snapshot.readingStartedAt;
     else delete entry.readingStartedAt;
+    entry.modifiedAt = Date.now();
+    if (remoteBacked) markEntryPending(entry, true);
 
     if (this._cache) await this._cache.putEntry(entry);
     this._onDirty();
     this._emitChange();
 
-    if (isRemoteBackedEntry(entry)) {
+    if (remoteBacked) {
       const entryKey = entry.bookId || entry.id;
-      this._scheduleEditUpload(entryKey, entry, { ...entry, ...snapshot });
+      this._scheduleEditUpload(entryKey, entry, before);
     }
 
     return { entry };
@@ -413,6 +481,7 @@ export class BookRepository {
       if (entry.wtrPosition === i) continue;
       entry.wtrPosition = i;
       entry.modifiedAt = Date.now();
+      if (isRemoteBackedEntry(entry)) markEntryPending(entry, true);
       if (this._cache) await this._cache.putEntry(entry);
       changed.push(entry);
     }
@@ -583,10 +652,8 @@ export class BookRepository {
             || this._entries.find(e => e.id === op.priorTxid);
           if (!local || !local.bookId) { await this._cache.removeOp(op.id); continue; }
           try {
-            const payload = buildPayloadFromEntry(local);
-            // Partial-merge path: pass the full payload minus the primary key.
-            const { bookId: _bookId, ...patch } = payload;
-            await client.books.update(local.bookId, patch);
+            const { patch, opts } = buildUpdateFromEntry(local);
+            await updateTarnBook(client, local.bookId, patch, opts);
             local.pending = false; local.status = 'confirmed'; local.seenRemote = true; local.remoteBacked = true;
             await this._cache.replaceProvisional(local.id, local);
             await this._cache.removeOp(op.id);
@@ -748,9 +815,8 @@ export class BookRepository {
     try {
       if (!this._tarnService.isLoggedIn()) throw new Error('Not logged in');
       const client = await this._tarnService.getClient();
-      const payload = buildPayloadFromEntry(uploadEntry);
-      const { bookId: _bookId, ...patch } = payload;
-      await client.books.update(uploadEntry.bookId, patch);
+      const { patch, opts } = buildUpdateFromEntry(uploadEntry);
+      await updateTarnBook(client, uploadEntry.bookId, patch, opts);
 
       const queueEntry = this._editQueue.get(entryKey);
       const changedDuringUpload = queueEntry?.hasPendingEdit || liveEntry.modifiedAt !== uploadStartedModifiedAt;
