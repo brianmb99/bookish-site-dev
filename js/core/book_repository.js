@@ -28,6 +28,7 @@ export const READING_STATUS = {
 };
 
 const DEFAULT_EDIT_UPLOAD_DEBOUNCE_MS = 2500;
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
 
 export function normalizeReadingStatus(entry) {
   const s = entry?.readingStatus;
@@ -47,17 +48,17 @@ function buildPayloadFromEntry(entry) {
     format: entry.format,
     readingStatus: entry.readingStatus || READING_STATUS.READ,
   };
-  if (entry.author) payload.author = entry.author;
+  if (hasOwn(entry, 'author') && entry.author != null) payload.author = entry.author;
   if (entry.dateRead != null && entry.dateRead !== '') payload.dateRead = entry.dateRead;
-  if (entry.coverImage) {
+  if (hasOwn(entry, 'coverImage')) {
     payload.coverImage = entry.coverImage;
-    if (entry.mimeType) payload.mimeType = entry.mimeType;
-    if (entry.coverFit) payload.coverFit = entry.coverFit;
+    if (hasOwn(entry, 'mimeType')) payload.mimeType = entry.mimeType || '';
+    if (hasOwn(entry, 'coverFit')) payload.coverFit = entry.coverFit || '';
   }
-  if (entry.notes) payload.notes = entry.notes;
-  if (entry.rating != null) payload.rating = entry.rating;
-  if (entry.tags) payload.tags = entry.tags;
-  if (entry.owned === true) payload.owned = true;
+  if (hasOwn(entry, 'notes') && entry.notes != null) payload.notes = entry.notes;
+  if (hasOwn(entry, 'rating') && entry.rating != null) payload.rating = entry.rating;
+  if (hasOwn(entry, 'tags') && entry.tags != null) payload.tags = entry.tags;
+  if (hasOwn(entry, 'owned') && typeof entry.owned === 'boolean') payload.owned = entry.owned;
   if (entry.readingStartedAt) payload.readingStartedAt = entry.readingStartedAt;
   if (entry.createdAt) payload.createdAt = entry.createdAt;
   if (entry.modifiedAt) payload.modifiedAt = entry.modifiedAt;
@@ -266,7 +267,11 @@ export class BookRepository {
 
     const snapshot = { ...old };
     Object.assign(old, payload);
-    if (payload.coverImage === '') { delete old.coverImage; delete old.mimeType; }
+    if (payload.coverImage === '') {
+      old.coverImage = '';
+      old.mimeType = '';
+      old.coverFit = '';
+    }
     old.modifiedAt = Date.now();
     old.pending = true;
     old.status = 'pending';
@@ -535,8 +540,17 @@ export class BookRepository {
       if (!this._cache) return;
       if (!this._tarnService.isLoggedIn()) return;
 
-      const ops = await this._cache.listOps();
+      let ops = await this._cache.listOps();
       if (!ops.length) return;
+
+      const deleteBookIds = new Set(ops.filter(op => op.type === 'delete' && op.bookId).map(op => op.bookId));
+      if (deleteBookIds.size) {
+        const supersededEdits = ops.filter(op => op.type === 'edit' && deleteBookIds.has(op.bookId));
+        for (const op of supersededEdits) {
+          await this._cache.removeOp(op.id);
+        }
+        ops = ops.filter(op => !(op.type === 'edit' && deleteBookIds.has(op.bookId)));
+      }
 
       debugLog('[BookRepository] Replaying', ops.length, 'pending operations...');
       const client = await this._tarnService.getClient();

@@ -1089,13 +1089,16 @@ async function _autoSaveIfDirty(){
   const orig = form.dataset.orig||'';
   const cur = currentFormState();
   if(orig === cur) return false;
+  const savedState = cur;
+  let shouldSaveAgain = false;
   _autosaveInFlight = true;
   try{
     const payload = _buildPayloadFromForm();
     await editServerless(priorTxid, payload);
-    snapshotOriginal();
+    form.dataset.orig = savedState;
     updateDirty();
-    _showAutosaveSaved();
+    shouldSaveAgain = currentFormState() !== savedState;
+    if(!shouldSaveAgain) _showAutosaveSaved();
     _renderSummaryRow();
     return true;
   } catch(err){
@@ -1115,6 +1118,7 @@ async function _autoSaveIfDirty(){
     return false;
   } finally {
     _autosaveInFlight = false;
+    if(shouldSaveAgain) queueMicrotask(()=>_autoSaveIfDirty());
   }
 }
 

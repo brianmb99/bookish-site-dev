@@ -129,11 +129,15 @@ import { debugLog } from './core/debug_log.js';
     for(const op of deletes){ await removeOp(op.id); }
   }
   async function clearAll(){
-    return withStore('readwrite', ENTRY_STORE, store=> new Promise(r=>{
-      const req=store.clear();
-      req.onsuccess=()=>r();
-      req.onerror=()=>r();
-    }));
+    const db=await openDB();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction([ENTRY_STORE, OPS_STORE], 'readwrite');
+      tx.oncomplete=()=>res();
+      tx.onerror=()=>rej(tx.error);
+      tx.onabort=()=>rej(tx.error);
+      tx.objectStore(ENTRY_STORE).clear();
+      tx.objectStore(OPS_STORE).clear();
+    });
   }
 
   window.bookishCache={
