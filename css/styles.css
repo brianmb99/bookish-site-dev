@@ -1820,20 +1820,24 @@ html.modal-transitioning::view-transition-new(root){
 
 /* Sync progress banner — slim indicator shown during first-sync of a large
    library (fresh device, cleared site data). Skips small/warm syncs by
-   design: a 200ms flash is worse UX than no UI at all. Sits directly under
-   the header, full-width, subtle backdrop so it doesn't compete with the
-   library grid for attention. */
-.sync-progress-banner{position:relative;background:rgba(28,34,42,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--color-border-subtle);padding:10px 16px;display:flex;align-items:center;gap:16px;font-size:.82rem;color:var(--color-text-secondary);animation:syncProgressFadeIn .2s ease-out;will-change:opacity,transform}
+   design: a 200ms flash is worse UX than no UI at all.
+   Full-bleed background (subtle blur + bottom border) so it reads as part
+   of the header chrome; inner content is constrained to a max-width and
+   centered so the text and progress bar stay visually paired on wide
+   viewports instead of drifting to opposite edges. */
+.sync-progress-banner{position:relative;background:rgba(28,34,42,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--color-border-subtle);padding:11px 16px;display:flex;justify-content:center;animation:syncProgressFadeIn .2s ease-out;will-change:opacity,transform}
 .sync-progress-banner.fading-out{animation:syncProgressFadeOut .4s ease-in forwards}
-.sync-progress-text{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync-progress-banner > .sync-progress-inner{display:flex;align-items:center;gap:14px;width:100%;max-width:640px}
+.sync-progress-text{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.82rem;color:var(--color-text-secondary)}
 .sync-progress-count{color:var(--color-text-primary);font-variant-numeric:tabular-nums;font-weight:500}
-.sync-progress-bar{flex:0 0 140px;height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
-.sync-progress-fill{height:100%;background:var(--color-primary);border-radius:2px;width:0%;transition:width .25s ease-out}
+.sync-progress-bar{flex:1 1 auto;min-width:90px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+.sync-progress-fill{height:100%;background:var(--color-primary);border-radius:3px;width:0%;transition:width .25s ease-out}
 @keyframes syncProgressFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 @keyframes syncProgressFadeOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-4px)}}
 @media (max-width:560px){
-  .sync-progress-bar{flex-basis:90px}
-  .sync-progress-banner{font-size:.78rem;padding:9px 12px;gap:12px}
+  .sync-progress-banner{padding:9px 12px}
+  .sync-progress-banner > .sync-progress-inner{gap:10px}
+  .sync-progress-text{font-size:.78rem}
 }
 @media (prefers-reduced-motion:reduce){
   .sync-progress-banner,.sync-progress-banner.fading-out{animation:none}
