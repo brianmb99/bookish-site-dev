@@ -17,7 +17,6 @@
 // matching share/unshare-with-all. The SDK manages the shareKey internally
 // — no monkey-patching needed.
 
-import { pickWinner } from './cache_core.js';
 import * as friends from './friends.js';
 import { debugLog } from './debug_log.js';
 
@@ -216,7 +215,12 @@ export class BookRepository {
     this._editQueue = new Map();
     this._replaying = false;
     this._purged = false;
-    this._listeners = { change: [], error: [], progress: [] };
+    // Maps a Tarn Eid (deterministic hash of appId+collection+primaryKey) to
+    // the local cache entry it represents. Populated lazily from the cache on
+    // sync; used to resolve delete events emitted by getEntriesSince(), which
+    // identify the removed record by Eid rather than bookId.
+    this._eidIndex = new Map();
+    this._listeners = { change: [], error: [], progress: [], syncProgress: [] };
   }
 
   // --- Event system ---
@@ -240,6 +244,17 @@ export class BookRepository {
   }
 
   _emitProgress(items) { this._emit('progress', items); }
+
+  // Emits structured sync-lifecycle events for UI progress indicators.
+  // Payload shape:
+  //   { phase: 'fetching' }                                    — before the network call
+  //   { phase: 'applying', loaded, total, deleted }            — during the apply loop
+  //   { phase: 'complete', total, deleted }                    — after success
+  //   { phase: 'error', error }                                — after failure
+  // First-sync on a new device (large library) is the only phase where the
+  // user is likely to wait long enough to notice; warm syncs return empty
+  // arrays and complete in one HTTP round trip.
+  _emitSyncProgress(payload) { this._emit('syncProgress', payload); }
 
   // --- Queries ---
 
@@ -518,84 +533,129 @@ export class BookRepository {
       return;
     }
 
+    // Flush any debounced edits to the ops queue, then replay every queued
+    // op (create / edit / delete) against the remote. After this returns
+    // every successful local mutation has been written to Tarn; only failures
+    // remain pending. Doing this BEFORE pulling the delta ensures we never
+    // overwrite an in-flight local change with stale remote state.
     await this.flushPendingEdits();
     await this.replayPending();
 
-    debugLog('[BookRepository] Syncing from Tarn...');
+    debugLog('[BookRepository] Syncing from Tarn (delta)...');
+    this._emitSyncProgress({ phase: 'fetching' });
     try {
       const client = await this._tarnService.getClient();
+
+      // Delta sync: returns only entries created/updated since the last
+      // call and the Eids of entries deleted on other devices. Cursor is
+      // persisted inside the SDK (per appId+dlk+type). First call after
+      // login on a fresh device — or after clearing site data — returns
+      // the full library since the cursor is absent.
+      const { entries, deleted } = await client.books.getEntriesSince();
+      debugLog('[BookRepository] Delta: +', entries.length, ' −', deleted.length);
+      this._emitSyncProgress({ phase: 'applying', loaded: 0, total: entries.length, deleted: deleted.length });
+
+      // Build / refresh the Eid → cache-entry index from current cache state.
+      // First post-upgrade sync runs against entries that don't yet carry an
+      // _eid field, but the delta also returns the full library on that
+      // first call (cursor absent), so every entry gets _eid populated below
+      // — subsequent delete events resolve correctly.
+      const localAll = await this._cache.listAllRaw();
+      this._eidIndex.clear();
+      for (const e of localAll) {
+        if (e._eid) this._eidIndex.set(e._eid, e);
+      }
+
+      // Build the set of bookIds with local protection against upsert:
+      //   - Queued delete ops (replayPending() above tried and failed, e.g.
+      //     offline). The local intent is "this is gone"; a stale delta
+      //     that still includes the bookId must not resurrect it.
+      //   - Cache rows already marked tombstoned. Same reason — local
+      //     intent overrides stale remote state until the tombstone is
+      //     confirmed by the server (at which point the bookId will
+      //     surface in `deleted` and we'll remove the tombstone row).
       const pendingOps = this._cache.listOps ? await this._cache.listOps() : [];
-      const pendingDeleteBookIds = new Set(pendingOps.filter(op => op.type === 'delete' && op.bookId).map(op => op.bookId));
-      const localAll = this._cache.listAllRaw ? await this._cache.listAllRaw() : await this._cache.getAllActive();
-      const localTombstoneBookIds = new Set(localAll.filter(e => e.status === 'tombstoned' && e.bookId).map(e => e.bookId));
-      const remoteRecords = (await client.books.list()).filter(data =>
-        !pendingDeleteBookIds.has(data.bookId) &&
-        !localTombstoneBookIds.has(data.bookId)
+      const pendingDeleteBookIds = new Set(
+        pendingOps.filter(op => op.type === 'delete' && op.bookId).map(op => op.bookId),
       );
-      debugLog('[BookRepository] Fetched', remoteRecords.length, 'records from Tarn');
+      const localTombstonedBookIds = new Set(
+        localAll.filter(e => e.status === 'tombstoned' && e.bookId).map(e => e.bookId),
+      );
 
-      // The SDK returns fully-decoded records validated against the schema.
-      // No normalization needed — every record carries the canonical shape.
-      const remote = remoteRecords.map(data => ({
-        ...data,
-        id: data.bookId,
-        status: 'confirmed',
-        seenRemote: true,
-        _committed: true,
-        remoteBacked: true,
-      }));
+      // Build the working set from current cache state (active entries only,
+      // skipping tombstones), keyed by bookId for O(1) upsert. We construct
+      // the in-memory list here rather than re-reading from cache after the
+      // apply loop — both because it avoids an unnecessary IDB round trip
+      // and because the test harnesses mock putEntry as a no-op fn.
+      const workingByBookId = new Map();
+      for (const e of localAll) {
+        if (e.status === 'tombstoned' || !e.bookId) continue;
+        workingByBookId.set(e.bookId, e);
+      }
 
-      const local = localAll.filter(e => e.status !== 'tombstoned');
-      const localPending = local.filter(e => !e.seenRemote || e.status === 'pending');
-
-      // Deduplicate by bookId; remote wins.
-      const byBookId = new Map();
-      for (const entry of remote) {
-        if (!entry.bookId) continue;
-        const existing = byBookId.get(entry.bookId);
-        if (!existing || pickWinner(entry, existing) === entry) {
-          byBookId.set(entry.bookId, entry);
+      // Apply deletes first. Idempotent: an Eid we don't recognize is a
+      // no-op (the entry was likely never on this device, or was already
+      // removed by a previous sync).
+      for (const eid of deleted) {
+        const entry = this._eidIndex.get(eid);
+        if (entry) {
+          await this._cache.deleteById(entry.id);
+          this._eidIndex.delete(eid);
+          if (entry.bookId) workingByBookId.delete(entry.bookId);
         }
       }
 
-      const merged = [...byBookId.values()];
-
-      // Add local pending entries that aren't yet on remote.
-      for (const pending of localPending) {
-        if (pending.bookId) {
-          const existingIndex = merged.findIndex(e => e.bookId === pending.bookId);
-          if (existingIndex >= 0) merged[existingIndex] = pending;
-          else merged.push(pending);
-        } else {
-          merged.push(pending);
+      // Apply upserts. Skip any entry that has a local pending mutation —
+      // replayPending() above either succeeded (status was reset to
+      // 'confirmed') or failed (op still queued, will retry next sync).
+      // A still-pending entry means the user has uncommitted local edits
+      // that haven't reached the remote yet; overwriting would lose them.
+      let loaded = 0;
+      const PROGRESS_INTERVAL = 25; // emit every ~25 entries to balance UI updates vs event spam
+      for (const { record, eid } of entries) {
+        const local = workingByBookId.get(record.bookId);
+        if (local && local.status === 'pending') {
+          loaded++;
+          continue;
+        }
+        // Local delete intent (queued op or tombstoned cache row) takes
+        // precedence over a stale delta that still lists the record.
+        if (pendingDeleteBookIds.has(record.bookId) || localTombstonedBookIds.has(record.bookId)) {
+          loaded++;
+          continue;
+        }
+        const merged = {
+          ...record,
+          id: record.bookId,
+          status: 'confirmed',
+          seenRemote: true,
+          _committed: true,
+          remoteBacked: true,
+          _eid: eid,
+        };
+        await this._cache.putEntry(merged);
+        this._eidIndex.set(eid, merged);
+        workingByBookId.set(record.bookId, merged);
+        loaded++;
+        if (loaded % PROGRESS_INTERVAL === 0 || loaded === entries.length) {
+          this._emitSyncProgress({ phase: 'applying', loaded, total: entries.length, deleted: deleted.length });
         }
       }
 
-      // Sort: newest first (by dateRead, then createdAt).
-      merged.sort((a, b) => {
+      // Apply the canonical sort (newest first by dateRead, then createdAt).
+      // This is the order the library UI reads — keep it stable across syncs.
+      this._entries = Array.from(workingByBookId.values()).sort((a, b) => {
         const da = typeof a.dateRead === 'number' ? a.dateRead : 0;
         const db = typeof b.dateRead === 'number' ? b.dateRead : 0;
         if (da !== db) return db - da;
         return (b.createdAt || 0) - (a.createdAt || 0);
       });
 
-      // Update cache.
-      for (const entry of merged) {
-        await this._cache.putEntry(entry);
-      }
-
-      // Remove stale entries from IndexedDB that aren't in the merged set.
-      const mergedIds = new Set(merged.map(e => e.id));
-      for (const entry of local) {
-        if (!mergedIds.has(entry.id) && entry.seenRemote && entry.status !== 'pending') {
-          await this._cache.deleteById(entry.id);
-        }
-      }
-
-      this._entries = merged;
+      this._emitSyncProgress({ phase: 'complete', total: entries.length, deleted: deleted.length });
       this._emitChange();
     } catch (e) {
       console.error('[BookRepository] Sync failed:', e.message);
+      this._emitSyncProgress({ phase: 'error', error: e.message });
       this._entries = await this._cache.getAllActive();
       this._emitChange();
       throw e;
