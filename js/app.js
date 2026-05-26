@@ -11,6 +11,7 @@ import { deriveBookId, dateStringToMsNoonUtc, msToDateInputUtc, formatDateReadDi
 import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
 import { haptic } from './core/haptic.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
+import { attachYearSwipeNavigation } from './core/year_swipe.js';
 import { attachKeyboardHandler } from './core/keyboard_viewport.js';
 import { initPullToRefresh } from './core/pull_to_refresh.js';
 import { initPwaUpdateManager } from './core/pwa_update.js';
@@ -147,6 +148,8 @@ const spineStrip = document.getElementById('spineStrip');
 let selectedYear = null; // null = default (current year or most recent)
 let searchQuery = '';
 let _lastYearGroups = null; // cached for spine nav interactions
+let _activeYear = null; // resolved year currently shown, including the default
+let _isSearching = false;
 let spineOpen = false; // spine panel expanded?
 
 /** Toast after marking a currently-reading book as read; Undo restores prior fields via BookRepository. */
@@ -1572,6 +1575,10 @@ function clearShelfSkeletons(){
 }
 
 function render(){
+  _lastYearGroups = null;
+  _activeYear = null;
+  _isSearching = false;
+
   // #149: keep header auth chips (Account gear vs Sign in) in sync with
   // tarnService.isLoggedIn(). render() is called on every login/logout
   // transition (clearBooks → render; bookRepo.on('change') → render).
@@ -1665,6 +1672,8 @@ function render(){
     shelfEntries, wantList, searchQuery, selectedYear
   });
   _lastYearGroups = yearGroups;
+  _activeYear = activeYear;
+  _isSearching = isSearching;
 
   const yearList = getYearList(yearGroups).map(item => ({
     ...item,
@@ -2125,6 +2134,16 @@ function toggleSpinePanel(){
 yearHeader?.addEventListener('click', toggleSpinePanel);
 yearHeader?.addEventListener('keydown', (ev)=>{
   if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); toggleSpinePanel(); }
+});
+
+attachYearSwipeNavigation(cardsEl, {
+  getYears: () => _lastYearGroups ? getYearList(_lastYearGroups).map(item => item.year) : [],
+  getActiveYear: () => _activeYear,
+  isEnabled: () => !_isSearching && !spineOpen && Boolean(_lastYearGroups?.size),
+  onNavigate: year => {
+    haptic();
+    navigateYear(year);
+  },
 });
 
 // Escape closes the spine panel
