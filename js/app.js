@@ -2139,7 +2139,7 @@ yearHeader?.addEventListener('keydown', (ev)=>{
 attachYearSwipeNavigation(cardsEl, {
   getYears: () => _lastYearGroups ? getYearList(_lastYearGroups).map(item => item.year) : [],
   getActiveYear: () => _activeYear,
-  isEnabled: () => !_isSearching && !spineOpen && Boolean(_lastYearGroups?.size),
+  isEnabled: () => !_isSearching && Boolean(_lastYearGroups?.size),
   onNavigate: year => {
     haptic();
     navigateYear(year);

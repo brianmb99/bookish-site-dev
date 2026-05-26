@@ -8,7 +8,12 @@ export function getSwipeYearTarget(years, activeYear, direction) {
 }
 
 function isInteractiveTarget(target) {
-  return Boolean(target?.closest?.('button,a,input,textarea,select,[contenteditable="true"],[role="button"],[role="tab"]'));
+  if (!target?.closest) return false;
+  if (target.closest('button,a,input,textarea,select,[contenteditable="true"],[role="tab"],.card-mark-read,[data-mark-read-key]')) {
+    return true;
+  }
+  const roleButton = target.closest('[role="button"]');
+  return Boolean(roleButton && !roleButton.classList.contains('card'));
 }
 
 export function attachYearSwipeNavigation(el, {
