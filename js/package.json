@@ -1,0 +1,4 @@
+{
+  "//": "Enables Node ESM loader to treat files under public/js/ as ES modules so import tools (tools/import/*) can load tarn-client.bundle.js and bookish_schema.js directly. Browser loading is unaffected — browsers do not read package.json. Vitest already handles ESM regardless of this field.",
+  "type": "module"
+}
