@@ -2803,6 +2803,46 @@ async function initCacheLayer(){
       if (items) dbg('sync progress:', items);
     });
 
+    // Sync-progress banner: only meaningful on a fresh-device first-sync of
+    // a large library. Warm syncs (delta empty or tiny) skip the UI entirely
+    // — a flash that vanishes before the user can read it is worse than no UI.
+    // Threshold of 20 means anything smaller stays silent in the header status.
+    bookRepo.on('syncProgress', (event) => {
+      const banner = document.getElementById('syncProgressBanner');
+      if (!banner) return;
+      const countEl = document.getElementById('syncProgressCount');
+      const fillEl = document.getElementById('syncProgressFill');
+      const SHOW_THRESHOLD = 20;
+
+      if (event.phase === 'applying' && (event.total ?? 0) >= SHOW_THRESHOLD) {
+        banner.classList.remove('fading-out');
+        banner.style.display = 'flex';
+        if (countEl) countEl.textContent = `${event.loaded} of ${event.total}`;
+        const pct = event.total > 0 ? Math.round((event.loaded / event.total) * 100) : 0;
+        if (fillEl) fillEl.style.width = `${pct}%`;
+      } else if (event.phase === 'complete') {
+        if (banner.style.display === 'flex') {
+          // Snap to 100% briefly so the user sees the bar fill, then fade out.
+          if (fillEl) fillEl.style.width = '100%';
+          setTimeout(() => {
+            banner.classList.add('fading-out');
+            setTimeout(() => {
+              banner.style.display = 'none';
+              banner.classList.remove('fading-out');
+              if (fillEl) fillEl.style.width = '0%';
+            }, 400);
+          }, 200);
+        }
+      } else if (event.phase === 'error' && banner.style.display === 'flex') {
+        banner.classList.add('fading-out');
+        setTimeout(() => {
+          banner.style.display = 'none';
+          banner.classList.remove('fading-out');
+          if (fillEl) fillEl.style.width = '0%';
+        }, 400);
+      }
+    });
+
     // Load cached books immediately for instant display
     await bookRepo.loadFromCache();
     debugLog('[Bookish] Loaded', entries.length, 'books from cache');

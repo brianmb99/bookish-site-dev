@@ -92,6 +92,16 @@
     <button id="accountBtn" class="refresh-link account-link" title="Account">Account</button>
   </div>
 </header>
+<!-- Sync progress banner: shown only during large first-syncs (e.g. fresh
+     device pulling the full library). Warm syncs and small libraries skip
+     it — they complete fast enough that no UI is warranted. Wired in app.js
+     via bookRepo.on('syncProgress', ...). -->
+<div id="syncProgressBanner" class="sync-progress-banner" style="display:none" role="status" aria-live="polite" aria-atomic="false">
+  <span class="sync-progress-text">Loading your library… <span id="syncProgressCount" class="sync-progress-count">0 of 0</span></span>
+  <div class="sync-progress-bar" aria-hidden="true">
+    <div id="syncProgressFill" class="sync-progress-fill"></div>
+  </div>
+</div>
 <div id="accountNudgeBanner" class="nudge-banner" style="display:none;">
   <div class="nudge-content">
     <span class="nudge-mark" aria-hidden="true">
@@ -185,7 +195,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.365</div>
+  <div class="footer-meta">Alpha &bull; v0.2.367</div>
 </footer>
 </div>
 

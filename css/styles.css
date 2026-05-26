@@ -1818,6 +1818,28 @@ html.modal-transitioning::view-transition-new(root){
 .toast-icon-book{color:var(--color-accent);display:inline-flex;align-items:center;justify-content:center}
 .celebration-toast{background:rgba(36,43,53,.92)}
 
+/* Sync progress banner — slim indicator shown during first-sync of a large
+   library (fresh device, cleared site data). Skips small/warm syncs by
+   design: a 200ms flash is worse UX than no UI at all. Sits directly under
+   the header, full-width, subtle backdrop so it doesn't compete with the
+   library grid for attention. */
+.sync-progress-banner{position:relative;background:rgba(28,34,42,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--color-border-subtle);padding:10px 16px;display:flex;align-items:center;gap:16px;font-size:.82rem;color:var(--color-text-secondary);animation:syncProgressFadeIn .2s ease-out;will-change:opacity,transform}
+.sync-progress-banner.fading-out{animation:syncProgressFadeOut .4s ease-in forwards}
+.sync-progress-text{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync-progress-count{color:var(--color-text-primary);font-variant-numeric:tabular-nums;font-weight:500}
+.sync-progress-bar{flex:0 0 140px;height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+.sync-progress-fill{height:100%;background:var(--color-primary);border-radius:2px;width:0%;transition:width .25s ease-out}
+@keyframes syncProgressFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes syncProgressFadeOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-4px)}}
+@media (max-width:560px){
+  .sync-progress-bar{flex-basis:90px}
+  .sync-progress-banner{font-size:.78rem;padding:9px 12px;gap:12px}
+}
+@media (prefers-reduced-motion:reduce){
+  .sync-progress-banner,.sync-progress-banner.fading-out{animation:none}
+  .sync-progress-fill{transition:none}
+}
+
 /* Account nudge banner */
 .nudge-banner{background:rgba(28,34,42,.66);border:1px solid var(--color-border-subtle);border-radius:10px;padding:13px 16px;margin:16px 0;display:flex;align-items:center;justify-content:center;gap:12px;animation:feedbackDropIn .3s ease-out;box-shadow:none}
 @keyframes feedbackDropIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
