@@ -80,10 +80,37 @@ async function performLogout() {
     if (window.bookishCache?.clearAll) await window.bookishCache.clearAll();
   } catch {}
 
+  // Wipe Tarn SDK's per-account local stores. session.clear() only clears
+  // the wrapped session blob in localStorage — these two IDB databases
+  // survive logout and cause a stuck state on next login:
+  //   - tarn-sync-cursors: keyed by (appId, dlk, type). A stale cursor
+  //     here makes getEntriesSince() return an empty delta after the
+  //     Bookish cache has been wiped, leaving the user with no books.
+  //   - tarn-blob-cache:   keyed by (appId, dlk, txid). Privacy-relevant
+  //     too — the next user on this browser shouldn't inherit any
+  //     ciphertext blobs from the previous account.
+  // Belongs in the SDK long-term (logout should wipe all per-account
+  // local state); patching here in the meantime.
+  await deleteIndexedDb('tarn-sync-cursors');
+  await deleteIndexedDb('tarn-blob-cache');
+
   // Clear in-memory book entries so the UI redraws immediately
   if (window.bookishApp?.clearBooks) window.bookishApp.clearBooks();
 
   uiStatusManager.refresh();
+}
+
+/** Best-effort IDB database deletion. Resolves on success, error, or
+ *  block (so logout can't hang). Silent — failures are non-fatal. */
+function deleteIndexedDb(name) {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.deleteDatabase(name);
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      req.onblocked = () => resolve();
+    } catch { resolve(); }
+  });
 }
 
 const BOOKISH_API = window.BOOKISH_API_URL || 'https://bookish-api.bookish.workers.dev';
