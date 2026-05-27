@@ -369,6 +369,14 @@ optFieldsZone?.addEventListener('click',e=>{
   persistOptionalFieldChange();
 });
 
+if(tileCoverClick){
+  tileCoverClick.addEventListener('contextmenu',(e)=>{
+    e.preventDefault();
+  }, true);
+  tileCoverClick.addEventListener('dragstart',(e)=>{
+    if(e.target?.closest?.('img')) e.preventDefault();
+  });
+}
 if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn,.cover-nav-arrow,.cover-adjust-btn')) return; if(modal.querySelector('.modal-inner')?.classList.contains('adjusting-cover')) return; coverFileInput.click(); }); }
 if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.add('no-cover'); updateDirty(); if(form.priorTxid.value) _autoSaveIfDirty(); }); }
 // #147 item B: collapsed "+ Add cover" CTA expands the cover slot. Removes

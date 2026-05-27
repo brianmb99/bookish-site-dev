@@ -2427,6 +2427,16 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .modal-inner .form-as-tile{display:flex;flex-direction:row;align-items:flex-start;gap:16px}
 .tile-cover-wrap{width:30%;min-width:120px;max-width:140px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px}
 .modal-inner .tile-cover{width:100%;aspect-ratio:2/3;min-height:140px;background:#101418;border:1px solid #2b333b;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;position:relative;transition:border-color .25s,box-shadow .25s}
+.modal-inner .tile-cover,
+.modal-inner .tile-cover img{
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+}
+.modal-inner .tile-cover img{
+  -webkit-user-drag:none;
+  user-drag:none;
+}
 /* Blur-fill background for modal tile cover */
 .modal-inner .tile-cover::before{
   content:'';
