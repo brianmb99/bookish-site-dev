@@ -2457,6 +2457,13 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .modal-inner .tile-cover:hover{border-color:#3a4652;box-shadow:0 4px 14px -4px rgba(0,0,0,.6)}
 .modal-inner .tile-cover img{width:100%;height:100%;object-fit:contain;display:block;position:relative;z-index:1}
 .modal-inner .tile-cover img[data-fit="cover"]{object-fit:cover}
+.modal-inner .tile-cover img.preview{
+  position:absolute;
+  inset:0;
+  max-width:none;
+  margin:0;
+  border-radius:0;
+}
 .modal-inner .tile-cover .placeholder{font-size:.6rem;opacity:.6;text-align:center;padding:0 12px}
 /* Cover placeholder icon (SVG book + label) */
 .placeholder-icon{display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.7;color:var(--color-text-secondary)}
