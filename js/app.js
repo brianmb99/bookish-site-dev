@@ -69,6 +69,7 @@ const accountClose = document.getElementById('accountClose');
 const form = document.getElementById('entryForm');
 const coverFileInput = document.getElementById('hiddenCoverInput');
 const coverPreview = document.getElementById('coverPreview');
+const tileCoverWrap = document.querySelector('.tile-cover-wrap');
 const tileCoverClick = document.getElementById('tileCoverClick');
 const coverPlaceholder = document.getElementById('coverPlaceholder');
 const coverRemoveBtn = document.getElementById('coverRemoveBtn');
@@ -369,11 +370,11 @@ optFieldsZone?.addEventListener('click',e=>{
   persistOptionalFieldChange();
 });
 
-if(tileCoverClick){
-  tileCoverClick.addEventListener('contextmenu',(e)=>{
+if(tileCoverWrap){
+  tileCoverWrap.addEventListener('contextmenu',(e)=>{
     e.preventDefault();
   }, true);
-  tileCoverClick.addEventListener('dragstart',(e)=>{
+  tileCoverWrap.addEventListener('dragstart',(e)=>{
     if(e.target?.closest?.('img')) e.preventDefault();
   });
 }
