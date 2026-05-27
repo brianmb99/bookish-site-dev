@@ -1068,6 +1068,13 @@ if(!form._dirtyBound){
 // or when in add-mode (status commit buttons handle that case).
 let _autosaveInFlight = false;
 function _isAddMode(){ return modal.querySelector('.modal-inner')?.classList.contains('add-mode'); }
+function _showAutosaveSaving(){
+  if(!autosaveMicrocopyEl) return;
+  autosaveMicrocopyEl.textContent='Saving...';
+  autosaveMicrocopyEl.classList.remove('error');
+  autosaveMicrocopyEl.classList.add('visible');
+  clearTimeout(autosaveMicrocopyEl._fadeTimer);
+}
 function _showAutosaveSaved(){
   if(!autosaveMicrocopyEl) return;
   autosaveMicrocopyEl.textContent='Saved ✓';
@@ -1100,6 +1107,7 @@ autosaveMicrocopyEl?.addEventListener('click', ()=>{
 async function _autoSaveIfDirty(){
   if(_isAddMode()) return false;
   if(_autosaveInFlight) return false;
+  if(window.bookSearch?.isCoverBrowsePending?.()) return false;
   const priorTxid = form.priorTxid.value;
   if(!priorTxid) return false;
   const orig = form.dataset.orig||'';
@@ -1108,6 +1116,7 @@ async function _autoSaveIfDirty(){
   const savedState = cur;
   let shouldSaveAgain = false;
   _autosaveInFlight = true;
+  _showAutosaveSaving();
   try{
     const payload = _buildPayloadFromForm();
     await editServerless(priorTxid, payload);

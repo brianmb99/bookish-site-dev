@@ -2550,10 +2550,21 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
 .modal-inner.adjusting-cover #changeCoverLink,
 .modal-inner.adjusting-cover #coverActions,
 .modal-inner.adjusting-cover #coverPlaceholder{display:none!important}
+.modal-inner.browsing-cover .cover-remove-btn,
+.modal-inner.browsing-cover .cover-adjust-btn,
+.modal-inner.browsing-cover #changeCoverLink,
+.modal-inner.browsing-cover #coverActions,
+.modal-inner.browsing-cover #coverPlaceholder{display:none!important}
 
 /* Slider + Apply/Cancel cluster — sits inside .tile-cover-wrap below the tile. */
 .cover-adjust-controls{
   display:flex;flex-direction:column;align-items:stretch;gap:10px;
+  width:100%;
+  padding:8px 4px 2px;
+  box-sizing:border-box;
+}
+.cover-browse-controls{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
   width:100%;
   padding:8px 4px 2px;
   box-sizing:border-box;
@@ -2613,7 +2624,9 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
   border:1px solid var(--color-primary)!important;
   color:#fff!important;
 }
+.cover-adjust-apply:disabled{opacity:.35;cursor:default;filter:none}
 .cover-adjust-apply:hover{filter:brightness(1.1)}
+.cover-adjust-apply:disabled:hover{filter:none}
 .cover-adjust-apply:active,
 .cover-adjust-cancel:active,
 .cover-adjust-reset:active{transform:scale(.95)}

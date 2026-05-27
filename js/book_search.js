@@ -16,6 +16,9 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
   const coverFileInput=document.getElementById('hiddenCoverInput');
   const changeCoverLink=document.getElementById('changeCoverLink');
   const coverActionsEl=document.getElementById('coverActions');
+  const coverBrowseControls=document.getElementById('coverBrowseControls');
+  const coverBrowseApplyBtn=document.getElementById('coverBrowseApply');
+  const coverBrowseCancelBtn=document.getElementById('coverBrowseCancel');
   // SVG book icon for cover placeholders (matches library card placeholder)
   const BOOK_SVG='<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
   function setCoverPlaceholder(ph,state){
@@ -29,6 +32,8 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
   // Captured at search-result selection time and read by the form save handler.
   // Reset whenever the search state is cleared. See window.bookSearch.getSearchMeta().
   let currentWorkKey=''; let currentIsbn13='';
+  let coverBrowseState=null;
+  let coverBrowseGeneration=0;
   function pickIsbn13(isbnList){
     if(!Array.isArray(isbnList)) return '';
     for(const raw of isbnList){
@@ -46,11 +51,125 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
     applyCoverCropToImage(coverPreview, normalized);
     return normalized;
   }
+  function isExistingBookEdit(){ return !!form.elements?.namedItem('priorTxid')?.value; }
+  function coverSnapshot(){
+    return {
+      hasCover: coverPreview.style.display==='block' && !!coverPreview.dataset.b64,
+      src: coverPreview.src || '',
+      b64: coverPreview.dataset.b64 || '',
+      mime: coverPreview.dataset.mime || '',
+      fit: coverPreview.dataset.fit || '',
+      crop: coverPreview.dataset.crop || ''
+    };
+  }
+  function storeCurrentCoverSentinel(){
+    const snap=coverSnapshot();
+    if(!snap.hasCover) return;
+    coverPreview.dataset._savedSrc=snap.src;
+    coverPreview.dataset._savedB64=snap.b64;
+    coverPreview.dataset._savedMime=snap.mime;
+    coverPreview.dataset._savedFit=snap.fit;
+    coverPreview.dataset._savedCrop=snap.crop;
+  }
+  function clearCurrentCoverSentinel(){
+    delete coverPreview.dataset._savedSrc;
+    delete coverPreview.dataset._savedB64;
+    delete coverPreview.dataset._savedMime;
+    delete coverPreview.dataset._savedFit;
+    delete coverPreview.dataset._savedCrop;
+  }
+  function restoreCoverSnapshot(snap){
+    const ph=document.getElementById('coverPlaceholder');
+    if(snap?.hasCover && snap.src){
+      coverPreview.src=snap.src;
+      coverPreview.style.display='block';
+      coverPreview.dataset.b64=snap.b64 || '';
+      if(snap.mime) coverPreview.dataset.mime=snap.mime; else delete coverPreview.dataset.mime;
+      if(snap.fit) coverPreview.dataset.fit=snap.fit; else delete coverPreview.dataset.fit;
+      setPreviewCrop(snap.crop || null);
+      if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${snap.src}')`);
+      if(ph) ph.style.display='none';
+    } else {
+      coverPreview.src='';
+      coverPreview.style.display='none';
+      delete coverPreview.dataset.b64;
+      delete coverPreview.dataset.mime;
+      delete coverPreview.dataset.fit;
+      setPreviewCrop(null);
+      if(tileCoverClick) tileCoverClick.style.removeProperty('--cover-url');
+      setCoverPlaceholder(ph,'no-cover');
+    }
+    if(window.bookishApp?.showCoverLoaded && snap?.hasCover) window.bookishApp.showCoverLoaded();
+    if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn();
+    syncCoverBrowseApplyEnabled();
+    markDirty();
+  }
+  function isCoverBrowsePending(){ return !!coverBrowseState; }
+  function isStaleCoverBrowseGeneration(generation){
+    return !!generation && (!coverBrowseState || coverBrowseState.generation !== generation);
+  }
+  function syncCoverBrowseApplyEnabled(){
+    if(!coverBrowseApplyBtn) return;
+    coverBrowseApplyBtn.disabled = !!coverBrowseState && !(coverPreview.style.display==='block' && !!coverPreview.dataset.b64);
+  }
+  function showCoverBrowseChrome(show){
+    const inner=document.querySelector('.modal-inner');
+    if(inner) inner.classList.toggle('browsing-cover', !!show);
+    if(coverBrowseControls) coverBrowseControls.style.display=show?'flex':'none';
+    syncCoverBrowseApplyEnabled();
+  }
+  function restoreCoverActionsAfterBrowse(){
+    hideCoverNav();
+    if(uploadCoverBtn) uploadCoverBtn.style.display='block';
+    if(changeCoverLink){ changeCoverLink.style.display='block'; changeCoverLink.setAttribute('aria-expanded','false'); }
+    if(coverActionsEl) coverActionsEl.style.display='none';
+    if(findCoversBtn){
+      const hasCover = coverPreview.style.display==='block' && !!coverPreview.dataset.b64;
+      findCoversBtn.textContent = hasCover ? 'Browse other covers' : 'Browse covers';
+      findCoversBtn.classList.remove('loading');
+      findCoversBtn.style.display = currentWorkKey ? 'block' : 'none';
+    }
+  }
+  function enterCoverBrowseMode(){
+    if(!isExistingBookEdit()) return false;
+    if(!coverBrowseState){
+      coverBrowseGeneration += 1;
+      coverBrowseState={ previous: coverSnapshot(), generation: coverBrowseGeneration };
+    }
+    showCoverBrowseChrome(true);
+    return true;
+  }
+  function finishCoverBrowseMode({ restore=false, restoreActions=false } = {}){
+    const state=coverBrowseState;
+    coverBrowseState=null;
+    coverBrowseGeneration += 1;
+    showCoverBrowseChrome(false);
+    clearCurrentCoverSentinel();
+    if(restore && state) restoreCoverSnapshot(state.previous);
+    if(restoreActions) restoreCoverActionsAfterBrowse();
+    if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn();
+  }
+  function applyCoverBrowseSelection(){
+    if(!coverBrowseState) return;
+    if(coverPreview.style.display!=='block' || !coverPreview.dataset.b64) return;
+    markDirty();
+    finishCoverBrowseMode({ restore:false, restoreActions:true });
+    if(isExistingBookEdit() && window.bookishApp?._autoSaveIfDirty){
+      setTimeout(()=>{ try{ window.bookishApp._autoSaveIfDirty(); }catch{} }, 50);
+    }
+  }
+  function cancelCoverBrowseSelection(){
+    if(!coverBrowseState) return;
+    finishCoverBrowseMode({ restore:true, restoreActions:true });
+  }
   function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; if(changeCoverLink) changeCoverLink.style.display='none'; if(coverActionsEl) coverActionsEl.style.display='none'; }
   function hideCoverNav(){ prevBtn.style.display='none'; nextBtn.style.display='none'; editionInfo.style.display='none'; }
   function clearSearchState(){
     currentWorkKey=''; currentIsbn13='';
     editions=[]; editionIndex=0; coverOnlyMode=false; itunesCoverState=null;
+    if(coverBrowseState) finishCoverBrowseMode({ restore:false });
+    else showCoverBrowseChrome(false);
+    clearCurrentCoverSentinel();
     hideCoverNav();
     if(uploadCoverBtn) uploadCoverBtn.style.display='none';
     if(changeCoverLink){ changeCoverLink.style.display='none'; changeCoverLink.setAttribute('aria-expanded','false'); }
@@ -133,14 +252,17 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
     }catch(err){ console.warn('[Bookish:Covers] OL workkey lookup failed:', err?.message||err); return ''; }
   }
   async function loadCoversFromGoogleBooks(title, author){
+    const browseGenerationAtStart=coverBrowseState?.generation || 0;
     // Reserve the tile-cover space so the modal doesn't resize when the cover lands.
     const inner=document.querySelector('.modal-inner');
     if(inner) inner.classList.remove('no-cover');
     const ph=document.getElementById('coverPlaceholder');
     if(ph){ ph.style.display='flex'; ph.innerHTML=''; ph.classList.add('cover-skeleton-pulse'); }
     coverPreview.style.display='none';
+    syncCoverBrowseApplyEnabled();
     if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers…'; }
     function paintItunesFallback(){
+      if(isStaleCoverBrowseGeneration(browseGenerationAtStart)) return;
       if(itunesCoverState && itunesCoverState.width){
         editions=[buildCoverEdition(itunesCoverState, { title })];
         editionIndex=0;
@@ -148,6 +270,8 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
         applyEdition();
         editionInfo.textContent=`Cover 1 of ${editions.length}`;
         prevBtn.disabled=true; nextBtn.disabled=true;
+      } else if(isCoverBrowsePending()){
+        cancelCoverBrowseSelection();
       } else if(ph){ setCoverPlaceholder(ph,'no-cover'); }
     }
     // Try OL ISBN search first (no key required, more reliable); fall back to Google Books.
@@ -165,6 +289,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
       })
     );
     await Promise.allSettled(coverPromises);
+    if(isStaleCoverBrowseGeneration(browseGenerationAtStart)) return;
     if(!editions.length){ paintItunesFallback(); return; }
     editions.sort(coverSortComparator);
     // Include iTunes cover if available
@@ -184,6 +309,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
     console.info('[Bookish:Covers] Google Books pipeline: %d covers, best rank=%d source=%s %dx%d', editions.length, best?._rank||0, best?._coverData?.source||'n/a', best?._coverData?.width||0, best?._coverData?.height||0);
   }
   async function loadEditionsFromSearch(meta){
+    const browseGenerationAtStart=coverBrowseState?.generation || 0;
     const workKey=meta.key;
     if(!workKey){ console.warn('[Bookish:Covers] loadEditionsFromSearch: no workKey, skipping'); return; }
     console.info('[Bookish:Covers] loadEditionsFromSearch: workKey=%s, title=%s, coverOnlyMode=%s', workKey, meta.title, coverOnlyMode);
@@ -194,8 +320,10 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
     const ph=document.getElementById('coverPlaceholder');
     if(ph){ ph.style.display='flex'; ph.innerHTML=''; ph.classList.add('cover-skeleton-pulse'); }
     coverPreview.style.display='none';
+    syncCoverBrowseApplyEnabled();
     if(editionInfo){ editionInfo.style.display='block'; editionInfo.textContent='Finding covers\u2026'; }
     function paintItunesFallback(){
+      if(isStaleCoverBrowseGeneration(browseGenerationAtStart)) return;
       if(ph) ph.classList.remove('cover-skeleton-pulse');
       if(itunesCoverState && itunesCoverState.width){
         editions=[buildCoverEdition(itunesCoverState, { title: meta.title })];
@@ -204,6 +332,8 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
         applyEdition();
         editionInfo.textContent=`Cover 1 of ${editions.length}`;
         prevBtn.disabled=true; nextBtn.disabled=true;
+      } else if(isCoverBrowsePending()){
+        cancelCoverBrowseSelection();
       } else if(ph){ setCoverPlaceholder(ph,'no-cover'); }
     }
     let rawEntries=[];
@@ -258,6 +388,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
     const allFetches=Promise.allSettled([...amazonPromises,...olIsbnPromises]);
     const pipelineTimeout=new Promise(resolve=>setTimeout(resolve,15000));
     await Promise.race([allFetches,pipelineTimeout]);
+    if(isStaleCoverBrowseGeneration(browseGenerationAtStart)) return;
     // Remove skeleton if still showing
     if(ph){ ph.classList.remove('cover-skeleton-pulse'); }
     const amzCovers=editions.filter(e=>e._coverData&&e._coverData.source==='amazon').length;
@@ -341,6 +472,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
       setCoverPlaceholder(ph,'no-cover');
       coverPreview.style.display = 'none';
       setPreviewCrop(null);
+      syncCoverBrowseApplyEnabled();
     } }
   function applyEdition(){ if(!editions.length||editionIndex<0) return;
     // If an Adjust session is in progress, late-arriving edition swaps from
@@ -368,17 +500,20 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
       if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn();
     }
     if(coverOnlyMode){ editionInfo.textContent=`Cover ${editionIndex+1} of ${editions.length}`; } else { editionInfo.textContent=editions.length>1?`Edition ${editionIndex+1} of ${editions.length} — use arrows to browse`:`1 edition`; }
-    prevBtn.disabled=editionIndex===0; nextBtn.disabled=editionIndex===editions.length-1; }
+    prevBtn.disabled=editionIndex===0; nextBtn.disabled=editionIndex===editions.length-1; syncCoverBrowseApplyEnabled(); }
   form && form.addEventListener('booksearch:applied', markDirty);
   async function loadCoverByUrl(coverUrl){ const ph = document.getElementById('coverPlaceholder');
+    const browseGenerationAtStart=coverBrowseState?.generation || 0;
     if(!coverUrl) {
       setCoverPlaceholder(ph,'no-cover');
       coverPreview.style.display = 'none';
       setPreviewCrop(null);
+      syncCoverBrowseApplyEnabled();
       return;
     }
     setCoverPlaceholder(ph,'loading');
     coverPreview.style.display = 'none';
+    syncCoverBrowseApplyEnabled();
     try {
       const resp = await fetch(coverUrl);
       if(!resp.ok) {
@@ -389,6 +524,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
       const { base64, mime, wasResized, dataUrl, width, height } = await resizeImageToBase64(blob);
       // Late-arriving fetch must not clobber an active Adjust session.
       if(typeof isAdjusting === 'function' && isAdjusting()) return;
+      if(isStaleCoverBrowseGeneration(browseGenerationAtStart)) return;
       if(wasResized) console.info('[Bookish] Cover resized for storage efficiency');
       coverPreview.src = dataUrl;
       coverPreview.style.display = 'block';
@@ -400,9 +536,11 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
       if(ph) ph.style.display = 'none';
       if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded();
       if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn();
+      syncCoverBrowseApplyEnabled();
       markDirty();
     } catch(e) {
       setCoverPlaceholder(ph,'no-cover');
+      syncCoverBrowseApplyEnabled();
     } }
   // #114: in-modal search input + results were deleted. No input/result listeners.
   // Edition arrows still operate on `editions` populated by browseCoversForEntry().
@@ -415,6 +553,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
     if(editionIndex<editions.length-1){ editionIndex++; applyEdition(); _autoSaveCoverChange(); }
   });
   function _autoSaveCoverChange(){
+    if(isCoverBrowsePending()) return;
     // In view mode, auto-save the new cover after a brief delay so the preview
     // settles. The cover swap already markDirty()'d the form. (#114)
     if(window.bookishApp?._autoSaveIfDirty){
@@ -445,6 +584,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
   // filterCoverMatches imported from search_core.js
   async function findCoversForEntry(title, author){
     if(!title) return;
+    const browseGenerationAtStart=coverBrowseState?.generation || 0;
     console.info('[Bookish:Covers] findCoversForEntry: title=%s, author=%s', title, author);
     editions=[]; editionIndex=0; coverOnlyMode=true; itunesCoverState=null;
     if(findCoversBtn){ findCoversBtn.textContent='Searching\u2026'; findCoversBtn.classList.add('loading'); findCoversBtn.style.display='block'; }
@@ -463,6 +603,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
         fetch('https://itunes.apple.com/search?media=audiobook&term='+encodeURIComponent(itunesQ)+'&limit=5').then(r=>r.json()).catch(()=>({results:[]}))
       ]);
       const itItems=itRes.results||[];
+      if(isStaleCoverBrowseGeneration(browseGenerationAtStart)) return;
       const bestIt=itItems[0];
       const currentCover=coverPreview.style.display==='block'?{dataUrl:coverPreview.src,base64:coverPreview.dataset.b64,mime:coverPreview.dataset.mime}:null;
       let itunesCover=null;
@@ -496,10 +637,12 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
       if(!isbn10s.length){
         isbn10s=await fetchGoogleBooksISBNs(title, author);
       }
+      if(isStaleCoverBrowseGeneration(browseGenerationAtStart)) return;
       if(isbn10s.length){
         const amazonResults=await Promise.allSettled(isbn10s.map(isbn=>
           fetchAndValidateCoverLocal(amazonCoverUrl(isbn),'amazon')
         ));
+        if(isStaleCoverBrowseGeneration(browseGenerationAtStart)) return;
         for(const r of amazonResults){
           if(r.status==='fulfilled'&&r.value) amazonCovers.push(r.value);
         }
@@ -529,6 +672,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
       console.info('[Bookish:Covers] findCovers result: %d Amazon, %d iTunes, %d OL, %d total editions', amazonEditions.length, itunesEditions.length, olEditions.length, editions.length);
       if(!editions.length || (editions.length===1 && editions[0]._currentCover)){
         hideCoverNav();
+        if(isCoverBrowsePending()) cancelCoverBrowseSelection();
         if(findCoversBtn){ findCoversBtn.textContent='No covers available'; findCoversBtn.classList.remove('loading'); setTimeout(()=>{ findCoversBtn.textContent=currentCover?'Browse other covers':'Browse covers'; },2000); }
         return;
       }
@@ -538,6 +682,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
       editionInfo.textContent=`Cover 1 of ${editions.length}`;
       prevBtn.disabled=true; nextBtn.disabled=editions.length<=1;
     }catch(e){
+      if(isCoverBrowsePending()) cancelCoverBrowseSelection();
       if(findCoversBtn){ findCoversBtn.textContent='Search failed'; findCoversBtn.classList.remove('loading'); setTimeout(()=>{ findCoversBtn.textContent='Browse other covers'; },2000); }
     }
   }
@@ -553,10 +698,12 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
       const savedSrc=coverPreview.dataset._savedSrc;
       const savedB64=coverPreview.dataset._savedB64;
       const savedMime=coverPreview.dataset._savedMime;
+      const savedFit=coverPreview.dataset._savedFit||'';
       const savedCrop=coverPreview.dataset._savedCrop||'';
       if(savedSrc){
         coverPreview.src=savedSrc; coverPreview.style.display='block';
         coverPreview.dataset.b64=savedB64||''; coverPreview.dataset.mime=savedMime||'';
+        if(savedFit) coverPreview.dataset.fit=savedFit; else delete coverPreview.dataset.fit;
         setPreviewCrop(savedCrop);
         if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${savedSrc}')`);
         const ph=document.getElementById('coverPlaceholder'); if(ph) ph.style.display='none';
@@ -750,6 +897,12 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
   if(adjustResetBtn){
     adjustResetBtn.addEventListener('click',(e)=>{ e.stopPropagation(); resetAdjust(); });
   }
+  if(coverBrowseApplyBtn){
+    coverBrowseApplyBtn.addEventListener('click',(e)=>{ e.stopPropagation(); applyCoverBrowseSelection(); });
+  }
+  if(coverBrowseCancelBtn){
+    coverBrowseCancelBtn.addEventListener('click',(e)=>{ e.stopPropagation(); cancelCoverBrowseSelection(); });
+  }
   // The cover-preview img sits inside #tileCoverClick which has a click handler
   // that opens the file picker. Block that while adjusting and also during a
   // drag, so a click that ends a drag doesn't accidentally trigger upload.
@@ -780,12 +933,8 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
    * If no workKey, falls back to title/author search via findCoversForEntry().
    */
   async function browseCoversForEntry(workKey){
-    if(coverPreview.style.display==='block'){
-      coverPreview.dataset._savedSrc=coverPreview.src;
-      coverPreview.dataset._savedB64=coverPreview.dataset.b64||'';
-      coverPreview.dataset._savedMime=coverPreview.dataset.mime||'';
-      coverPreview.dataset._savedCrop=coverPreview.dataset.crop||'';
-    }
+    if(isExistingBookEdit()) enterCoverBrowseMode();
+    storeCurrentCoverSentinel();
     const title=(titleInput?.value||'').trim();
     const author=(authorInput?.value||'').trim();
     if(workKey){
@@ -837,9 +986,10 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
         }
       }
     },
-    handleModalClose(){ if(isAdjusting()) exitAdjust(); clearSearchState(); },
+    handleModalClose(){ if(isAdjusting()) exitAdjust(); if(isCoverBrowsePending()) cancelCoverBrowseSelection(); clearSearchState(); },
     /** New decoupled entry point (#114). */
     browseCoversForEntry(workKey){ return browseCoversForEntry(workKey); },
+    isCoverBrowsePending(){ return isCoverBrowsePending(); },
     /**
      * Used by the omnibox add-flow to feed a selected work into the modal
      * before openModal renders. Sets currentWorkKey + currentIsbn13 so the
