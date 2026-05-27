@@ -568,8 +568,10 @@ function wireDisplayNameSettings(content) {
     summary?.classList.add('is-editing');
     changeBtn.hidden = true;
     input.value = valueEl.textContent.trim();
-    input.focus({ preventScroll: true });
-    try { input.setSelectionRange(input.value.length, input.value.length); } catch {}
+    if (shouldAutoFocusInlineAccountInput()) {
+      input.focus({ preventScroll: true });
+      try { input.setSelectionRange(input.value.length, input.value.length); } catch {}
+    }
   };
 
   const save = async () => {
@@ -731,6 +733,11 @@ function createOverlay(extraClass = '') {
 function shouldAutoFocusSecurityInput(autoFocusInput) {
   if (autoFocusInput === false) return false;
   if (autoFocusInput === true) return true;
+  const coarse = window.matchMedia?.('(pointer: coarse)')?.matches === true;
+  return !coarse;
+}
+
+function shouldAutoFocusInlineAccountInput() {
   const coarse = window.matchMedia?.('(pointer: coarse)')?.matches === true;
   return !coarse;
 }

@@ -15,6 +15,10 @@ function getScrollBlock(el) {
   return isBookDetailPlacard(el) || isInlineAccountEdit(el) ? 'nearest' : 'center';
 }
 
+function shouldResizeSheet(sheet) {
+  return !sheet?.classList?.contains('account-modal');
+}
+
 /**
  * Attach keyboard-aware viewport handling to a bottom sheet modal.
  * Listens for visualViewport resize events to detect keyboard open/close,
@@ -34,6 +38,7 @@ export function attachKeyboardHandler({ sheet }) {
   let keyboardOpen = false;
   let rafId = null;
   let baselineHeight = Math.max(window.innerHeight || 0, vv.height || 0);
+  const resizeSheet = shouldResizeSheet(sheet);
 
   function onViewportResize() {
     if (rafId) cancelAnimationFrame(rafId);
@@ -59,14 +64,24 @@ export function attachKeyboardHandler({ sheet }) {
     if (isKbOpen && !keyboardOpen) {
       keyboardOpen = true;
       sheet.classList.add('keyboard-open');
-      // Set max-height to fit within the visible viewport
-      sheet.style.maxHeight = visibleHeight + 'px';
-      sheet.style.marginBottom = bottomInset ? bottomInset + 'px' : '';
+      if (resizeSheet) {
+        // Set max-height to fit within the visible viewport.
+        sheet.style.maxHeight = visibleHeight + 'px';
+        sheet.style.marginBottom = bottomInset ? bottomInset + 'px' : '';
+      } else {
+        sheet.style.maxHeight = '';
+        sheet.style.marginBottom = '';
+      }
       scrollFocusedInput();
     } else if (isKbOpen && keyboardOpen) {
-      // Keyboard still open but viewport height changed (e.g., suggestions bar)
-      sheet.style.maxHeight = visibleHeight + 'px';
-      sheet.style.marginBottom = bottomInset ? bottomInset + 'px' : '';
+      if (resizeSheet) {
+        // Keyboard still open but viewport height changed (e.g., suggestions bar).
+        sheet.style.maxHeight = visibleHeight + 'px';
+        sheet.style.marginBottom = bottomInset ? bottomInset + 'px' : '';
+      } else {
+        sheet.style.maxHeight = '';
+        sheet.style.marginBottom = '';
+      }
       scrollFocusedInput();
     } else if (!isKbOpen && keyboardOpen) {
       keyboardOpen = false;
