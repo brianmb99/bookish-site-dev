@@ -32,6 +32,7 @@
 
 import { formatMonthYearDisplay } from '../core/id_core.js';
 import { READING_STATUS, normalizeReadingStatus } from '../core/book_repository.js';
+import { coverCropStyleAttr } from '../core/cover_crop.js';
 
 // Generated covers should feel like quiet shelf objects, not generic color
 // tiles. Keep this palette muted and bookish; the CSS adds the cover frame.
@@ -142,7 +143,7 @@ export function buildCardHTML(e, isWtrResult, opts = {}) {
   // (row on desktop, column on mobile) don't need to know about pips.
   return `
       <div class="cover-wrap">
-        <div class="cover"${coverDataUrl ? ` style="--cover-url:url('${coverDataUrl}')"` : ''}>${e.coverImage ? `<img src="${coverDataUrl}" data-fit="${e.coverFit || 'contain'}">` : `<div class="generated-cover" style="background:${generatedCoverColor(e.title || '')}"><span class="generated-title">${escapeHtml(e.title || 'Untitled')}</span>${e.author ? `<span class="generated-author">${escapeHtml(e.author)}</span>` : ''}</div>`}${overlay}</div>
+        <div class="cover"${coverDataUrl ? ` style="--cover-url:url('${coverDataUrl}')"` : ''}>${e.coverImage ? `<img src="${coverDataUrl}" data-fit="${e.coverFit || 'contain'}"${coverCropStyleAttr(e.coverCrop)}>` : `<div class="generated-cover" style="background:${generatedCoverColor(e.title || '')}"><span class="generated-title">${escapeHtml(e.title || 'Untitled')}</span>${e.author ? `<span class="generated-author">${escapeHtml(e.author)}</span>` : ''}</div>`}${overlay}</div>
       </div>
       <div class="meta">
         ${srLabel}

@@ -14,6 +14,19 @@
     "dateRead": { "type": "number", "description": "JS millisecond epoch timestamp. Date-only values use noon UTC (YYYY-MM-DDT12:00:00.000Z)." },
     "mimeType": { "type": "string" },
     "coverImage": { "type": "string", "description": "base64-encoded image data" },
+    "coverFit": { "type": "string", "enum": ["cover", "contain"], "description": "Baseline object-fit mode for the stored cover image." },
+    "coverCrop": {
+      "type": "object",
+      "description": "Non-destructive normalized crop metadata for cover rendering.",
+      "properties": {
+        "v": { "type": "integer", "const": 1 },
+        "zoom": { "type": "number", "minimum": 1, "maximum": 3 },
+        "x": { "type": "number", "description": "Horizontal pan as a fraction of the cover tile width." },
+        "y": { "type": "number", "description": "Vertical pan as a fraction of the cover tile height." }
+      },
+      "required": ["v", "zoom", "x", "y"],
+      "additionalProperties": false
+    },
     "readingStatus": { "type": "string", "enum": ["want_to_read", "reading", "read"], "default": "want_to_read", "description": "Reading status of the book" },
     "readingStartedAt": { "type": "number", "description": "Timestamp when book was moved to reading status" },
     "wtrPosition": { "type": "integer", "minimum": 0, "description": "Sort position within the want-to-read list (0 = top)" },

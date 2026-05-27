@@ -6,6 +6,7 @@ import uiStatusManager from './ui_status_manager.js';
 import { getAccountStatus } from './account_ui.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { BookRepository, READING_STATUS, normalizeReadingStatus } from './core/book_repository.js';
+import { coverFitMode } from './core/search_core.js';
 import { buildDisplayList, getYearList, getNearestPopulatedYear } from './core/shelf_filter.js';
 import { deriveBookId, dateStringToMsNoonUtc, msToDateInputUtc, formatDateReadDisplay, formatMonthYearDisplay } from './core/id_core.js';
 import { pushOverlayState, popOverlayState, consumeSuppressFlag, isStandalone } from './core/overlay_history.js';
@@ -15,6 +16,7 @@ import { attachYearSwipeNavigation } from './core/year_swipe.js';
 import { attachKeyboardHandler } from './core/keyboard_viewport.js';
 import { initPullToRefresh } from './core/pull_to_refresh.js';
 import { initPwaUpdateManager } from './core/pwa_update.js';
+import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from './core/cover_crop.js';
 import { getFieldPref, setFieldPref } from './core/field_prefs.js';
 import * as subscription from './core/subscription.js';
 import * as friendsRouter from './core/friends_router.js';
@@ -392,7 +394,13 @@ if(addCoverCtaEl){
 // components/book_card.js (#123) so the friend's-shelf view can reuse the
 // same builders verbatim. Local aliases preserve the rest of app.js.
 const escapeHtml = sharedEscapeHtml;
-function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Add cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn(); }
+function setCoverPreviewCrop(crop){
+  const normalized = normalizeCoverCrop(crop);
+  if(normalized) coverPreview.dataset.crop = serializeCoverCrop(normalized);
+  else delete coverPreview.dataset.crop;
+  applyCoverCropToImage(coverPreview, normalized);
+}
+function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Add cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; delete coverPreview.dataset.fit; setCoverPreviewCrop(null); coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn(); }
 function showCoverLoaded(){
   if(coverRemoveBtn) coverRemoveBtn.style.display='inline-flex';
   // Round 2 (#147) introduced the .no-cover collapsed state and a small
@@ -534,7 +542,10 @@ function openModal(entry, forceIntent){
     const coverDataUrl='data:'+(entry.mimeType||'image/*')+';base64,'+entry.coverImage;
     coverPreview.src=coverDataUrl;
     coverPreview.style.display='block'; coverPlaceholder.style.display='none';
-    coverPreview.dataset.b64=entry.coverImage; if(entry.mimeType) coverPreview.dataset.mime=entry.mimeType; if(entry.coverFit) coverPreview.dataset.fit=entry.coverFit;
+    coverPreview.dataset.b64=entry.coverImage;
+    if(entry.mimeType) coverPreview.dataset.mime=entry.mimeType; else delete coverPreview.dataset.mime;
+    if(entry.coverFit) coverPreview.dataset.fit=entry.coverFit; else delete coverPreview.dataset.fit;
+    setCoverPreviewCrop(entry.coverCrop);
     tileCoverClick.style.setProperty('--cover-url',`url('${coverDataUrl}')`);
     showCoverLoaded();
     if(inner) inner.classList.remove('no-cover');
@@ -944,6 +955,7 @@ function _finalizeCloseModal(fromPopstate){
   form.reset();
   resetOptionalFields();
   coverPreview.style.display='none';
+  setCoverPreviewCrop(null);
   if(coverRemoveBtn) coverRemoveBtn.style.display='none';
   delete form.dataset.orig;
   if(statusSelector){ statusSelector.style.display='none'; }
@@ -1021,6 +1033,7 @@ function currentFormState(){ return JSON.stringify({
   dateRead: form.dateRead.value,
   readingStatus: readingStatusInput?.value||READING_STATUS.WANT_TO_READ,
   cover: coverPreview.dataset.b64||'',
+  coverCrop: serializeCoverCrop(coverPreview.dataset.crop||''),
   notes: (notesInput?.value||'').trim(),
   rating: ratingInput?.value||'',
   owned: ownedToggle?.checked?'1':'',
@@ -1144,10 +1157,13 @@ function _buildPayloadFromForm(){
   if(coverPreview.dataset.b64){
     payload.coverImage = coverPreview.dataset.b64;
     if(coverPreview.dataset.mime) payload.mimeType = coverPreview.dataset.mime;
-    if(coverPreview.dataset.fit) payload.coverFit = coverPreview.dataset.fit;
+    payload.coverFit = coverPreview.dataset.fit || '';
+    const coverCrop = normalizeCoverCrop(coverPreview.dataset.crop);
+    payload.coverCrop = coverCrop || '';
   } else if(form.priorTxid.value){
     payload.coverImage = '';
     payload.mimeType = '';
+    payload.coverCrop = '';
   }
   const notesVal=(notesInput?.value||'').trim();
   payload.notes = notesVal;
@@ -1234,13 +1250,15 @@ summaryRowEl?.addEventListener('keydown', e=>{
 // --- Cover file input ---
 coverFileInput.addEventListener('change', async ()=>{ const f=coverFileInput.files[0]; if(!f) return;
   try {
-    const { base64, mime, wasResized, dataUrl } = await resizeImageToBase64(f);
+    const { base64, mime, wasResized, dataUrl, width, height } = await resizeImageToBase64(f);
     if(wasResized) console.info('[Bookish] User upload resized for storage efficiency');
     coverPreview.src = dataUrl;
     coverPreview.style.display = 'block';
     coverPlaceholder.style.display = 'none';
     coverPreview.dataset.b64 = base64;
     coverPreview.dataset.mime = mime;
+    coverPreview.dataset.fit = coverFitMode(width, height);
+    setCoverPreviewCrop(null);
     tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`);
     showCoverLoaded();
     if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn();
@@ -1250,7 +1268,7 @@ coverFileInput.addEventListener('change', async ()=>{ const f=coverFileInput.fil
     if(form.priorTxid.value) _autoSaveIfDirty();
   } catch(err) {
     // Fallback to original if resize fails
-    const r = new FileReader(); r.onload = e => { const b64full = e.target.result; const b64 = b64full.split(',')[1]; coverPreview.src = b64full; coverPreview.style.display = 'block'; coverPlaceholder.style.display = 'none'; coverPreview.dataset.b64 = b64; coverPreview.dataset.mime = f.type || 'image/jpeg'; tileCoverClick.style.setProperty('--cover-url',`url('${b64full}')`); showCoverLoaded(); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('no-cover'); updateDirty(); if(form.priorTxid.value) _autoSaveIfDirty(); }; r.readAsDataURL(f);
+    const r = new FileReader(); r.onload = e => { const b64full = e.target.result; const b64 = b64full.split(',')[1]; coverPreview.src = b64full; coverPreview.style.display = 'block'; coverPlaceholder.style.display = 'none'; coverPreview.dataset.b64 = b64; coverPreview.dataset.mime = f.type || 'image/jpeg'; delete coverPreview.dataset.fit; setCoverPreviewCrop(null); tileCoverClick.style.setProperty('--cover-url',`url('${b64full}')`); showCoverLoaded(); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.remove('no-cover'); updateDirty(); if(form.priorTxid.value) _autoSaveIfDirty(); }; r.readAsDataURL(f);
   }
 });
 
@@ -1517,13 +1535,15 @@ function entryFingerprint(e){
 function cardCoverChanged(card, e){
   return card._bookishCoverImage !== (e.coverImage || '') ||
     card._bookishCoverMime !== (e.mimeType || '') ||
-    card._bookishCoverFit !== (e.coverFit || '');
+    card._bookishCoverFit !== (e.coverFit || '') ||
+    card._bookishCoverCrop !== serializeCoverCrop(e.coverCrop || '');
 }
 
 function rememberCardCover(card, e){
   card._bookishCoverImage = e.coverImage || '';
   card._bookishCoverMime = e.mimeType || '';
   card._bookishCoverFit = e.coverFit || '';
+  card._bookishCoverCrop = serializeCoverCrop(e.coverCrop || '');
 }
 
 /**
@@ -2668,9 +2688,14 @@ function _buildSubmitPayloadFromForm(priorTxid){
     payload.coverImage = coverPreview.dataset.b64;
     if(coverPreview.dataset.mime) payload.mimeType = coverPreview.dataset.mime;
     if(coverPreview.dataset.fit) payload.coverFit = coverPreview.dataset.fit;
+    else if(priorTxid) payload.coverFit = '';
+    const coverCrop = normalizeCoverCrop(coverPreview.dataset.crop);
+    if(coverCrop) payload.coverCrop = coverCrop;
+    else if(priorTxid) payload.coverCrop = '';
   } else if(priorTxid){
     payload.coverImage = '';
     payload.mimeType = '';
+    payload.coverCrop = '';
   }
   const notesVal = (notesInput?.value||'').trim();
   if(notesVal) payload.notes = notesVal;

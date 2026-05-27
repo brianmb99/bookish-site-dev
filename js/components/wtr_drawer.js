@@ -1,4 +1,5 @@
 import { escapeHtml, generatedCoverColor } from './book_card.js';
+import { coverCropStyleAttr } from '../core/cover_crop.js';
 
 export function sortWtrList(wantList) {
   const hasPositions = wantList.some(e => e.wtrPosition != null);
@@ -40,7 +41,7 @@ export function renderWtrDrawerList(wantList, { listEl, emptyEl } = {}) {
     const key = getWtrEntryKey(entry);
     const coverDataUrl = entry.coverImage ? `data:${entry.mimeType || 'image/jpeg'};base64,${entry.coverImage}` : '';
     const coverHtml = coverDataUrl
-      ? `<img src="${coverDataUrl}">`
+      ? `<img src="${coverDataUrl}" data-fit="${entry.coverFit || 'contain'}"${coverCropStyleAttr(entry.coverCrop)}>`
       : `<div class="wtr-mini-cover" style="background:${generatedCoverColor(entry.title || '')}"><span class="wtr-mini-title">${escapeHtml(entry.title || '')}</span></div>`;
     return `<div class="wtr-item" data-key="${escapeHtml(key)}" draggable="${showHandle}">
       <div class="wtr-item-cover">${coverHtml}</div>

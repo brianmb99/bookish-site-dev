@@ -1,8 +1,9 @@
 // book_search.js
 // Lightweight module to search OpenLibrary and populate the entry form
 import { cleanTitle, filterCoverMatches, extractISBN10s, amazonCoverUrl, olCoverByISBN, coverFitMode, coverSortComparator, convertISBN13to10 } from './core/search_core.js';
-import { resizeImageToBase64, cropAndResizeImageToBase64 } from './core/image_utils.js';
+import { resizeImageToBase64 } from './core/image_utils.js';
 import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdition, fetchAndValidateCover } from './core/cover_pipeline.js';
+import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from './core/cover_crop.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
   const titleInput=form.elements?.namedItem('title');
@@ -38,6 +39,13 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
     return '';
   }
   function markDirty(){ try{ form.dispatchEvent(new Event('input',{bubbles:true})); }catch{} }
+  function setPreviewCrop(crop){
+    const normalized = normalizeCoverCrop(crop);
+    if(normalized) coverPreview.dataset.crop = serializeCoverCrop(normalized);
+    else delete coverPreview.dataset.crop;
+    applyCoverCropToImage(coverPreview, normalized);
+    return normalized;
+  }
   function showCoverNav(){ prevBtn.style.display='flex'; nextBtn.style.display='flex'; editionInfo.style.display='block'; if(changeCoverLink) changeCoverLink.style.display='none'; if(coverActionsEl) coverActionsEl.style.display='none'; }
   function hideCoverNav(){ prevBtn.style.display='none'; nextBtn.style.display='none'; editionInfo.style.display='none'; }
   function clearSearchState(){
@@ -332,6 +340,7 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
       const ph = document.getElementById('coverPlaceholder');
       setCoverPlaceholder(ph,'no-cover');
       coverPreview.style.display = 'none';
+      setPreviewCrop(null);
     } }
   function applyEdition(){ if(!editions.length||editionIndex<0) return;
     // If an Adjust session is in progress, late-arriving edition swaps from
@@ -343,7 +352,7 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
     if(!coverOnlyMode){ let changed=false; if(ed.title && titleInput){ titleInput.value=cleanTitle(ed.title); changed=true; } if(ed.author_name&&ed.author_name.length&&authorInput){ authorInput.value=ed.author_name.join(', '); changed=true; } if(changed) markDirty(); }
     if(ed._coverData) {
       const cd=ed._coverData;
-      coverPreview.src=cd.dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=cd.base64; coverPreview.dataset.mime=cd.mime; coverPreview.dataset.fit=coverFitMode(cd.width, cd.height); if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${cd.dataUrl}')`); const ph=document.getElementById('coverPlaceholder'); if(ph) ph.style.display='none'; if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded(); if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn(); markDirty();
+      coverPreview.src=cd.dataUrl; coverPreview.style.display='block'; coverPreview.dataset.b64=cd.base64; coverPreview.dataset.mime=cd.mime; coverPreview.dataset.fit=coverFitMode(cd.width, cd.height); setPreviewCrop(null); if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${cd.dataUrl}')`); const ph=document.getElementById('coverPlaceholder'); if(ph) ph.style.display='none'; if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded(); if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn(); markDirty();
     } else if(ed.cover_url) {
       loadCoverByUrl(ed.cover_url);
     } else {
@@ -354,6 +363,7 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
       delete coverPreview.dataset.b64;
       delete coverPreview.dataset.mime;
       delete coverPreview.dataset.fit;
+      setPreviewCrop(null);
       if(tileCoverClick) tileCoverClick.style.removeProperty('--cover-url');
       if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn();
     }
@@ -364,6 +374,7 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
     if(!coverUrl) {
       setCoverPlaceholder(ph,'no-cover');
       coverPreview.style.display = 'none';
+      setPreviewCrop(null);
       return;
     }
     setCoverPlaceholder(ph,'loading');
@@ -384,6 +395,7 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
       coverPreview.dataset.b64 = base64;
       coverPreview.dataset.mime = mime;
       coverPreview.dataset.fit = coverFitMode(width, height);
+      setPreviewCrop(null);
       if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`);
       if(ph) ph.style.display = 'none';
       if(window.bookishApp?.showCoverLoaded) window.bookishApp.showCoverLoaded();
@@ -541,9 +553,11 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
       const savedSrc=coverPreview.dataset._savedSrc;
       const savedB64=coverPreview.dataset._savedB64;
       const savedMime=coverPreview.dataset._savedMime;
+      const savedCrop=coverPreview.dataset._savedCrop||'';
       if(savedSrc){
         coverPreview.src=savedSrc; coverPreview.style.display='block';
         coverPreview.dataset.b64=savedB64||''; coverPreview.dataset.mime=savedMime||'';
+        setPreviewCrop(savedCrop);
         if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${savedSrc}')`);
         const ph=document.getElementById('coverPlaceholder'); if(ph) ph.style.display='none';
       }
@@ -573,7 +587,8 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
   const adjustZoom=document.getElementById('coverAdjustZoom');
   const adjustApplyBtn=document.getElementById('coverAdjustApply');
   const adjustCancelBtn=document.getElementById('coverAdjustCancel');
-  let adjustState=null; // { zoom, panX, panY, original{Src,B64,Mime,Fit}, dragging, lastX, lastY }
+  const adjustResetBtn=document.getElementById('coverAdjustReset');
+  let adjustState=null; // { zoom, panX, panY, dragging, lastX, lastY }
   function isAdjusting(){ return !!adjustState; }
   function refreshAdjustBtnVisibility(){
     if(!adjustBtn) return;
@@ -640,25 +655,26 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
   function enterAdjust(){
     if(isAdjusting()) return;
     if(!(coverPreview.style.display==='block' && coverPreview.dataset.b64)) return;
+    const tile=document.getElementById('tileCoverClick');
+    const r=tile?.getBoundingClientRect?.();
+    const currentCrop=normalizeCoverCrop(coverPreview.dataset.crop);
     adjustState={
-      zoom:1.0, panX:0, panY:0,
-      originalSrc: coverPreview.src,
-      originalB64: coverPreview.dataset.b64,
-      originalMime: coverPreview.dataset.mime || '',
-      originalFit: coverPreview.dataset.fit || '',
+      zoom:currentCrop?.zoom || 1.0,
+      panX:(currentCrop?.x || 0) * Math.max(1, r?.width || 1),
+      panY:(currentCrop?.y || 0) * Math.max(1, r?.height || 1),
       dragging:false, lastX:0, lastY:0
     };
     const inner=document.querySelector('.modal-inner');
     if(inner) inner.classList.add('adjusting-cover');
     if(adjustControls) adjustControls.style.display='flex';
-    if(adjustZoom) adjustZoom.value='100';
+    if(adjustZoom) adjustZoom.value=String(Math.round(adjustState.zoom * 100));
     applyTransform();
     bindPointerHandlers();
   }
   function exitAdjust(){
     unbindPointerHandlers();
     adjustState=null;
-    coverPreview.style.transform='';
+    applyCoverCropToImage(coverPreview, coverPreview.dataset.crop);
     const inner=document.querySelector('.modal-inner');
     if(inner) inner.classList.remove('adjusting-cover');
     if(adjustControls) adjustControls.style.display='none';
@@ -668,33 +684,30 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
     const tile=document.getElementById('tileCoverClick');
     if(!tile){ exitAdjust(); return; }
     const r=tile.getBoundingClientRect();
-    const { zoom, panX, panY, originalSrc } = adjustState;
+    const { zoom, panX, panY } = adjustState;
     try{
       // Disable controls briefly to avoid double-Apply.
       if(adjustApplyBtn) adjustApplyBtn.disabled=true;
       if(adjustCancelBtn) adjustCancelBtn.disabled=true;
-      const { base64, mime, dataUrl } = await cropAndResizeImageToBase64(
-        originalSrc,
-        { tileW: r.width, tileH: r.height, zoom, panX, panY },
-        { outWidth: 600, outHeight: 900, quality: 0.85 }
-      );
-      coverPreview.src = dataUrl;
-      coverPreview.dataset.b64 = base64;
-      coverPreview.dataset.mime = mime;
-      coverPreview.dataset.fit = 'cover';
-      if(tileCoverClick) tileCoverClick.style.setProperty('--cover-url',`url('${dataUrl}')`);
-      // The new image becomes the new baseline — discard saved-source dataset
-      // entries that the "Cancel cover-browse" path uses, since they refer to
-      // a stale image now.
-      coverPreview.dataset._savedSrc = dataUrl;
-      coverPreview.dataset._savedB64 = base64;
-      coverPreview.dataset._savedMime = mime;
+      if(adjustResetBtn) adjustResetBtn.disabled=true;
+      const crop=setPreviewCrop({
+        zoom,
+        x: panX / Math.max(1, r.width || 1),
+        y: panY / Math.max(1, r.height || 1)
+      });
+      if(coverPreview.dataset._savedSrc === coverPreview.src){
+        coverPreview.dataset._savedCrop = crop ? serializeCoverCrop(crop) : '';
+      }
       markDirty();
+      if(form.priorTxid.value && window.bookishApp?._autoSaveIfDirty){
+        setTimeout(()=>{ try{ window.bookishApp._autoSaveIfDirty(); }catch{} }, 50);
+      }
     }catch(err){
       console.warn('[Bookish:Adjust] Apply failed:', err?.message||err);
     }finally{
       if(adjustApplyBtn) adjustApplyBtn.disabled=false;
       if(adjustCancelBtn) adjustCancelBtn.disabled=false;
+      if(adjustResetBtn) adjustResetBtn.disabled=false;
       exitAdjust();
       refreshAdjustBtnVisibility();
     }
@@ -705,6 +718,14 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
     // captured (we never mutated them during a session), so just exit.
     exitAdjust();
     refreshAdjustBtnVisibility();
+  }
+  function resetAdjust(){
+    if(!isAdjusting()) return;
+    adjustState.zoom=1.0;
+    adjustState.panX=0;
+    adjustState.panY=0;
+    if(adjustZoom) adjustZoom.value='100';
+    applyTransform();
   }
   if(adjustBtn){
     adjustBtn.addEventListener('click',(e)=>{ e.stopPropagation(); enterAdjust(); });
@@ -725,6 +746,9 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
   }
   if(adjustCancelBtn){
     adjustCancelBtn.addEventListener('click',(e)=>{ e.stopPropagation(); cancelAdjust(); });
+  }
+  if(adjustResetBtn){
+    adjustResetBtn.addEventListener('click',(e)=>{ e.stopPropagation(); resetAdjust(); });
   }
   // The cover-preview img sits inside #tileCoverClick which has a click handler
   // that opens the file picker. Block that while adjusting and also during a
@@ -760,6 +784,7 @@ import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdit
       coverPreview.dataset._savedSrc=coverPreview.src;
       coverPreview.dataset._savedB64=coverPreview.dataset.b64||'';
       coverPreview.dataset._savedMime=coverPreview.dataset.mime||'';
+      coverPreview.dataset._savedCrop=coverPreview.dataset.crop||'';
     }
     const title=(titleInput?.value||'').trim();
     const author=(authorInput?.value||'').trim();

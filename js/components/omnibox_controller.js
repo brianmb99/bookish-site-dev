@@ -2,6 +2,7 @@ import { filterBySearch } from '../core/shelf_filter.js';
 import { normalizeOLDoc, normalizeItunesItem, mergeOmniboxResults } from '../core/omnibox_merge.js';
 import { escapeHtml, generatedCoverColor } from './book_card.js';
 import { renderPipOverlay } from './friend_pip.js';
+import { coverCropStyleAttr } from '../core/cover_crop.js';
 
 const EMPTY_LIBRARY_PLACEHOLDER = 'Add your first book';
 const DEFAULT_PLACEHOLDER = 'Find or add a book';
@@ -69,7 +70,7 @@ export function renderOmniboxShelfResults({
     else if (rs === readingStatus?.READING) { statusLabel = 'Reading'; statusClass = 'status-reading'; }
     else if (rs === readingStatus?.WANT_TO_READ) { statusLabel = 'Want to Read'; statusClass = 'status-wtr'; }
     const coverHtml = coverDataUrl
-      ? `<img src="${coverDataUrl}">`
+      ? `<img src="${coverDataUrl}" data-fit="${entry.coverFit || 'contain'}"${coverCropStyleAttr(entry.coverCrop)}>`
       : `<div class="omnibox-result-mini" style="background:${generatedCoverColor(entry.title || '')}">${escapeHtml((entry.title || '').slice(0, 20))}</div>`;
     const statusHtml = statusLabel
       ? `<span class="omnibox-result-status ${statusClass}">${statusLabel}</span>`

@@ -19,6 +19,7 @@
 
 import * as friends from './friends.js';
 import { debugLog } from './debug_log.js';
+import { normalizeCoverCrop } from './cover_crop.js';
 
 export const READING_STATUS = {
   WANT_TO_READ: 'want_to_read',
@@ -64,11 +65,20 @@ function buildPayloadFromEntry(entry, { forUpdate = false } = {}) {
     if (entry.coverImage) {
       payload.coverImage = entry.coverImage;
       if (hasOwn(entry, 'mimeType') && entry.mimeType) payload.mimeType = entry.mimeType;
-      if (hasOwn(entry, 'coverFit') && entry.coverFit) payload.coverFit = entry.coverFit;
+      if (hasOwn(entry, 'coverFit')) {
+        if (entry.coverFit) payload.coverFit = entry.coverFit;
+        else if (forUpdate) addUnset(unset, 'coverFit');
+      }
+      if (hasOwn(entry, 'coverCrop')) {
+        const coverCrop = normalizeCoverCrop(entry.coverCrop);
+        if (coverCrop) payload.coverCrop = coverCrop;
+        else if (forUpdate) addUnset(unset, 'coverCrop');
+      }
     } else if (forUpdate) {
       addUnset(unset, 'coverImage');
       addUnset(unset, 'mimeType');
       addUnset(unset, 'coverFit');
+      addUnset(unset, 'coverCrop');
     }
   }
   if (hasOwn(entry, 'notes')) {
@@ -353,6 +363,7 @@ export class BookRepository {
       old.coverImage = '';
       old.mimeType = '';
       old.coverFit = '';
+      old.coverCrop = '';
     }
     if (hasOwn(payload, 'readingStatus')) applyStatusDateRules(old, payload.readingStatus);
     old.modifiedAt = Date.now();

@@ -30,6 +30,7 @@
 //   - Friend's notes (notes are still a single-player field; sharing not gated)
 
 import { escapeHtml, generatedCoverColor } from './book_card.js';
+import { coverCropStyleAttr } from '../core/cover_crop.js';
 import { renderFriendAvatar } from './friend_avatar.js';
 import { displayNameForConnection } from './friend_strip.js';
 import { formatMonthYearDisplay } from '../core/id_core.js';
@@ -91,7 +92,7 @@ function setCover(book) {
   const author = book.author || '';
   if (book.coverImage) {
     const dataUrl = `data:${book.mimeType || 'image/jpeg'};base64,${book.coverImage}`;
-    host.innerHTML = `<img src="${dataUrl}" alt="${escapeHtml(title)} cover" data-fit="${book.coverFit || 'contain'}">`;
+    host.innerHTML = `<img src="${dataUrl}" alt="${escapeHtml(title)} cover" data-fit="${book.coverFit || 'contain'}"${coverCropStyleAttr(book.coverCrop)}>`;
   } else {
     // Same fallback pattern as the Library card.
     host.innerHTML = `

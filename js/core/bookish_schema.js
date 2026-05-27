@@ -13,7 +13,7 @@
 //     through the Tarn API.
 //
 // Field set mirrors public/schemas/bookish_0.3.0.json (the previous Ajv-
-// based schema). Schema version is bumped from 0.3.0 → 5 (the new SDK
+// based schema). Schema version is bumped from 0.3.0 → 6 (the new SDK
 // uses positive integers, not semver strings).
 //
 // IMPORTANT: every field a Bookish entry might carry must be declared
@@ -24,7 +24,7 @@ import { defineSchema } from '../lib/tarn/tarn-client.bundle.js';
 
 export const bookishSchema = defineSchema({
   appId: 'bookish',
-  version: 5,
+  version: 6,
   collections: {
     profiles: {
       primaryKey: 'profileId',
@@ -58,11 +58,13 @@ export const bookishSchema = defineSchema({
         wtrPosition: 'integer?',
 
         // Cover art (base64-encoded). mimeType paired so the renderer
-        // knows how to interpret coverImage. coverFit captures the user's
-        // crop / fit preference for the cover (cover | contain).
+        // knows how to interpret coverImage. coverFit captures the baseline
+        // fit mode (cover | contain); coverCrop stores non-destructive
+        // normalized pan/zoom metadata for the user's chosen crop.
         coverImage: 'string?',
         mimeType: 'string?',
         coverFit: 'string?',
+        coverCrop: 'json?',
 
         // Friend-matching identifiers (issue #111). work_key is the
         // OpenLibrary work key used for strict equality matching across

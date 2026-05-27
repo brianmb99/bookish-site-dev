@@ -25,6 +25,7 @@ import { renderFriendAvatar } from './friend_avatar.js';
 import { displayNameForConnection } from './friend_strip.js';
 import { generatedCoverColor, escapeHtml } from './book_card.js';
 import { openFriendBookDetail } from './friend_book_detail.js';
+import { applyCoverCropToImage } from '../core/cover_crop.js';
 
 const SECTION_HEADING = 'Recent finishes';
 
@@ -72,6 +73,8 @@ export function buildRecentFinishRow(event, opts = {}) {
     img.src = dataUrl;
     img.alt = '';            // decorative — full title is in the row's aria-label
     img.loading = 'lazy';
+    img.dataset.fit = book.coverFit || 'contain';
+    applyCoverCropToImage(img, book.coverCrop);
     cover.appendChild(img);
   } else {
     cover.classList.add('recent-finish-cover-placeholder');
