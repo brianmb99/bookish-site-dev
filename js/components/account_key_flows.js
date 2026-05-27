@@ -132,17 +132,21 @@ export async function startViewAccountKeyFlow(opts = {}, deps = {}) {
     tarnService,
     requestPasswordConfirmation,
     showResultOverlay = showAccountKeyResultOverlay,
+    onDismissTransientUi = noop,
   } = deps;
+  onDismissTransientUi();
   const result = await requestPasswordConfirmation({
     title: 'View your account key',
     body: 'Re-enter your password to see your 24-word account key.',
     confirmLabel: 'Show account key',
+    autoFocusInput: 'desktop',
     submit: async (password) => tarnService.accountKey.view({ password }),
   });
   if (!result || !result.accountKey) return;
+  onDismissTransientUi();
   showResultOverlay({
     heading: 'Your account key',
-    body: "Save these 24 words somewhere safe \u2014 a password manager works well. We won't be able to give them to you again if you lose them.",
+    body: 'Save these 24 words somewhere safe \u2014 a password manager works well. You can view this key again any time in Settings \u2192 Account & Security.',
     accountKey: result.accountKey,
     onDone: typeof onCompleted === 'function' ? onCompleted : undefined,
   }, deps);
@@ -197,6 +201,7 @@ export async function startReplaceAccountKeyFlow(deps = {}) {
 export function showAccountKeyResultOverlay(opts, deps = {}) {
   const {
     createOverlay = defaultCreateOverlay,
+    onDismissTransientUi = noop,
     onWarn = noop,
   } = deps;
   const overlay = createOverlay('account-key-result-overlay');
@@ -216,7 +221,12 @@ export function showAccountKeyResultOverlay(opts, deps = {}) {
   const done = overlay.querySelector('[data-overlay-done]');
   if (done) {
     done.addEventListener('click', () => {
+      const active = overlay.ownerDocument?.activeElement;
+      if (active && overlay.contains(active) && typeof active.blur === 'function') active.blur();
       overlay.remove();
+      try { onDismissTransientUi(); } catch (err) {
+        onWarn('[AccountUI] transient UI cleanup failed:', err?.message || err);
+      }
       if (typeof opts.onDone === 'function') {
         try { opts.onDone(); } catch (err) {
           onWarn('[AccountUI] onDone callback threw:', err?.message || err);

@@ -1017,7 +1017,21 @@ function closeModal(fromPopstate = false){
   }
 }
 function clearBooks(){ if(bookRepo) bookRepo.clear(); else { entries=[]; render(); } }
-window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus, showShelfSkeletons, clearShelfSkeletons, getActiveEntryCount: ()=>activeEntryCount(), showStatusToast, _autoSaveIfDirty: ()=>_autoSaveIfDirty(),
+function dismissTransientUi(){
+  const active = document.activeElement;
+  if(active && typeof active.blur === 'function') active.blur();
+  try {
+    if(omniboxController.isSearchTakeoverActive()) closeSearchTakeover();
+    else {
+      clearOmnibox({ refocus:false });
+      closeOmniboxDropdown();
+    }
+  } catch (err) {
+    console.warn('[Bookish] transient UI cleanup failed:', err?.message || err);
+  }
+  document.body.classList.remove('empty-omnibox-active');
+}
+window.bookishApp={ openModal, clearBooks, showCoverLoaded, clearCoverPreview, render, changeReadingStatus, showShelfSkeletons, clearShelfSkeletons, getActiveEntryCount: ()=>activeEntryCount(), showStatusToast, dismissTransientUi, _autoSaveIfDirty: ()=>_autoSaveIfDirty(),
   // Test-only: synchronously inject an entry into the in-memory list and
   // re-render. Used by browser tests that need a deterministic card without
   // reaching through the network-bound search-and-save flow. NEVER called

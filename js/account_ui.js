@@ -664,6 +664,7 @@ function accountKeyFlowDeps() {
     confirmDialog,
     createOverlay,
     requestPasswordConfirmation,
+    onDismissTransientUi: () => window.bookishApp?.dismissTransientUi?.(),
     onWarn: (...args) => console.warn(...args),
   };
 }
@@ -723,6 +724,13 @@ function createOverlay(extraClass = '') {
   return overlay;
 }
 
+function shouldAutoFocusSecurityInput(autoFocusInput) {
+  if (autoFocusInput === false) return false;
+  if (autoFocusInput === true) return true;
+  const coarse = window.matchMedia?.('(pointer: coarse)')?.matches === true;
+  return !coarse;
+}
+
 /**
  * Show a password-prompt modal.
  *
@@ -744,15 +752,16 @@ function createOverlay(extraClass = '') {
  *   title: string,
  *   body: string,
  *   confirmLabel?: string,
+ *   autoFocusInput?: boolean | 'desktop',
  *   submit?: (password: string) => Promise<T>,
  * }} opts
  * @returns {Promise<string | T | null>}
  */
-function requestPasswordConfirmation({ title, body, confirmLabel = 'Continue', submit }) {
+function requestPasswordConfirmation({ title, body, confirmLabel = 'Continue', autoFocusInput = 'desktop', submit }) {
   return new Promise((resolve) => {
-    const overlay = createOverlay();
+    const overlay = createOverlay('security-password-overlay');
     overlay.innerHTML = `
-      <div class="security-overlay-card" role="dialog" aria-modal="true">
+      <div class="security-overlay-card" role="dialog" aria-modal="true" tabindex="-1">
         <h2 class="security-overlay-title">${escapeHtml(title)}</h2>
         <p class="security-overlay-body">${escapeHtml(body)}</p>
         <div class="form-group">
@@ -781,7 +790,10 @@ function requestPasswordConfirmation({ title, body, confirmLabel = 'Continue', s
     const cleanupAndResolve = (value) => {
       // Clear the input before resolving so the password doesn't sit in
       // the DOM after the overlay is removed.
-      if (input) input.value = '';
+      if (input) {
+        input.blur();
+        input.value = '';
+      }
       overlay.remove();
       resolve(value);
     };
@@ -832,8 +844,13 @@ function requestPasswordConfirmation({ title, body, confirmLabel = 'Continue', s
     // Click on card stops bubbling so the backdrop handler doesn't fire.
     card.addEventListener('click', (e) => e.stopPropagation());
 
-    // Focus the input on the next frame.
-    requestAnimationFrame(() => input.focus({ preventScroll: true }));
+    // On touch devices, opening the keyboard immediately can hide the
+    // security prompt. Focus the card instead; the user taps the password
+    // field when ready.
+    requestAnimationFrame(() => {
+      if (shouldAutoFocusSecurityInput(autoFocusInput)) input.focus({ preventScroll: true });
+      else card.focus({ preventScroll: true });
+    });
   });
 }
 

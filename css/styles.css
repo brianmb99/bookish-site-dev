@@ -3889,6 +3889,17 @@ form.inline label.toggle-switch{display:flex}
   .security-overlay-actions .btn{
     width:100%;
   }
+  .security-overlay.security-password-overlay{
+    align-items:center;
+    justify-content:flex-start;
+    padding:calc(env(safe-area-inset-top) + 72px) 12px max(12px, env(safe-area-inset-bottom));
+  }
+  .security-overlay.security-password-overlay .security-overlay-card{
+    width:min(100%, 420px);
+    max-width:420px;
+    max-height:calc(100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    border-radius:12px;
+  }
   .account-key-result-overlay .security-overlay-card .auth-header{
     text-align:center;
   }
