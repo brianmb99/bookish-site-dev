@@ -7,8 +7,12 @@ function isBookDetailPlacard(el) {
   return !!el?.classList?.contains('placard') && !!el.closest?.('.book-detail-placards');
 }
 
+function isInlineAccountEdit(el) {
+  return !!el?.closest?.('.account-display-name-edit');
+}
+
 function getScrollBlock(el) {
-  return isBookDetailPlacard(el) ? 'nearest' : 'center';
+  return isBookDetailPlacard(el) || isInlineAccountEdit(el) ? 'nearest' : 'center';
 }
 
 /**
@@ -29,6 +33,7 @@ export function attachKeyboardHandler({ sheet }) {
 
   let keyboardOpen = false;
   let rafId = null;
+  let baselineHeight = Math.max(window.innerHeight || 0, vv.height || 0);
 
   function onViewportResize() {
     if (rafId) cancelAnimationFrame(rafId);
@@ -38,24 +43,29 @@ export function attachKeyboardHandler({ sheet }) {
   function applyLayout() {
     rafId = null;
     const viewportHeight = vv.height;
-    // On iOS, window.innerHeight stays the same when keyboard opens,
-    // but visualViewport.height shrinks. On Android, both may shrink.
-    // Use the initial stored height or window.innerHeight as baseline.
-    const fullHeight = window.innerHeight;
-    const diff = fullHeight - viewportHeight;
+    // On iOS, window.innerHeight stays the same when keyboard opens; on
+    // Android, both window.innerHeight and visualViewport.height may shrink.
+    // Keep a pre-keyboard baseline so Android resize-keyboards are detected.
+    const layoutHeight = window.innerHeight || viewportHeight;
+    baselineHeight = Math.max(baselineHeight, layoutHeight, viewportHeight);
+    const visibleHeight = Math.min(layoutHeight, viewportHeight);
+    const diff = baselineHeight - visibleHeight;
     const isKbOpen = diff > KEYBOARD_THRESHOLD;
-    const bottomInset = Math.max(0, fullHeight - viewportHeight - (vv.offsetTop || 0));
+    // Only offset sheets when the layout viewport itself has not resized
+    // around the keyboard. If the layout viewport already shrank, adding a
+    // bottom margin pushes full-height sheets off the top of the screen.
+    const bottomInset = Math.max(0, layoutHeight - viewportHeight - (vv.offsetTop || 0));
 
     if (isKbOpen && !keyboardOpen) {
       keyboardOpen = true;
       sheet.classList.add('keyboard-open');
       // Set max-height to fit within the visible viewport
-      sheet.style.maxHeight = viewportHeight + 'px';
+      sheet.style.maxHeight = visibleHeight + 'px';
       sheet.style.marginBottom = bottomInset ? bottomInset + 'px' : '';
       scrollFocusedInput();
     } else if (isKbOpen && keyboardOpen) {
       // Keyboard still open but viewport height changed (e.g., suggestions bar)
-      sheet.style.maxHeight = viewportHeight + 'px';
+      sheet.style.maxHeight = visibleHeight + 'px';
       sheet.style.marginBottom = bottomInset ? bottomInset + 'px' : '';
       scrollFocusedInput();
     } else if (!isKbOpen && keyboardOpen) {
