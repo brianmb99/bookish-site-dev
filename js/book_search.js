@@ -3,7 +3,7 @@
 import { cleanTitle, filterCoverMatches, extractISBN10s, amazonCoverUrl, olCoverByISBN, coverFitMode, coverSortComparator, convertISBN13to10 } from './core/search_core.js';
 import { resizeImageToBase64 } from './core/image_utils.js';
 import { buildOLEditions, filterEnglishRawEditions, insertByRank, buildCoverEdition, fetchAndValidateCover } from './core/cover_pipeline.js';
-import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from './core/cover_crop.js';
+import { applyCoverCropToImage, MAX_COVER_ZOOM, MIN_COVER_ZOOM, normalizeCoverCrop, serializeCoverCrop } from './core/cover_crop.js';
 (function(){
   const form=document.getElementById('entryForm'); if(!form) return; const coverPreview=document.getElementById('coverPreview'); const tileCoverClick=document.getElementById('tileCoverClick');
   const titleInput=form.elements?.namedItem('title');
@@ -735,7 +735,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
   const adjustApplyBtn=document.getElementById('coverAdjustApply');
   const adjustCancelBtn=document.getElementById('coverAdjustCancel');
   const adjustResetBtn=document.getElementById('coverAdjustReset');
-  let adjustState=null; // { zoom, panX, panY, dragging, lastX, lastY }
+  let adjustState=null; // { zoom, panX, panY, dragging, pinching, lastX, lastY, pinchStartDist, pinchStartZoom }
   function isAdjusting(){ return !!adjustState; }
   function refreshAdjustBtnVisibility(){
     if(!adjustBtn) return;
@@ -747,6 +747,14 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
     if(!adjustState) return;
     const { zoom, panX, panY } = adjustState;
     coverPreview.style.transform=`translate(${panX}px, ${panY}px) scale(${zoom})`;
+  }
+  function setAdjustZoom(zoom){
+    if(!adjustState) return;
+    adjustState.zoom=Math.max(MIN_COVER_ZOOM, Math.min(MAX_COVER_ZOOM, Number(zoom)||MIN_COVER_ZOOM));
+    if(adjustState.zoom<=MIN_COVER_ZOOM){ adjustState.panX=0; adjustState.panY=0; }
+    else { clampPan(); }
+    if(adjustZoom) adjustZoom.value=String(Math.round(adjustState.zoom * 100));
+    applyTransform();
   }
   function clampPan(){
     if(!adjustState) return;
@@ -762,6 +770,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
   }
   function onPointerDown(ev){
     if(!isAdjusting() || ev.button===2) return;
+    if(adjustState.pinching) return;
     if(adjustState.zoom<=1.0) return; // nothing to pan
     adjustState.dragging=true;
     adjustState.lastX=ev.clientX;
@@ -771,6 +780,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
   }
   function onPointerMove(ev){
     if(!isAdjusting() || !adjustState.dragging) return;
+    if(adjustState.pinching) return;
     const dx=ev.clientX-adjustState.lastX;
     const dy=ev.clientY-adjustState.lastY;
     adjustState.lastX=ev.clientX;
@@ -785,12 +795,49 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
     adjustState.dragging=false;
     try{ ev.target.releasePointerCapture?.(ev.pointerId); }catch{}
   }
+  function touchDistance(t1,t2){
+    const dx=t1.clientX-t2.clientX;
+    const dy=t1.clientY-t2.clientY;
+    return Math.hypot(dx,dy);
+  }
+  function onTouchStart(ev){
+    if(!isAdjusting() || ev.touches.length!==2) return;
+    adjustState.pinching=true;
+    adjustState.dragging=false;
+    adjustState.pinchStartDist=touchDistance(ev.touches[0], ev.touches[1]);
+    adjustState.pinchStartZoom=adjustState.zoom;
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  function onTouchMove(ev){
+    if(!isAdjusting() || !adjustState.pinching || ev.touches.length!==2) return;
+    const d=touchDistance(ev.touches[0], ev.touches[1]);
+    const startDist=Math.max(1, adjustState.pinchStartDist || d || 1);
+    setAdjustZoom((adjustState.pinchStartZoom || MIN_COVER_ZOOM) * (d / startDist));
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  function onTouchEnd(ev){
+    if(!isAdjusting() || !adjustState.pinching) return;
+    if(ev.touches.length<2){
+      adjustState.pinching=false;
+      adjustState.pinchStartDist=0;
+      adjustState.pinchStartZoom=adjustState.zoom;
+      adjustState.dragging=false;
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }
   function bindPointerHandlers(){
     coverPreview.addEventListener('pointerdown', onPointerDown);
     coverPreview.addEventListener('pointermove', onPointerMove);
     coverPreview.addEventListener('pointerup', onPointerUp);
     coverPreview.addEventListener('pointercancel', onPointerUp);
     coverPreview.addEventListener('pointerleave', onPointerUp);
+    coverPreview.addEventListener('touchstart', onTouchStart, { passive:false });
+    coverPreview.addEventListener('touchmove', onTouchMove, { passive:false });
+    coverPreview.addEventListener('touchend', onTouchEnd, { passive:false });
+    coverPreview.addEventListener('touchcancel', onTouchEnd, { passive:false });
   }
   function unbindPointerHandlers(){
     coverPreview.removeEventListener('pointerdown', onPointerDown);
@@ -798,6 +845,10 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
     coverPreview.removeEventListener('pointerup', onPointerUp);
     coverPreview.removeEventListener('pointercancel', onPointerUp);
     coverPreview.removeEventListener('pointerleave', onPointerUp);
+    coverPreview.removeEventListener('touchstart', onTouchStart);
+    coverPreview.removeEventListener('touchmove', onTouchMove);
+    coverPreview.removeEventListener('touchend', onTouchEnd);
+    coverPreview.removeEventListener('touchcancel', onTouchEnd);
   }
   function enterAdjust(){
     if(isAdjusting()) return;
@@ -809,7 +860,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
       zoom:currentCrop?.zoom || 1.0,
       panX:(currentCrop?.x || 0) * Math.max(1, r?.width || 1),
       panY:(currentCrop?.y || 0) * Math.max(1, r?.height || 1),
-      dragging:false, lastX:0, lastY:0
+      dragging:false, pinching:false, lastX:0, lastY:0, pinchStartDist:0, pinchStartZoom:currentCrop?.zoom || 1.0
     };
     const inner=document.querySelector('.modal-inner');
     if(inner) inner.classList.add('adjusting-cover');
@@ -881,11 +932,7 @@ import { applyCoverCropToImage, normalizeCoverCrop, serializeCoverCrop } from '.
     adjustZoom.addEventListener('input',()=>{
       if(!isAdjusting()) return;
       const pct=Math.max(100, Math.min(300, parseInt(adjustZoom.value,10)||100));
-      adjustState.zoom=pct/100;
-      // When zooming back to 1, force pan to 0 (per spec).
-      if(adjustState.zoom<=1.0){ adjustState.panX=0; adjustState.panY=0; }
-      else { clampPan(); }
-      applyTransform();
+      setAdjustZoom(pct/100);
     });
   }
   if(adjustApplyBtn){

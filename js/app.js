@@ -3103,6 +3103,12 @@ notesInput?.addEventListener('input', ()=>{ autoGrowNotes(); if(notesInput.value
 (function enableMobilePinch(){
   let cols=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--mobile-columns')||'2',10);
   function clamp(n){ return Math.min(3, Math.max(1,n)); }
+  function isPinchSuppressed(){
+    return document.body.classList.contains('modal-open') ||
+      omniboxController.isSearchTakeoverActive() ||
+      (notesOverlay && notesOverlay.style.display === 'flex') ||
+      (wtrOverlay && wtrOverlay.style.display === 'block');
+  }
   function apply(){
     document.documentElement.style.setProperty('--mobile-columns', String(cols));
     document.documentElement.dataset.cols=String(cols);
@@ -3111,10 +3117,10 @@ notesInput?.addEventListener('input', ()=>{ autoGrowNotes(); if(notesInput.value
   }
   let pinchStartDist=null; let startCols=cols;
   function dist(t1,t2){ const dx=t1.clientX-t2.clientX, dy=t1.clientY-t2.clientY; return Math.hypot(dx,dy); }
-  window.addEventListener('touchstart',e=>{ if(e.touches.length===2){ pinchStartDist=dist(e.touches[0],e.touches[1]); startCols=cols; } });
-  window.addEventListener('touchmove',e=>{ if(e.touches.length===2 && pinchStartDist){ const d=dist(e.touches[0],e.touches[1]); const scale=d/pinchStartDist; const target = scale>1? Math.round(startCols - (scale-1)*1.2): Math.round(startCols + (1-scale)*1.2); const next=clamp(target); if(next!==cols){ cols=next; apply(); } e.preventDefault(); } }, { passive:false });
+  window.addEventListener('touchstart',e=>{ if(e.touches.length===2){ if(isPinchSuppressed()){ pinchStartDist=null; return; } pinchStartDist=dist(e.touches[0],e.touches[1]); startCols=cols; } });
+  window.addEventListener('touchmove',e=>{ if(e.touches.length===2 && isPinchSuppressed()){ pinchStartDist=null; e.preventDefault(); return; } if(e.touches.length===2 && pinchStartDist){ const d=dist(e.touches[0],e.touches[1]); const scale=d/pinchStartDist; const target = scale>1? Math.round(startCols - (scale-1)*1.2): Math.round(startCols + (1-scale)*1.2); const next=clamp(target); if(next!==cols){ cols=next; apply(); } e.preventDefault(); } }, { passive:false });
   window.addEventListener('touchend',()=>{ pinchStartDist=null; });
-  window.addEventListener('wheel',e=>{ if(!e.ctrlKey) return; e.preventDefault(); cols=clamp(cols + (e.deltaY>0?1:-1)); apply(); }, { passive:false });
+  window.addEventListener('wheel',e=>{ if(!e.ctrlKey) return; if(isPinchSuppressed()){ e.preventDefault(); return; } e.preventDefault(); cols=clamp(cols + (e.deltaY>0?1:-1)); apply(); }, { passive:false });
   apply();
 })();
 

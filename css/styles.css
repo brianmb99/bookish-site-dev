@@ -2531,7 +2531,7 @@ img.preview{max-width:100%;border-radius:8px;margin-top:8px}
    When adjusting, suppress the blur backdrop's hover transition (so the backdrop
    doesn't repaint while dragging) and disable native image touch gestures so
    our pointer handlers receive every move. */
-.modal-inner.adjusting-cover .tile-cover{cursor:grab;user-select:none}
+.modal-inner.adjusting-cover .tile-cover{cursor:grab;user-select:none;touch-action:none}
 .modal-inner.adjusting-cover .tile-cover:active{cursor:grabbing}
 .modal-inner.adjusting-cover .tile-cover img{
   touch-action:none;
@@ -4427,7 +4427,7 @@ form.inline label.toggle-switch{display:flex}
 
 /* 7a: Overscroll containment - keep scroll inside modals/overlays */
 .modal-inner,.wtr-drawer,.notes-overlay{overscroll-behavior:contain}
-body.modal-open{overscroll-behavior-y:contain}
+body.modal-open{overscroll-behavior-y:contain;touch-action:pan-y}
 
 /* 7c: Touch press feedback - coarse pointer only */
 @media (pointer:coarse){
