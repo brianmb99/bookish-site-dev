@@ -17,6 +17,13 @@ function defaultCreateOverlay(extraClass = '') {
   return overlay;
 }
 
+function shouldAutoFocusTextInput(autoFocusInput, windowRef = globalThis.window) {
+  if (autoFocusInput === false) return false;
+  if (autoFocusInput === true) return true;
+  const coarse = windowRef?.matchMedia?.('(pointer: coarse)')?.matches === true;
+  return !coarse;
+}
+
 function defaultHumanizeAccountKeyError(err) {
   const msg = err?.message || '';
   if (err?.name === 'AccountKeyPinningError' || /pinning|pin check|does not match/i.test(msg)) {
@@ -323,15 +330,18 @@ export async function startAddPasskeyFlow(content, deps = {}) {
   const {
     passkeys,
     openAddPasskeyDialogImpl = openAddPasskeyDialog,
+    onDismissTransientUi = noop,
     onWarn = noop,
   } = deps;
   const errorEl = content.querySelector('#accountPasskeysError');
   if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
 
+  onDismissTransientUi();
   const result = await openAddPasskeyDialogImpl({
     suggestion: suggestDeviceLabel(),
   }, deps);
   if (!result || !result.deviceLabel) return;
+  onDismissTransientUi();
 
   try {
     await passkeys.register({ deviceLabel: result.deviceLabel });
@@ -430,12 +440,14 @@ export function humanizePasskeyError(err, deps = {}) {
 export function openAddPasskeyDialog({ suggestion }, deps = {}) {
   const {
     createOverlay = defaultCreateOverlay,
+    autoFocusInput = 'desktop',
     requestAnimationFrameImpl = globalThis.requestAnimationFrame,
+    windowRef = globalThis.window,
   } = deps;
   return new Promise((resolve) => {
-    const overlay = createOverlay();
+    const overlay = createOverlay('passkey-add-overlay');
     overlay.innerHTML = `
-      <div class="security-overlay-card" role="dialog" aria-modal="true">
+      <div class="security-overlay-card" role="dialog" aria-modal="true" tabindex="-1">
         <h2 class="security-overlay-title">Add a passkey</h2>
         <p class="security-overlay-body">You'll see a system prompt next \u2014 Touch ID, Face ID, or Windows Hello \u2014 to confirm.</p>
         <div class="form-group">
@@ -458,7 +470,11 @@ export function openAddPasskeyDialog({ suggestion }, deps = {}) {
       confirmBtn.disabled = input.value.trim().length === 0;
     };
     validate();
-    const cleanup = (val) => { overlay.remove(); resolve(val); };
+    const cleanup = (val) => {
+      input.blur();
+      overlay.remove();
+      resolve(val);
+    };
     input.addEventListener('input', validate);
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !confirmBtn.disabled) {
@@ -475,8 +491,12 @@ export function openAddPasskeyDialog({ suggestion }, deps = {}) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(null); });
     card.addEventListener('click', (e) => e.stopPropagation());
     requestAnimationFrameImpl(() => {
-      input.focus({ preventScroll: true });
-      input.select();
+      if (shouldAutoFocusTextInput(autoFocusInput, windowRef)) {
+        input.focus({ preventScroll: true });
+        input.select();
+      } else {
+        card.focus({ preventScroll: true });
+      }
     });
   });
 }

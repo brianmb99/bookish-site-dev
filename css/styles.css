@@ -3502,6 +3502,13 @@ form.inline label.toggle-switch{display:flex}
   font-size:.8rem;
   color:var(--color-text-muted);
 }
+.account-display-name-summary.is-editing{
+  grid-template-columns:1fr;
+  grid-template-areas:
+    "label"
+    "edit";
+  gap:6px;
+}
 .account-display-name-summary > span{
   grid-area:label;
   min-width:0;
@@ -3550,60 +3557,87 @@ form.inline label.toggle-switch{display:flex}
   grid-area:action;
   justify-self:end;
 }
+.account-display-name-summary.is-editing .account-display-name-change,
+.account-display-name-summary.is-editing #accountDisplayNameValue{
+  display:none;
+}
 .account-display-name-edit{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
+  grid-area:edit;
+  min-width:0;
 }
 .account-display-name-edit[hidden]{
   display:none;
 }
 .account-display-name-edit label{
-  font-size:.72rem;
-  color:var(--color-text-muted);
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0 0 0 0);
+  white-space:nowrap;
+  border:0;
   text-transform:none;
   letter-spacing:0;
 }
 .account-display-name-edit-row{
-  display:flex;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 36px 36px;
   align-items:center;
-  gap:8px;
+  gap:6px;
 }
 .account-display-name-edit-row input{
-  flex:1;
   min-width:0;
-  height:40px;
-  padding:8px 10px;
-  background:var(--color-bg-base);
+  height:36px;
+  padding:4px 0;
+  background:transparent;
   color:var(--color-text-primary);
-  border:1px solid var(--color-border-default);
-  border-radius:8px;
+  border:0;
+  border-bottom:1px dashed var(--color-border-default);
+  border-radius:0;
   font:inherit;
+  font-size:.95rem;
+  font-weight:600;
 }
 .account-display-name-edit-row input:focus{
   outline:none;
-  border-color:rgba(245,158,11,.68);
-  box-shadow:0 0 0 3px rgba(245,158,11,.14);
+  border-bottom-color:rgba(245,158,11,.78);
+  box-shadow:none;
+}
+.account-inline-icon-btn{
+  width:36px;
+  height:36px;
+  min-height:36px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid var(--color-border-subtle);
+  border-radius:8px;
+  background:transparent;
+  color:var(--color-text-secondary);
+  cursor:pointer;
+  box-shadow:none!important;
+  transition:background .15s,border-color .15s,color .15s;
+}
+.account-inline-icon-btn:hover,
+.account-inline-icon-btn:focus-visible{
+  color:var(--color-text-primary);
+  background:rgba(28,34,42,.58);
+  border-color:var(--color-border-default);
+  outline:none;
 }
 .account-inline-save-btn{
-  height:40px;
-  padding:0 14px;
-  border:1px solid var(--color-primary);
-  border-radius:8px;
-  background:var(--color-primary);
-  color:#fff;
-  font-size:.84rem;
-  font-weight:600;
-  cursor:pointer;
+  color:var(--color-primary);
+  border-color:rgba(59,130,246,.45);
 }
 .account-inline-save-btn:disabled{
   opacity:.55;
   cursor:wait;
 }
 .account-inline-cancel-btn{
-  min-height:40px;
-  padding:0 12px;
-  font-size:.82rem;
+  color:var(--color-text-muted);
 }
 .account-security-error{
   font-size:.78rem;
@@ -3894,7 +3928,18 @@ form.inline label.toggle-switch{display:flex}
     justify-content:flex-start;
     padding:calc(env(safe-area-inset-top) + 72px) 12px max(12px, env(safe-area-inset-bottom));
   }
+  .security-overlay.passkey-add-overlay{
+    align-items:center;
+    justify-content:flex-start;
+    padding:calc(env(safe-area-inset-top) + 72px) 12px max(12px, env(safe-area-inset-bottom));
+  }
   .security-overlay.security-password-overlay .security-overlay-card{
+    width:min(100%, 420px);
+    max-width:420px;
+    max-height:calc(100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    border-radius:12px;
+  }
+  .security-overlay.passkey-add-overlay .security-overlay-card{
     width:min(100%, 420px);
     max-width:420px;
     max-height:calc(100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
@@ -4141,15 +4186,6 @@ form.inline label.toggle-switch{display:flex}
     justify-self:start;
     min-height:38px;
     width:auto;
-  }
-  .account-display-name-edit-row{
-    flex-wrap:wrap;
-  }
-  .account-display-name-edit-row input{
-    flex-basis:100%;
-  }
-  .account-inline-save-btn{
-    flex:1 1 0;
   }
 }
 .account-signout {

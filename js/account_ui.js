@@ -539,6 +539,7 @@ function wireAccountSecuritySection(content) {
 
 function wireDisplayNameSettings(content) {
   const changeBtn = content.querySelector('#changeDisplayNameBtn');
+  const summary = content.querySelector('.account-display-name-summary');
   const edit = content.querySelector('#accountDisplayNameEdit');
   const input = content.querySelector('#accountDisplayNameInput');
   const valueEl = content.querySelector('#accountDisplayNameValue');
@@ -556,6 +557,7 @@ function wireDisplayNameSettings(content) {
   const closeEditor = () => {
     hideError();
     edit.hidden = true;
+    summary?.classList.remove('is-editing');
     changeBtn.hidden = false;
     input.value = valueEl.textContent.trim();
   };
@@ -563,10 +565,11 @@ function wireDisplayNameSettings(content) {
   const openEditor = () => {
     hideError();
     edit.hidden = false;
+    summary?.classList.add('is-editing');
     changeBtn.hidden = true;
     input.value = valueEl.textContent.trim();
     input.focus({ preventScroll: true });
-    input.select();
+    try { input.setSelectionRange(input.value.length, input.value.length); } catch {}
   };
 
   const save = async () => {
@@ -623,6 +626,7 @@ function passkeySettingsDeps() {
     confirmDialog,
     requestPasswordConfirmation,
     humanizeAccountKeyError,
+    onDismissTransientUi: () => window.bookishApp?.dismissTransientUi?.(),
     onWarn: (...args) => console.warn(...args),
   };
 }
