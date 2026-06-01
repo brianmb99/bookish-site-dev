@@ -104,13 +104,14 @@ export function renderOmniboxApiResults({ results = [], refs = {}, onAfterRender
   }
   addResults.innerHTML = results.slice(0, 8).map(result => {
     const coverHtml = result.coverUrl
-      ? `<img src="${result.coverUrl}">`
+      ? `<img src="${escapeHtml(result.coverUrl)}">`
       : `<div class="omnibox-result-mini" style="background:${generatedCoverColor(result.title || '')}">${escapeHtml((result.title || '').slice(0, 20))}</div>`;
     const meta = [result.year, result.publisher, result.duration].filter(Boolean).join(' \u00B7 ');
     const workKey = (result.work_key && typeof result.work_key === 'string') ? result.work_key : '';
-    const wkAttr = workKey ? ` data-work-key='${escapeHtml(workKey)}'` : '';
+    const wkAttr = workKey ? ` data-work-key="${escapeHtml(workKey)}"` : '';
     const addLabel = result.title ? `Add ${result.title}` : 'Add book';
-    return `<div class="omnibox-result" data-add-json='${encodeURIComponent(JSON.stringify(result))}'${wkAttr}>
+    const payload = escapeHtml(encodeURIComponent(JSON.stringify(result)));
+    return `<div class="omnibox-result" data-add-json="${payload}"${wkAttr}>
       <div class="omnibox-result-cover">${coverHtml}</div>
       <div class="omnibox-result-info">
         <div class="omnibox-result-title">${escapeHtml(result.title || '')}</div>
@@ -533,7 +534,9 @@ export function createOmniboxController({
         const meta = JSON.parse(decodeURIComponent(addRow.dataset.addJson));
         completeSelection();
         onOpenApiResult(meta);
-      } catch {}
+      } catch (err) {
+        onWarn('[Bookish] omnibox add result failed to open:', err?.message || err);
+      }
     }
   }
 
