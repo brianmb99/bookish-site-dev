@@ -851,7 +851,7 @@ function _showStatusMicrocopy(status){
 
 /**
  * Render the inline summary row under the status pills (#114).
- * Day/month only (no year) — shelf is grouped by year.
+ * Month/day/year so the detail sheet stands alone without relying on shelf context.
  * Shows: rating stars, Started date, Finished date — only segments that are set.
  * Hidden entirely on WTR with no data.
  */
@@ -878,7 +878,7 @@ function _renderSummaryDateSegment(kind, label, value){
   if(_summaryDateEditing === kind){
     return `<input type="date" class="summary-date-input" data-edit-date="${kind}" aria-label="${ariaLabel}" value="${escapeHtml(value)}">`;
   }
-  return `<span class="summary-seg summary-date-seg" data-edit="${kind}" tabindex="0" role="button" aria-label="${ariaLabel}">${label} ${escapeHtml(_formatDayMonth(ms))}</span>`;
+  return `<span class="summary-seg summary-date-seg" data-edit="${kind}" tabindex="0" role="button" aria-label="${ariaLabel}">${label} ${escapeHtml(_formatDayMonthYear(ms))}</span>`;
 }
 
 function _renderSummaryRow(){
@@ -899,7 +899,7 @@ function _renderSummaryRow(){
     if(startedSeg) segs.push(startedSeg);
   }
   if(status === READING_STATUS.READ){
-    if(startedMs) segs.push(`<span class="summary-seg summary-static-seg">Started ${escapeHtml(_formatDayMonth(startedMs))}</span>`);
+    if(startedMs) segs.push(`<span class="summary-seg summary-static-seg">Started ${escapeHtml(_formatDayMonthYear(startedMs))}</span>`);
     const finishedSeg = _renderSummaryDateSegment('finished', 'Finished', currentDateValue);
     if(finishedSeg) segs.push(finishedSeg);
   }
@@ -942,13 +942,13 @@ function _commitSummaryDateInput(input){
   if(!_isAddMode()) _autoSaveIfDirty();
 }
 
-function _formatDayMonth(ms){
+function _formatDayMonthYear(ms){
   if(ms == null || ms === '') return '';
   const n = typeof ms === 'number' ? ms : Number(ms);
   if(!Number.isFinite(n)) return '';
   const d = new Date(n);
   if(isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat(undefined, { month:'short', day:'numeric', timeZone:'UTC' }).format(d);
+  return new Intl.DateTimeFormat(undefined, { month:'short', day:'numeric', year:'numeric', timeZone:'UTC' }).format(d);
 }
 
 function _finalizeCloseModal(fromPopstate){
