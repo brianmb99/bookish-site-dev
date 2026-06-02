@@ -421,9 +421,16 @@ async function saveInitialDisplayName({ email, displayName }) {
 
 function getAccountIdentity() {
   const email = tarnService.getEmail() || '';
-  const displayName = tarnService.displayName() || email.split('@')[0] || 'User';
-  const initial = (displayName[0] || 'U').toUpperCase();
-  return { email, displayName, initial };
+  const cachedName = tarnService.displayName() || '';
+  // Passkey-only sessions are username-less by design (#224): the SDK does
+  // not expose the email on passkey auth, and `authenticateWithPasskey()`
+  // clears any stale identity cache from a prior password sign-in. Surface
+  // that state explicitly so the UI can render a clear placeholder instead
+  // of a misleading email or a bare "User".
+  const passkeyOnly = !email && !cachedName;
+  const displayName = cachedName || email.split('@')[0] || (passkeyOnly ? 'Signed in via passkey' : 'User');
+  const initial = passkeyOnly ? '•' : ((displayName[0] || 'U').toUpperCase());
+  return { email, displayName, initial, passkeyOnly };
 }
 
 function showAccountSecurityView(content) {

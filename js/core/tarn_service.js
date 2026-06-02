@@ -187,6 +187,12 @@ export async function authenticateWithPasskey(opts = {}) {
     _dataLookupKey = result.dataLookupKey;
     localStorage.setItem(DLK_STORAGE_KEY, result.dataLookupKey);
   }
+  // Passkey sessions are username-less by design — the SDK has no email or
+  // display name for this account. Clear any stale values left over from a
+  // previous password sign-in to a *different* account on this browser, so
+  // the Account modal cannot misrepresent the session identity (see #224).
+  localStorage.removeItem(STORAGE_KEYS.EMAIL);
+  localStorage.removeItem(STORAGE_KEYS.DISPLAY_NAME);
   return result;
 }
 

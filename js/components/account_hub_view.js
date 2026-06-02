@@ -4,7 +4,11 @@ import {
   wireSubscriptionSection,
 } from './account_subscription_section.js';
 
-export function renderAccountHeaderHtml({ email, displayName, initial }) {
+export function renderAccountHeaderHtml({ email, displayName, initial, passkeyOnly = false }) {
+  // Passkey-only sessions (#224) carry no email/display-name client-side, so
+  // we render an explicit "Passkey session" placeholder under the name slot
+  // instead of an empty/stale email line. Same visual style as the email row.
+  const subline = passkeyOnly ? 'Passkey session' : (email || '');
   return `
     <div class="account-panel-header">
       <div class="account-avatar">${escapeHtml(initial)}</div>
@@ -12,7 +16,7 @@ export function renderAccountHeaderHtml({ email, displayName, initial }) {
         <div class="account-panel-name">
           <span id="displayNameValue">${escapeHtml(displayName)}</span>
         </div>
-        <div class="account-panel-email">${escapeHtml(email)}</div>
+        <div class="account-panel-email">${escapeHtml(subline)}</div>
       </div>
     </div>
   `;
