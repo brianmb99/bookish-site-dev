@@ -84,6 +84,7 @@ export function openChangeCredentialsDialog({ currentEmail, onSuccess }, deps = 
         <div class="form-group">
           <label for="ccNewUsername">New username</label>
           <input type="email" id="ccNewUsername" autocomplete="email" />
+          <p class="form-hint" id="ccPasskeyOnlyHint" style="display:none;">Passkey sessions don&rsquo;t have a cached username. Enter one to change credentials.</p>
         </div>
         <div class="form-group">
           <label for="ccNewPassword">New password</label>
@@ -118,7 +119,18 @@ export function openChangeCredentialsDialog({ currentEmail, onSuccess }, deps = 
     const confirmBtn = overlay.querySelector('[data-confirm]');
     const cancelBtn = overlay.querySelector('[data-cancel]');
 
-    newUsernameInput.value = currentEmail;
+    // Passkey-only sessions (#224) land here with `currentEmail === ''`. Pre-
+    // filling an empty value leaves Save disabled with no UI hint, which
+    // looks broken. Switch to a placeholder + inline note so the user knows
+    // why the field is empty and what they need to do.
+    const passkeyOnly = !currentEmail;
+    if (passkeyOnly) {
+      newUsernameInput.placeholder = 'Enter a username';
+      const hint = overlay.querySelector('#ccPasskeyOnlyHint');
+      if (hint) hint.style.display = '';
+    } else {
+      newUsernameInput.value = currentEmail;
+    }
     const initialUsername = currentEmail;
 
     const clearPasswordsFromDom = () => {

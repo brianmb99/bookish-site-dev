@@ -992,4 +992,5 @@ export const __test__ = {
   promptStalePasskeyRepair,
   showPasskeyAddedAffirmation,
   resetPasskeysSupportedCache: () => passkeySupportProbe.resetPasskeysSupportedCache(),
+  getAccountIdentity,
 };

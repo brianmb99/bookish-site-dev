@@ -191,7 +191,11 @@ export async function openInviteModal(opts = {}) {
       const syncedName = hydrateDisplayName
         ? await hydrateDisplayName()
         : null;
-      const displayName = (opts.displayName || syncedName || tarnService.displayName() || tarnService.getEmail()?.split('@')[0] || '').trim();
+      // Final fallback for passkey-only users without a synced profile name
+      // (#224): every prior link in the chain returns empty, so we'd send an
+      // invite with displayName: '' and the recipient sees "Invite unnamed".
+      // Use a clear placeholder that mirrors the account-hub passkey phrasing.
+      const displayName = (opts.displayName || syncedName || tarnService.displayName() || tarnService.getEmail()?.split('@')[0] || 'Passkey user').trim();
       const invite = await friends.generateInvite({ displayName, expiryDays: 7 });
       if (!_isOpen) return; // user closed before generation finished
       renderInvite(content, invite);

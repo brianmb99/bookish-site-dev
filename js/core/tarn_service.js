@@ -640,6 +640,20 @@ export async function changeCredentials({
   const { accountKey: phrase } = await client.accountKey.view({ password: currentPassword });
 
   const currentEmail = localStorage.getItem(STORAGE_KEYS.EMAIL) || '';
+  const passkeyOnly = !currentEmail;
+
+  // Passkey-only sessions (#224) don't cache an email. The caller MUST
+  // supply a new username explicitly; we have no cached value to fall back
+  // to. Without this guard the user gets a cryptic "no current username
+  // available" error from the generic check below. Convert to a clear,
+  // actionable message that names the actual problem.
+  if (passkeyOnly && (typeof newUsername !== 'string' || newUsername.length === 0)) {
+    throw new Error(
+      'changeCredentials: passkey-authenticated session — a new username must be ' +
+      'provided explicitly (no cached username to fall back to).'
+    );
+  }
+
   const effectiveUsername =
     typeof newUsername === 'string' && newUsername.length > 0 ? newUsername : currentEmail;
   const effectivePassword =
@@ -662,7 +676,9 @@ export async function changeCredentials({
 
   // Refresh the cached email if username changed. The SDK's session-resume
   // path doesn't write back to localStorage; we own this cache.
-  if (effectiveUsername !== currentEmail) {
+  // Defense in depth: only write a non-empty value — never poison the cache
+  // with an empty string even if the guards above were ever bypassed.
+  if (effectiveUsername !== currentEmail && effectiveUsername.length > 0) {
     localStorage.setItem(STORAGE_KEYS.EMAIL, effectiveUsername);
   }
 
