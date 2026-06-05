@@ -30,6 +30,28 @@ export const READING_STATUS = {
 const DEFAULT_EDIT_UPLOAD_DEBOUNCE_MS = 2500;
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
 
+/**
+ * Derive a STABLE idempotency key for a book create, keyed on the record's
+ * persistent identity (`bookId` — a UUID minted once at create time and stored
+ * on the entry/op in IndexedDB). The SAME key is used for the initial optimistic
+ * `books.create()` and for every replay of that record's create — same-session
+ * retry, cross-restart replay, or lost-response requeue — so the Tarn API's 24h
+ * `X-Idempotency-Key` dedup collapses the duplicate instead of writing a SECOND
+ * remote entry (bookish#225 / seam S-2).
+ *
+ * The `book-create:` prefix namespaces the key (no collision with other op
+ * types for the same account) and keeps it well within the API's 16–128
+ * printable-ASCII constraint (prefix + 36-char UUID = 48 chars). Returns
+ * undefined when no bookId is available — the SDK then falls back to its
+ * default per-call key, i.e. today's behavior (no regression, just no dedup).
+ *
+ * @param {string|undefined|null} bookId
+ * @returns {string|undefined}
+ */
+function bookCreateIdempotencyKey(bookId) {
+  return bookId ? `book-create:${bookId}` : undefined;
+}
+
 export function normalizeReadingStatus(entry) {
   const s = entry?.readingStatus;
   if (s === READING_STATUS.WANT_TO_READ || s === READING_STATUS.READING || s === READING_STATUS.READ) return s;
@@ -167,20 +189,27 @@ function isAlreadyDeletedError(err) {
 
 /**
  * Best-effort share-on-save: publish to every non-muted connection.
- * Fire-and-forget; the SDK returns per-connection failures but we don't
- * surface share errors as save errors.
+ * The SDK returns per-connection failures (logged but tolerated). A thrown
+ * error — e.g. `TarnPasskeyOnlyError` on a passkey-only session post-Tarn#32,
+ * or a transient network failure — propagates to the caller so the share
+ * path can surface it instead of silently dropping it (see BK-4). The
+ * success path stays fire-and-forget at the call site: failing here never
+ * fails the local save.
  */
 async function shareToFriends(client, bookId) {
-  try {
-    const result = await client.books.shareWithAll(bookId);
-    if (result && result.failed && result.failed.length) {
-      for (const f of result.failed) {
-        console.warn('[BookRepository] share failed for', f.connection?.share_pub?.slice(0, 8), '—', f.error);
-      }
+  const result = await client.books.shareWithAll(bookId);
+  if (result && result.failed && result.failed.length) {
+    for (const f of result.failed) {
+      console.warn('[BookRepository] share failed for', f.connection?.share_pub?.slice(0, 8), '—', f.error);
     }
-  } catch (err) {
-    console.warn('[BookRepository] shareWithAll failed:', err.message);
   }
+}
+
+// Name-based detection avoids importing the error class from the Tarn bundle
+// (matches the existing `err?.name === 'AccountKeyPinningError'` pattern in
+// account_ui.js). The bundle sets `this.name = 'TarnPasskeyOnlyError'`.
+function isPasskeyOnlyError(err) {
+  return err?.name === 'TarnPasskeyOnlyError';
 }
 
 /**
@@ -266,6 +295,40 @@ export class BookRepository {
   // arrays and complete in one HTTP round trip.
   _emitSyncProgress(payload) { this._emit('syncProgress', payload); }
 
+  /**
+   * Fire-and-forget share fan-out with observable failures (BK-4).
+   *
+   * The local save has already succeeded by the time this runs; sharing is a
+   * best-effort follow-up, so the SUCCESS path never blocks. But failures are
+   * no longer swallowed:
+   *   - `TarnPasskeyOnlyError` (expected on a passkey-only session post-Tarn#32):
+   *     not a crash — the book is saved, sharing just needs a password session.
+   *     Surfaced as a non-alarming notice via the existing `error` event.
+   *   - Any other (transient/network) error: surfaced as a recoverable error so
+   *     it isn't lost to a silent console.warn. The next privacy-toggle or edit
+   *     re-runs the share fan-out (idempotent on the SDK side).
+   * On success the friend-library cache is invalidated as before.
+   */
+  _shareAndRefresh(client, bookId) {
+    return shareToFriends(client, bookId)
+      .then(() => friends.invalidateFriendLibraryCache())
+      .catch((err) => {
+        if (isPasskeyOnlyError(err)) {
+          console.warn('[BookRepository] share skipped — passkey-only session:', bookId);
+          this._emitError(
+            'share-needs-password',
+            'Book saved. Sharing to friends needs signing in with your password.',
+          );
+        } else {
+          console.warn('[BookRepository] shareWithAll failed:', err?.message || err);
+          this._emitError(
+            'share-failed',
+            'Book saved, but couldn’t share to friends — will retry on your next change.',
+          );
+        }
+      });
+  }
+
   // --- Queries ---
 
   getAll() { return this._entries; }
@@ -318,13 +381,22 @@ export class BookRepository {
     this._onDirty();
     this._emitChange();
 
+    // Stable idempotency key tied to this record's identity. Used for BOTH the
+    // optimistic create below AND any later replay of the same create, so a
+    // retry (crash between create() and removeOp(), or a lost response) is
+    // deduped server-side instead of double-writing (bookish#225 / seam S-2).
+    // Persisted on the queued op so it survives an app restart.
+    const idempotencyKey = bookCreateIdempotencyKey(rec.bookId);
+
     // Try to upload to Tarn immediately
     if (this._tarnService.isLoggedIn()) {
       try {
         const client = await this._tarnService.getClient();
         const builtPayload = buildPayloadFromEntry(rec);
-        // Fresh create — no Eid mapping yet, the SDK derives one.
-        await client.books.create(builtPayload);
+        // Fresh create — no Eid mapping yet, the SDK derives one. The stable
+        // idempotency key makes a later replay of this same create a no-op
+        // server-side rather than a second remote entry.
+        await client.books.create(builtPayload, { idempotencyKey });
         const oldId = rec.id;
         // bookId is now the canonical id; drop the local-id sentinel.
         rec.id = rec.bookId;
@@ -333,18 +405,22 @@ export class BookRepository {
         this._emitError(null, null);
         this._emitChange();
         // Share to friends if public. Fire-and-forget — share failures
-        // don't fail the local save.
+        // don't fail the local save, but are surfaced (not swallowed).
         if (rec.is_private !== true) {
-          shareToFriends(client, rec.bookId).then(() => friends.invalidateFriendLibraryCache());
+          this._shareAndRefresh(client, rec.bookId);
         }
       } catch (e) {
         console.warn('[BookRepository] books.create failed, queued for retry:', e.message);
-        if (this._cache) await this._cache.queueOp({ type: 'create', localId: rec.id, payload });
+        // Persist the stable key on the op so the replay (this session or a
+        // later restart) sends the SAME X-Idempotency-Key — the create above
+        // may have reached the wire before the failure (lost response), so
+        // dedup is what prevents a double-write.
+        if (this._cache) await this._cache.queueOp({ type: 'create', localId: rec.id, payload, idempotencyKey });
         this._emitProgress(['Queued for sync']);
       }
     } else {
-      // Not logged in — queue for later
-      if (this._cache) await this._cache.queueOp({ type: 'create', localId: rec.id, payload });
+      // Not logged in — queue for later (with the stable key for replay dedup).
+      if (this._cache) await this._cache.queueOp({ type: 'create', localId: rec.id, payload, idempotencyKey });
     }
 
     return { entry: rec, isDuplicate: false };
@@ -585,10 +661,28 @@ export class BookRepository {
       //     intent overrides stale remote state until the tombstone is
       //     confirmed by the server (at which point the bookId will
       //     surface in `deleted` and we'll remove the tombstone row).
+      //   - Queued edit ops (BK-3). A still-queued `edit` marker means the
+      //     user has an offline/uncommitted edit that hasn't been confirmed
+      //     by the server. A stale delta that re-discovers an older txid/eid
+      //     for that bookId must not overwrite the locally-pending fields —
+      //     otherwise the in-memory edit survives but the next flush uploads
+      //     the stale remote snapshot and clobbers the user's edit remotely
+      //     too. Mirrors pendingDeleteBookIds: edit markers are queued in
+      //     _scheduleEditUpload and removed only on a confirmed upload
+      //     (removeEditOp) or successful replay (removeOp), so a lingering
+      //     marker reliably means "un-acked local edit". We also union the
+      //     live in-flight _editQueue keys to cover the window between
+      //     scheduling an edit and its async op-queue marker resolving.
       const pendingOps = this._cache.listOps ? await this._cache.listOps() : [];
       const pendingDeleteBookIds = new Set(
         pendingOps.filter(op => op.type === 'delete' && op.bookId).map(op => op.bookId),
       );
+      const pendingEditBookIds = new Set(
+        pendingOps.filter(op => op.type === 'edit' && op.bookId).map(op => op.bookId),
+      );
+      for (const queued of this._editQueue.values()) {
+        if (queued?.entry?.bookId) pendingEditBookIds.add(queued.entry.bookId);
+      }
       const localTombstonedBookIds = new Set(
         localAll.filter(e => e.status === 'tombstoned' && e.bookId).map(e => e.bookId),
       );
@@ -632,6 +726,16 @@ export class BookRepository {
         // Local delete intent (queued op or tombstoned cache row) takes
         // precedence over a stale delta that still lists the record.
         if (pendingDeleteBookIds.has(record.bookId) || localTombstonedBookIds.has(record.bookId)) {
+          loaded++;
+          continue;
+        }
+        // Local edit intent (queued/in-flight edit op) takes precedence over
+        // a stale delta (BK-3). Skipping the overwrite leaves the pending
+        // local edit intact; the next flush/replay uploads the edit. The
+        // cursor was already advanced inside getEntriesSince(), so the delta
+        // is acked and won't be re-fetched — we skip only the local-record
+        // overwrite, not the sync progress.
+        if (pendingEditBookIds.has(record.bookId)) {
           loaded++;
           continue;
         }
@@ -702,7 +806,13 @@ export class BookRepository {
           if (local.seenRemote) { await this._cache.removeOp(op.id); continue; }
           try {
             const payload = buildPayloadFromEntry(local);
-            await client.books.create(payload);
+            // Reuse the SAME stable key the initial create used (persisted on
+            // the op), so this replay is deduped server-side rather than
+            // creating a second remote entry (bookish#225 / seam S-2). Ops
+            // queued before this change have no op.idempotencyKey; re-derive
+            // from the record's bookId — identical to what the create stored.
+            const idempotencyKey = op.idempotencyKey || bookCreateIdempotencyKey(local.bookId);
+            await client.books.create(payload, { idempotencyKey });
             const oldId = local.id;
             local.id = local.bookId;
             local.pending = false; local.status = 'confirmed'; local.seenRemote = true; local.remoteBacked = true;
@@ -710,7 +820,7 @@ export class BookRepository {
             await this._cache.removeOp(op.id);
             this._emitChange();
             if (local.is_private !== true) {
-              shareToFriends(client, local.bookId).then(() => friends.invalidateFriendLibraryCache());
+              this._shareAndRefresh(client, local.bookId);
             }
           } catch (e) {
             console.warn('[BookRepository] Replay create failed:', e.message);
@@ -732,7 +842,7 @@ export class BookRepository {
             // Replay-side fan-out: stay-public → re-share (publishes the new
             // tx_id). Private → unshare. Both paths idempotent on the SDK.
             if (local.is_private !== true) {
-              shareToFriends(client, local.bookId).then(() => friends.invalidateFriendLibraryCache());
+              this._shareAndRefresh(client, local.bookId);
             } else {
               unshareFromAllFriends(client, local.bookId).then(() => friends.invalidateFriendLibraryCache());
             }
@@ -914,11 +1024,11 @@ export class BookRepository {
       const wasPrivate = snapshot && snapshot.is_private === true;
       const isPrivate = uploadEntry.is_private === true;
       if (!wasPrivate && !isPrivate) {
-        shareToFriends(client, uploadEntry.bookId).then(() => friends.invalidateFriendLibraryCache());
+        this._shareAndRefresh(client, uploadEntry.bookId);
       } else if (!wasPrivate && isPrivate) {
         unshareFromAllFriends(client, uploadEntry.bookId).then(() => friends.invalidateFriendLibraryCache());
       } else if (wasPrivate && !isPrivate) {
-        shareToFriends(client, uploadEntry.bookId).then(() => friends.invalidateFriendLibraryCache());
+        this._shareAndRefresh(client, uploadEntry.bookId);
       }
 
       return true;
