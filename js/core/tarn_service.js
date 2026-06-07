@@ -173,6 +173,14 @@ export async function login(email, password) {
  * The wrapper itself does not invoke the handler — it's purely a
  * passthrough.
  *
+ * Throwing contract: this wraps the SDK's `authenticateWithPasskey`, which
+ * can REJECT — e.g. `StalePasskeyError` (the stale-repair handler returned
+ * `null`), `NotAllowedError`/user-cancelled WebAuthn, no-credential-found,
+ * `TarnPasskeyOnlyError`, or a network failure. The wrapper does NOT swallow
+ * these; callers MUST `await` it inside a try/catch (or attach `.catch`) and
+ * surface the failure to the user. The sign-in handler in
+ * `components/account_auth_flows.js` does this via `humanizePasskeySigninError`.
+ *
  * @param {{
  *   stalePasskeyHandler?: () => Promise<{ username: string, password: string } | null>,
  *   credentialId?: string,

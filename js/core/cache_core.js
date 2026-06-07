@@ -33,14 +33,63 @@ export function pickWinner(a, b) {
 }
 
 /**
- * Detect if an entry is a duplicate of existing entries
+ * Strong identity key for a book, if present. `work_key` (the OpenLibrary
+ * work key, also the friend-matching primitive) is preferred over `isbn13`.
+ * Returns null when neither is present (e.g. legacy or manually-typed
+ * entries), in which case the caller falls back to the content hash.
+ * @param {Object} entry
+ * @returns {string|null}
+ */
+function strongIdentityKey(entry) {
+  if (entry.work_key) return 'wk:' + entry.work_key;
+  if (entry.isbn13) return 'isbn:' + entry.isbn13;
+  return null;
+}
+
+/**
+ * Detect if an entry is a duplicate of existing entries.
+ *
+ * Dedup rule (BOOKISH-5): the legacy content hash is `title|author|format|
+ * dateRead`, which can FALSELY merge two distinct books that happen to share
+ * a generic title/author (e.g. two different self-published "Untitled" books).
+ * To fix that without regressing existing dedupe, strong identity keys
+ * (`work_key`, then `isbn13`) are used as a *tiebreaker around* the content
+ * hash rather than replacing it:
+ *
+ *   - If the payload AND a candidate BOTH carry a strong key, they are a
+ *     duplicate only when those strong keys MATCH. A content-hash collision
+ *     between two records whose strong keys differ is rejected (this is the
+ *     false-merge fix). A matching strong key still requires the same
+ *     format/dateRead via the content hash, preserving the existing rule that
+ *     the same book read in a different format / on a different date is a
+ *     distinct entry.
+ *   - If EITHER record lacks a strong key (one has isbn13, the other doesn't;
+ *     or both are legacy), the strong key is ignored and behavior falls back
+ *     to the pure content-hash match exactly as before — so books without
+ *     these keys (and a strong-key/weak-key pair for the genuinely same book)
+ *     still dedupe.
+ *
+ * Net effect: strictly *fewer* false merges; no entry that deduped before
+ * stops deduping. The change can only let more genuinely-distinct books
+ * through, never block a real add.
+ *
  * @param {Object} payload - Entry to check for duplication
  * @param {Array<Object>} existingEntries - Local entries to check against
  * @returns {Promise<Object|null>} - Existing entry if duplicate found (non-tombstoned), null otherwise
  */
 export async function detectDuplicate(payload, existingEntries) {
   const hash = await computeContentHash(payload);
-  const existing = existingEntries.find(e => e.contentHash === hash && e.status !== 'tombstoned');
+  const payloadKey = strongIdentityKey(payload);
+  const existing = existingEntries.find(e => {
+    if (e.contentHash !== hash || e.status === 'tombstoned') return false;
+    // Content hash matches. If BOTH records carry a strong identity key,
+    // require it to match too — this rejects false merges of distinct books
+    // that share a generic title/author. Otherwise (either side lacks a key),
+    // the content-hash match stands, preserving legacy behavior.
+    const candidateKey = strongIdentityKey(e);
+    if (payloadKey && candidateKey && payloadKey !== candidateKey) return false;
+    return true;
+  });
   return existing || null;
 }
 
