@@ -30,6 +30,8 @@ import { openFriendBookDetail } from './components/friend_book_detail.js';
 import { setStatusLine, showMarkAsReadUndoToast, showStatusToast, showSubscriptionSuccessToast, showUpdateReadyToast } from './components/status_helpers.js';
 import { createWtrDrawerController, sortWtrList } from './components/wtr_drawer.js';
 import { activeEntryCount as countActiveEntries, createOmniboxController } from './components/omnibox_controller.js';
+import { openConfirmDialog } from './components/confirm_dialog.js';
+import { retryPendingProvisioning } from './components/account_auth_flows.js';
 
 // Friends invite-link routing (#118). Capture the invite parameters from
 // /invite/:token_id#:payload_key BEFORE anything else touches window.location
@@ -2795,7 +2797,13 @@ form.addEventListener('submit', ev => {
   commitEntryForm();
 });
 
-deleteBtn?.addEventListener('click', async ()=>{ const txid=form.priorTxid.value; if(!txid) return; haptic(); closeModal(); await deleteServerless(txid); });
+deleteBtn?.addEventListener('click', async ()=>{
+  const txid=form.priorTxid.value; if(!txid) return;
+  haptic();
+  const confirmed = await openConfirmDialog({ title: 'Delete this book?', body: 'It will be removed from your shelf, along with any notes and rating.', confirmLabel: 'Delete', destructive: true });
+  if(!confirmed) return;
+  closeModal(); await deleteServerless(txid);
+});
 
 // header refresh removed; app auto-syncs
 
@@ -2938,6 +2946,11 @@ async function initCacheLayer(){
       // Fire-and-forget; omnibox UI reads whatever's cached at interaction time.
       subscription.fetchStatus().catch(err =>
         console.warn('[Bookish] Subscription status fetch failed:', err?.message || err)
+      );
+      // Heal accounts whose rule provisioning failed during signup (stashed
+      // under bookish.needsProvisioning). Fire-and-forget; clears on success.
+      retryPendingProvisioning({ onWarn: (...args) => console.warn(...args) }).catch(err =>
+        console.warn('[Bookish] Deferred provisioning retry failed:', err?.message || err)
       );
       // Handle return from Stripe Checkout (?sub=success / ?sub=cancel).
       handleStripeReturn();

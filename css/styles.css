@@ -1103,6 +1103,13 @@ html:not(.is-signed-in) #friendsHeaderBtn{display:none}
 }
 .omnibox-skeleton-line:first-child{width:70%}
 .omnibox-skeleton-line:last-child{width:45%}
+/* Empty / offline state for API results (shown once all sources settle) */
+.omnibox-empty{
+  padding:12px 8px;
+  font-size:.85rem;
+  color:var(--color-text-muted, #9aa3ad);
+  line-height:1.4;
+}
 
 /* ── Subscription count + prompt (#74) ────────────────────────── */
 .omnibox-count{

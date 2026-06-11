@@ -97,9 +97,10 @@ class UIStatusManager {
     }
 
     if (sync.error) {
-      const friendly = sync.error.toLowerCase().includes('fetch')
+      // Never surface raw error strings (SDK/crypto internals) in the header.
+      const friendly = /fetch|network|load failed/i.test(sync.error)
         ? 'Couldn\u2019t reach the server. Your books are safe \u2014 we\u2019ll retry when you\u2019re back online.'
-        : sync.error;
+        : 'Sync is having trouble right now. Your books are safe on this device \u2014 we\u2019ll keep retrying.';
       return {
         message: friendly,
         priority: PRIORITY.CRITICAL,

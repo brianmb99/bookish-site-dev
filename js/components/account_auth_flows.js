@@ -43,6 +43,42 @@ async function hydrateSignedInDisplayName(tarnService, fallback) {
   }
 }
 
+const NEEDS_PROVISIONING_KEY = 'bookish.needsProvisioning';
+
+// Heal accounts whose free-tier rule provisioning failed at signup: the signup
+// flow stashes {email, dataLookupKey} under NEEDS_PROVISIONING_KEY when all
+// three /api/register attempts fail. Called fire-and-forget at app boot for
+// signed-in users; clears the stash only once provisioning succeeds.
+export async function retryPendingProvisioning({
+  bookishApiUrl = DEFAULT_BOOKISH_API,
+  fetchImpl = globalThis.fetch,
+  onWarn = noop,
+  storage = globalThis.localStorage,
+  delay = undefined,
+} = {}) {
+  let pending = null;
+  try {
+    pending = JSON.parse(storage?.getItem(NEEDS_PROVISIONING_KEY) || 'null');
+  } catch {
+    return false;
+  }
+  if (!pending?.email || !pending?.dataLookupKey) return false;
+
+  const ok = await provisionBookishAccount({
+    email: pending.email,
+    dataLookupKey: pending.dataLookupKey,
+    bookishApiUrl,
+    fetchImpl,
+    onWarn,
+    ...(delay ? { delay } : {}),
+  });
+  if (ok) {
+    try { storage?.removeItem(NEEDS_PROVISIONING_KEY); } catch { /* ignore */ }
+    onWarn('[AccountUI] Deferred provisioning succeeded');
+  }
+  return ok;
+}
+
 export async function provisionBookishAccount({
   email,
   dataLookupKey,
@@ -223,7 +259,7 @@ export function renderCreateAccountForm(content, deps = {}) {
       });
 
       if (!provisioned) {
-        globalThis.localStorage?.setItem('bookish.needsProvisioning', JSON.stringify({ email, dataLookupKey }));
+        globalThis.localStorage?.setItem(NEEDS_PROVISIONING_KEY, JSON.stringify({ email, dataLookupKey }));
         onWarn('[AccountUI] Provisioning failed after 3 attempts - will retry later');
       }
 
@@ -334,6 +370,9 @@ export function renderSignInForm(content, deps = {}) {
       onError('[AccountUI] Sign in failed:', e);
       let msg = 'Sign in failed. Please check your email and password.';
       if (e.message?.includes('not found')) msg = 'Account not found. Check your email address.';
+      else if (e instanceof TypeError || /fetch|network|load failed/i.test(e.message || '')) {
+        msg = 'Couldn’t reach the server. Check your connection and try again.';
+      }
       error.style.display = 'block';
       error.textContent = msg;
       progress.style.display = 'none';

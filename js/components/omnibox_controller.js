@@ -95,11 +95,13 @@ export function renderOmniboxApiSkeletons({ addSection, addResults }) {
   </div>`).join('');
 }
 
-export function renderOmniboxApiResults({ results = [], refs = {}, onAfterRender = () => {} }) {
+export function renderOmniboxApiResults({ results = [], refs = {}, emptyMessage = '', onAfterRender = () => {} }) {
   const { addResults } = refs;
   if (!addResults) return;
   if (!results.length) {
-    addResults.innerHTML = '';
+    addResults.innerHTML = emptyMessage
+      ? `<div class="omnibox-empty">${escapeHtml(emptyMessage)}</div>`
+      : '';
     return;
   }
   addResults.innerHTML = results.slice(0, 8).map(result => {
@@ -418,10 +420,17 @@ export function createOmniboxController({
     renderOmniboxApiSkeletons({ addSection: refs.addSection, addResults: refs.addResults });
   }
 
-  function renderApiResults(results) {
+  function renderApiResults(results, { settled = false } = {}) {
+    // Only show the empty-state message once every search source has settled —
+    // never while one is still in flight.
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    const emptyMessage = !settled ? '' : (offline
+      ? 'You’re offline — book search needs a connection. You can still add the book manually below.'
+      : 'No matches found. Check the spelling, or add the book manually below.');
     renderOmniboxApiResults({
       results,
       refs,
+      emptyMessage,
       onAfterRender: attachResultPips,
     });
   }
@@ -455,23 +464,32 @@ export function createOmniboxController({
 
     let olResults = [];
     let itResults = [];
+    let olDone = false;
+    let itDone = false;
 
     function mergeAndShow() {
       if (isStale()) return;
-      renderApiResults(mergeOmniboxResults({ itunesResults: itResults, olResults, query }));
+      const merged = mergeOmniboxResults({ itunesResults: itResults, olResults, query });
+      const settled = olDone && itDone;
+      // Keep skeletons up while a source is still in flight and there's nothing
+      // to show yet — avoids flashing "no matches" prematurely.
+      if (!merged.length && !settled) return;
+      renderApiResults(merged, { settled });
     }
 
     fetchImpl(olUrl, { signal }).then(r => r.json()).then(json => {
       if (isStale()) return;
       olResults = (json.docs || []).slice(0, 10).map(normalizeOLDoc);
+      olDone = true;
       mergeAndShow();
-    }).catch(err => { if (err.name !== 'AbortError') mergeAndShow(); });
+    }).catch(err => { if (err.name !== 'AbortError') { olDone = true; mergeAndShow(); } });
 
     fetchImpl(itUrl, { signal }).then(r => r.json()).then(json => {
       if (isStale()) return;
       itResults = (json.results || []).slice(0, 6).map(normalizeItunesItem);
+      itDone = true;
       mergeAndShow();
-    }).catch(err => { if (err.name !== 'AbortError') mergeAndShow(); });
+    }).catch(err => { if (err.name !== 'AbortError') { itDone = true; mergeAndShow(); } });
   }
 
   function handleInput() {
