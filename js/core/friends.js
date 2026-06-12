@@ -262,6 +262,7 @@ export async function generateInvite(opts = {}) {
   const tarn = await tarnService.getClient();
   const displayName = normalizeInviteDisplayName(opts.displayName ?? '');
   const created = await tarn.connections.createInvite({
+    label: displayName,
     display_name: displayName,
     expiry_days: opts.expiryDays ?? 7,
   });
