@@ -45,6 +45,29 @@ async function hydrateSignedInDisplayName(tarnService, fallback) {
 
 const NEEDS_PROVISIONING_KEY = 'bookish.needsProvisioning';
 
+// Pre-registration gate (#238): ask bookish-api whether signups are paused
+// BEFORE creating the Tarn account — gating later (at rule provisioning)
+// would strand half-provisioned accounts. Fails open: an unreachable or
+// erroring config endpoint must never block signups.
+export async function checkRegistrationsPaused({
+  bookishApiUrl = DEFAULT_BOOKISH_API,
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  try {
+    const res = await fetchImpl(`${bookishApiUrl}/api/config`, {
+      signal: AbortSignal.timeout?.(4000),
+    });
+    if (!res.ok) return false;
+    const cfg = await res.json();
+    return cfg?.registrationsPaused === true;
+  } catch {
+    return false;
+  }
+}
+
+const REGISTRATIONS_PAUSED_MSG =
+  'New signups are briefly paused — please try again in a little while. Existing accounts are unaffected.';
+
 // Heal accounts whose free-tier rule provisioning failed at signup: the signup
 // flow stashes {email, dataLookupKey} under NEEDS_PROVISIONING_KEY when all
 // three /api/register attempts fail. Called fire-and-forget at app boot for
@@ -245,6 +268,15 @@ export function renderCreateAccountForm(content, deps = {}) {
     progress.textContent = 'Creating account...';
 
     try {
+      // Front-door pause gate (#238) — must run before any account exists.
+      if (await checkRegistrationsPaused({ bookishApiUrl, fetchImpl })) {
+        error.style.display = 'block';
+        error.textContent = REGISTRATIONS_PAUSED_MSG;
+        progress.style.display = 'none';
+        createBtn.disabled = false;
+        return;
+      }
+
       progress.textContent = 'Deriving encryption keys...';
       const reg = await tarnService.register(email, password);
       const { dataLookupKey, accountKey } = reg;
