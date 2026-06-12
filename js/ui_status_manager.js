@@ -96,7 +96,10 @@ class UIStatusManager {
       };
     }
 
-    if (sync.error) {
+    // Gate on 2+ consecutive failed cycles (#237): a single blip that
+    // recovers next cycle never surfaces. failureCount missing (older
+    // provider shape) falls back to surfacing on any error.
+    if (sync.error && (sync.failureCount === undefined || sync.failureCount >= 2)) {
       // Never surface raw error strings (SDK/crypto internals) in the header.
       const friendly = /fetch|network|load failed/i.test(sync.error)
         ? 'Couldn\u2019t reach the server. Your books are safe \u2014 we\u2019ll retry when you\u2019re back online.'
@@ -104,7 +107,7 @@ class UIStatusManager {
       return {
         message: friendly,
         priority: PRIORITY.CRITICAL,
-        maxDisplay: 10000
+        maxDisplay: 0 // persists until the state changes (next cycle recalc)
       };
     }
 
@@ -222,6 +225,19 @@ class UIStatusManager {
           statusEl.classList.add('warning');
         } else {
           statusEl.classList.remove('warning');
+        }
+      }
+
+      // CRITICAL messages get the visible banner below the header (#237) —
+      // the legacy #status header div has been display:none since the
+      // omnibox redesign, so it cannot carry user-facing errors.
+      const bannerEl = document.getElementById('syncErrorBanner');
+      if (bannerEl) {
+        if (priority === PRIORITY.CRITICAL && message) {
+          bannerEl.textContent = message;
+          bannerEl.hidden = false;
+        } else {
+          bannerEl.hidden = true;
         }
       }
 

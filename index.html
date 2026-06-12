@@ -104,6 +104,10 @@
     </div>
   </div>
 </div>
+<!-- Sync error banner (#237): calm persistent strip shown by ui_status_manager
+     when sync has failed 2+ consecutive cycles (or a critical app error is
+     set). Self-clears on the next successful cycle. -->
+<div id="syncErrorBanner" class="sync-error-banner" hidden role="status" aria-live="polite"></div>
 <div id="accountNudgeBanner" class="nudge-banner" style="display:none;">
   <div class="nudge-content">
     <span class="nudge-mark" aria-hidden="true">
@@ -197,7 +201,7 @@
 </div>
 <footer>
   <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
-  <div class="footer-meta">Alpha &bull; v0.2.415</div>
+  <div class="footer-meta">Alpha &bull; v0.2.416</div>
 </footer>
 </div>
 

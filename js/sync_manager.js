@@ -32,7 +32,10 @@ let transientSyncState = {
   completedTime: 0,
   pendingBooks: 0,
   isRefreshing: false,
-  error: null
+  error: null,
+  // Consecutive failed cycles. The error banner (#237) gates on >= 2 so a
+  // single blip that recovers next cycle never surfaces.
+  failureCount: 0
 };
 
 // Global reference for external modules
@@ -122,7 +125,8 @@ async function runSyncCycle() {
   isSyncing = true;
   dirtyFlag = false;
   transientSyncState.isRefreshing = false;
-  transientSyncState.error = null;
+  // NOTE: error is NOT cleared here — it clears on success below. Clearing
+  // at cycle start made the failure banner flicker on every retry (#237).
   if (statusCallback) statusCallback();
 
   try {
@@ -131,6 +135,8 @@ async function runSyncCycle() {
     }
 
     initialSynced = true;
+    transientSyncState.error = null;
+    transientSyncState.failureCount = 0;
     transientSyncState.isRefreshing = false;
     transientSyncState.justCompleted = true;
     transientSyncState.completedTime = Date.now();
@@ -143,6 +149,7 @@ async function runSyncCycle() {
   } catch (error) {
     console.error('[Bookish:SyncManager] Sync cycle failed:', error);
     transientSyncState.error = error.message || 'Sync failed';
+    transientSyncState.failureCount += 1;
     transientSyncState.isRefreshing = false;
     initialSynced = true; // Don't block UI on error
   } finally {
@@ -164,7 +171,8 @@ export function getSyncStatusForUI() {
     isRefreshing: transientSyncState.isRefreshing,
     justCompleted: transientSyncState.justCompleted,
     completedTime: transientSyncState.completedTime,
-    error: transientSyncState.error
+    error: transientSyncState.error,
+    failureCount: transientSyncState.failureCount
   };
 }
 
@@ -184,6 +192,7 @@ export function resetForTesting() {
     completedTime: 0,
     pendingBooks: 0,
     isRefreshing: false,
-    error: null
+    error: null,
+    failureCount: 0
   };
 }

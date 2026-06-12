@@ -37,15 +37,12 @@
 //     ("when did Maya finish this book?") far better than "when did the
 //     publish-event hit Arweave."
 //   - The derivation works without any Tarn protocol changes.
-//   - The same code lights up automatically the moment publish-on-save lands
-//     in issue #8 — no further changes needed here.
 //
-// ── Pre-known constraint (publish-on-save gap) ───────────────────────────────
-//
-// Today, Bookish doesn't publish books to the share log (issue #8 — per-book
-// privacy — gates the publish path). Until #8 ships, every friend's
-// `fetchFriendLibrary` returns []. This module returns [] in that case and the
-// `recent_finishes.js` component renders nothing (the region is hidden).
+// Publish-on-save SHIPPED (#8): book_repository.js fans every public save out
+// to all non-muted connections via shareWithAll(), so friend libraries are
+// live. A friend's library can still legitimately be [] (new connection, all
+// books private) — this module returns [] then and `recent_finishes.js`
+// renders nothing (the region is hidden).
 
 import * as friends from './friends.js';
 import * as tarnService from './tarn_service.js';

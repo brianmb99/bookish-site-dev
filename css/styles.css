@@ -1853,6 +1853,17 @@ html.modal-transitioning::view-transition-new(root){
   .sync-progress-fill{transition:none}
 }
 
+/* Sync error banner (#237) — same slot + frame as the sync-progress banner,
+   warm amber tint, deliberately calm: reflects state, never demands action. */
+.sync-error-banner{position:relative;background:rgba(42,34,22,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(245,158,11,.32);padding:9px 16px;text-align:center;font-size:.82rem;color:var(--color-text-secondary);animation:syncProgressFadeIn .2s ease-out}
+.sync-error-banner[hidden]{display:none}
+@media (max-width:560px){
+  .sync-error-banner{padding:8px 12px;font-size:.78rem}
+}
+@media (prefers-reduced-motion:reduce){
+  .sync-error-banner{animation:none}
+}
+
 /* Account nudge banner */
 .nudge-banner{background:rgba(28,34,42,.66);border:1px solid var(--color-border-subtle);border-radius:10px;padding:13px 16px;margin:16px 0;display:flex;align-items:center;justify-content:center;gap:12px;animation:feedbackDropIn .3s ease-out;box-shadow:none}
 @keyframes feedbackDropIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}

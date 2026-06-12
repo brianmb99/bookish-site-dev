@@ -9,11 +9,10 @@
 //
 //   Region A — "Recent finishes" events (#125). Vertical list of friends'
 //     recent `finished` events; renders only when there are events to show.
-//     Today (publish-on-save deferred to #8) every friend's share log is
-//     empty so the region stays empty for all users; the CSS rule
-//     `.friends-events:empty { display: none }` keeps the layout clean.
-//     The full rendering pipeline is wired and lights up automatically as
-//     soon as real share-log entries exist.
+//     Publish-on-save shipped (#8), so the region is live for any friend
+//     with public finished books; the CSS rule
+//     `.friends-events:empty { display: none }` keeps the layout clean when
+//     a user's connections have nothing to show yet.
 //
 //   Region B — friend strip. See friend_strip.js. When 0 connections, the
 //     strip renders an empty state with a friendly message + prominent
