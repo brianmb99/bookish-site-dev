@@ -37,7 +37,7 @@ import * as tarnService from './tarn_service.js';
 const PENDING_LABELS_KEY = 'bookish.friends.pendingLabels';
 
 // sessionStorage key for invite parameters held across the signup redirect.
-// Shape: { token_id: string, payload_key: string, captured_at: number }
+// Shape: { token_id: string, payload_key: string, display_name?: string, captured_at: number }
 const PENDING_INVITE_KEY = 'bookish.friends.pendingInvite';
 
 // ============ Pending-invite state (signup redirect bridge) ============
@@ -49,12 +49,14 @@ const PENDING_INVITE_KEY = 'bookish.friends.pendingInvite';
  */
 export function stashPendingInvite(invite) {
   if (!invite || !invite.token_id || !invite.payload_key) return;
+  const displayName = normalizeInviteDisplayName(invite.display_name);
   try {
     sessionStorage.setItem(
       PENDING_INVITE_KEY,
       JSON.stringify({
         token_id: invite.token_id,
         payload_key: invite.payload_key,
+        ...(displayName ? { display_name: displayName } : {}),
         captured_at: Date.now(),
       }),
     );
@@ -73,7 +75,12 @@ export function readPendingInvite() {
     if (!parsed || typeof parsed.token_id !== 'string' || typeof parsed.payload_key !== 'string') {
       return null;
     }
-    return { token_id: parsed.token_id, payload_key: parsed.payload_key };
+    const displayName = normalizeInviteDisplayName(parsed.display_name);
+    return {
+      token_id: parsed.token_id,
+      payload_key: parsed.payload_key,
+      ...(displayName ? { display_name: displayName } : {}),
+    };
   } catch {
     return null;
   }
@@ -86,9 +93,11 @@ export function clearPendingInvite() {
 // ============ URL parsing ============
 
 /**
- * Extract `{ token_id, payload_key }` from an invite URL. Returns null if
- * the URL doesn't match the expected `/invite/<token_id>#<payload_key>`
- * shape.
+ * Extract `{ token_id, payload_key, display_name? }` from an invite URL.
+ * Returns null if the URL doesn't match the expected
+ * `/invite/<token_id>#<payload_key>` shape. New Bookish links can append
+ * `&from=<display-name>` inside the fragment so the name stays client-side
+ * (not sent to GitHub Pages / Tarn).
  */
 export function parseInviteUrl(input) {
   let pathname, hash;
@@ -120,10 +129,49 @@ export function parseInviteUrl(input) {
   const tokenId = decodeURIComponent(match[1]);
   if (!tokenId) return null;
 
-  const payloadKey = (hash || '').replace(/^#/, '');
+  const fragment = (hash || '').replace(/^#/, '');
+  const payloadKey = fragment.split('&')[0] || '';
   if (!payloadKey) return null;
 
-  return { token_id: tokenId, payload_key: payloadKey };
+  const displayName = readInviteDisplayNameFromFragment(fragment);
+  return {
+    token_id: tokenId,
+    payload_key: payloadKey,
+    ...(displayName ? { display_name: displayName } : {}),
+  };
+}
+
+function normalizeInviteDisplayName(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().slice(0, 64);
+}
+
+function readInviteDisplayNameFromFragment(fragment) {
+  const amp = fragment.indexOf('&');
+  if (amp === -1) return '';
+  try {
+    const params = new URLSearchParams(fragment.slice(amp + 1));
+    return normalizeInviteDisplayName(params.get('from') || '');
+  } catch {
+    return '';
+  }
+}
+
+function withInviteDisplayName(inviteUrl, displayName) {
+  const normalized = normalizeInviteDisplayName(displayName);
+  if (!normalized) return inviteUrl;
+  try {
+    const url = new URL(inviteUrl);
+    const fragment = url.hash.replace(/^#/, '');
+    if (!fragment) return inviteUrl;
+    const payloadKey = fragment.split('&')[0];
+    const params = new URLSearchParams(fragment.includes('&') ? fragment.slice(fragment.indexOf('&') + 1) : '');
+    params.set('from', normalized);
+    url.hash = `${payloadKey}&${params.toString()}`;
+    return url.toString();
+  } catch {
+    return inviteUrl;
+  }
 }
 
 // ============ Pending-label storage (recipient side) ============
@@ -212,12 +260,14 @@ export async function applyPendingLabels() {
  */
 export async function generateInvite(opts = {}) {
   const tarn = await tarnService.getClient();
+  const displayName = normalizeInviteDisplayName(opts.displayName ?? '');
   const created = await tarn.connections.createInvite({
-    display_name: opts.displayName ?? '',
+    display_name: displayName,
     expiry_days: opts.expiryDays ?? 7,
   });
-  const parsed = parseInviteUrl(created.invite_url);
-  return { ...created, parsed };
+  const inviteUrl = withInviteDisplayName(created.invite_url, displayName);
+  const parsed = parseInviteUrl(inviteUrl);
+  return { ...created, invite_url: inviteUrl, parsed };
 }
 
 // ============ Invite preview (recipient, non-consuming) ============

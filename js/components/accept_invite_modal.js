@@ -83,7 +83,7 @@ function renderUnavailable(content, reason) {
 }
 
 function renderPreview(content, preview, params) {
-  const inviterName = preview.inviter_display_name?.trim() || 'Your friend';
+  const inviterName = preview.inviter_display_name?.trim() || params.display_name?.trim() || 'Your friend';
   const fingerprint = preview.inviter_share_pub_fingerprint || '';
   content.innerHTML = `
     <div class="invite-pane">
