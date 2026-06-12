@@ -1,0 +1,390 @@
+<!doctype html><html><head><meta charset="utf-8"/><title>Bookish</title><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<!-- Synchronously stamp auth state on <html> before first paint. Avoids
+     a flash of the "Sign in" chip for returning signed-in users while
+     tarnService.init() catches up. CSS selectors below pick the right
+     header button based on this class; refreshHeaderAuthState() keeps
+     it in sync on login/logout. -->
+<script>try{var s=localStorage.getItem('tarn:session:v1');if(s&&s.length>2)document.documentElement.classList.add('is-signed-in');}catch(e){}</script>
+<base href="/"/>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#0f1114"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="view-transition" content="same-origin"/>
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png"/>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-192.png"/>
+<!-- iOS splash screens — portrait -->
+<link rel="apple-touch-startup-image" href="assets/splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1242x2208.png" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1080x2340.png" media="(device-width: 360px) and (device-height: 780px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1488x2266.png" media="(device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1640x2360.png" media="(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1668x2388.png" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2048x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
+<!-- iOS splash screens — landscape -->
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1334x750.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2208x1242.png" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2436x1125.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-1792x828.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2688x1242.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2340x1080.png" media="(device-width: 360px) and (device-height: 780px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2532x1170.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2778x1284.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2556x1179.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2796x1290.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2266x1488.png" media="(device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2360x1640.png" media="(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2388x1668.png" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)"/>
+<link rel="apple-touch-startup-image" href="assets/splash/splash-2732x2048.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)"/>
+<link rel="preload" href="fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/styles.css"/>
+</head><body><div id="app">
+<header id="mainHeader">
+  <h1 class="header-title">Bookish</h1>
+  <button id="headerSearchBtn" class="header-search-btn" type="button" aria-label="Find or add a book">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  </button>
+  <button id="headerSearchCancel" class="header-search-cancel" type="button">Cancel</button>
+  <div id="omniboxWrap" class="omnibox-wrap" style="display:none">
+    <div class="omnibox-inner">
+      <span class="omnibox-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </span>
+      <input id="omniboxInput" type="text" placeholder="Find or add a book" aria-label="Find books in your library or add a new one" role="combobox" aria-expanded="false" aria-controls="omniboxDropdown" autocomplete="off"/>
+      <button type="button" id="omniboxClear" class="omnibox-clear" aria-label="Clear search" style="display:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div id="status" style="display:none"></div>
+    <button id="wtrHeaderBtn" class="wtr-header-btn" title="My Reading List" style="display:none">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span class="wtr-badge" id="wtrBadge" style="display:none"></span>
+    </button>
+    <!-- Friends drawer trigger (#122). Sized to match wtrHeaderBtn visual weight. Hidden when zero connections. -->
+    <button id="friendsHeaderBtn" class="friends-header-btn" type="button" title="Friends" aria-label="Open Friends">
+      <!-- "Person cluster" glyph: two overlapping head+shoulders silhouettes.
+           Drawn as a single SVG so the cluster reads as one glyph at small sizes. -->
+      <svg class="friends-header-glyph" width="20" height="14" viewBox="0 0 20 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <!-- Back person: head + shoulder arc -->
+        <circle cx="13" cy="4" r="2.4"/>
+        <path d="M8 13 C8 10.2 10.5 8.5 13 8.5 C15.5 8.5 18 10.2 18 13"/>
+        <!-- Front person, slightly forward and lower -->
+        <circle cx="6.5" cy="5" r="2.6" fill="var(--color-bg-base, #0b0f14)"/>
+        <path d="M1.5 13 C1.5 10.0 4 8.2 6.5 8.2 C9 8.2 11.5 10.0 11.5 13" fill="var(--color-bg-base, #0b0f14)"/>
+      </svg>
+      <span class="friends-header-arrow" aria-hidden="true">↗</span>
+    </button>
+    <button id="installBtn" class="refresh-link" style="display:none" title="Install">Install</button>
+    <!-- #149: Signed-out shows "Sign in" chip; signed-in shows Account gear.
+         Both start hidden — `refreshHeaderAuthState()` in app.js reveals the
+         correct one based on `tarnService.isLoggedIn()`. It runs once at
+         account_ui module load and again on every render() to stay in sync
+         with login/logout. -->
+    <button id="signInHeaderBtn" class="refresh-link signin-link" type="button" title="Sign in">Sign in</button>
+    <button id="accountBtn" class="refresh-link account-link" title="Account">Account</button>
+  </div>
+</header>
+<!-- Sync progress banner: shown only during large first-syncs (e.g. fresh
+     device pulling the full library). Warm syncs and small libraries skip
+     it — they complete fast enough that no UI is warranted. Wired in app.js
+     via bookRepo.on('syncProgress', ...). -->
+<div id="syncProgressBanner" class="sync-progress-banner" style="display:none" role="status" aria-live="polite" aria-atomic="false">
+  <div class="sync-progress-inner">
+    <span class="sync-progress-text">Loading your library… <span id="syncProgressCount" class="sync-progress-count">0 of 0</span></span>
+    <div class="sync-progress-bar" aria-hidden="true">
+      <div id="syncProgressFill" class="sync-progress-fill"></div>
+    </div>
+  </div>
+</div>
+<!-- Sync error banner (#237): calm persistent strip shown by ui_status_manager
+     when sync has failed 2+ consecutive cycles (or a critical app error is
+     set). Self-clears on the next successful cycle. -->
+<div id="syncErrorBanner" class="sync-error-banner" hidden role="status" aria-live="polite"></div>
+<div id="accountNudgeBanner" class="nudge-banner" style="display:none;">
+  <div class="nudge-content">
+    <span class="nudge-mark" aria-hidden="true">
+      <span></span><span></span><span></span>
+    </span>
+    <div class="nudge-text">
+      <div class="nudge-headline">Keep your shelf on every device.</div>
+      <div class="nudge-subtext">Create an account when you're ready to sync this library.</div>
+    </div>
+    <button id="nudgeCreateAccountBtn" class="nudge-cta">Create account</button>
+  </div>
+  <button id="nudgeDismissBtn" class="nudge-dismiss" title="Dismiss">×</button>
+</div>
+
+
+<!-- Account Modal -->
+<div id="accountModal" class="modal-overlay" style="display:none;">
+  <div class="modal-backdrop"></div>
+  <div class="modal account-modal">
+    <button class="modal-close-btn" id="accountModalClose" aria-label="Close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></button>
+    <div id="accountModalContent"></div>
+  </div>
+</div>
+
+<!-- Want to Read drawer -->
+<div id="wtrOverlay" style="display:none">
+  <div class="wtr-backdrop" id="wtrBackdrop"></div>
+  <div class="wtr-drawer" id="wtrDrawer">
+    <div class="wtr-drawer-handle"></div>
+    <div class="wtr-header">
+      <h3 class="wtr-title">My Reading List</h3>
+      <button type="button" class="modal-close-btn" id="wtrClose" aria-label="Close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></button>
+    </div>
+    <div id="wtrList" class="wtr-list"></div>
+    <div id="wtrEmpty" class="wtr-empty" style="display:none">
+      <p>When you hear about a book you want to read, add it here so you don't forget.</p>
+      <button type="button" class="btn secondary" id="wtrAddBtn">Add a book</button>
+    </div>
+    <div class="wtr-footer">
+      <button type="button" class="wtr-footer-add" id="wtrFooterAdd">Add a book to read</button>
+    </div>
+  </div>
+</div>
+
+<div id="omniboxDropdown" class="omnibox-dropdown" style="display:none" role="listbox">
+  <div id="omniboxShelfSection" class="omnibox-section" style="display:none">
+    <div class="omnibox-section-label">In your library</div>
+    <div id="omniboxShelfResults" class="omnibox-results"></div>
+  </div>
+  <div id="omniboxAddSection" class="omnibox-section" style="display:none">
+    <div class="omnibox-section-label">Add a new book</div>
+    <button type="button" id="omniboxManualAdd" class="omnibox-manual-add" style="display:none">Add manually</button>
+    <div id="omniboxAddResults" class="omnibox-results"></div>
+  </div>
+</div>
+<div id="shelfEmpty" class="shelf-empty" style="display:none">
+  <p class="shelf-empty-text">Books you're reading and have finished show up here.</p>
+  <button type="button" id="shelfEmptyBrowse" class="shelf-empty-link">Browse My Reading List →</button>
+</div>
+<div id="yearHeader" class="year-header" style="display:none" role="button" tabindex="0" aria-expanded="false" aria-controls="spinePanel" aria-live="polite">
+  <span id="yearLabel" class="year-header-label"></span>
+  <svg class="year-header-chevron" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+</div>
+<div id="spinePanel" class="spine-panel" role="tablist" aria-label="Browse reading years">
+  <div class="spine-panel-inner">
+    <div class="spine-fade-left"></div>
+    <div class="spine-strip" id="spineStrip"></div>
+    <div class="spine-fade-right"></div>
+  </div>
+</div>
+<div id="cards" class="cards"></div>
+<div id="empty" class="empty-state" style="display:none">
+  <div class="empty-illustration" aria-hidden="true">
+    <span class="empty-book empty-book-one"></span>
+    <span class="empty-book empty-book-two"></span>
+    <span class="empty-book empty-book-three"></span>
+    <span class="empty-shelf-line"></span>
+  </div>
+  <h2 class="empty-headline">Build a shelf worth keeping</h2>
+  <p class="empty-subtext">Search for a book, then keep your reading list private, portable, and yours.</p>
+  <!-- #144: real omnibox is relocated here in the empty branch via app.js.
+       The slot starts empty; app.js detaches #omniboxWrap from the header
+       and appends it here when the shelf is empty. -->
+  <div id="emptyOmniboxSlot" class="empty-omnibox-slot"></div>
+</div>
+<div id="celebrationToast" class="toast celebration-toast" style="display:none;">
+  <span class="toast-icon toast-icon-book" aria-hidden="true">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h6.5a1.5 1.5 0 0 1 1.5 1.5v9.5H6.5A1.5 1.5 0 0 0 5 16V3.5Z"/><path d="M5 3.5H4A1.5 1.5 0 0 0 2.5 5v9.5A1.5 1.5 0 0 0 4 16h2.5"/><path d="M7 7h4"/></svg>
+  </span>
+  <span class="toast-message">First book saved to your shelf.</span>
+</div>
+<footer>
+  <div class="footer-links"><a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html" target="_blank" rel="noopener">Data export</a></div>
+  <div class="footer-meta">Alpha &bull; v0.2.417</div>
+</footer>
+</div>
+
+<!-- Notes expand overlay -->
+<div id="notesOverlay" class="notes-overlay" style="display:none;">
+  <div class="notes-overlay-backdrop"></div>
+  <div class="notes-overlay-inner">
+    <div class="notes-overlay-header">
+      <h3>Notes</h3>
+      <button type="button" id="notesOverlayClose" class="btn notes-overlay-done">Done</button>
+    </div>
+    <textarea id="notesOverlayInput" placeholder="Write your thoughts about this book..." maxlength="10000"></textarea>
+    <div class="notes-overlay-count"><span id="notesOverlayCount">0</span> / 10,000</div>
+  </div>
+</div>
+
+<div id="modal" class="modal">
+  <div class="modal-inner book-detail-page">
+    <button class="modal-close-btn" id="closeModal" aria-label="Close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></button>
+    <form id="entryForm" class="inline book-detail-form" novalidate>
+      <div class="book-detail-hero">
+        <div class="tile-cover-wrap">
+          <button type="button" id="addCoverCta" class="cover-add-cta" aria-expanded="false">Add cover</button>
+          <div class="tile-cover" id="tileCoverClick">
+            <img class="preview" id="coverPreview" style="display:none" draggable="false" alt=""/>
+            <div class="placeholder" id="coverPlaceholder"><div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Add cover</span></div></div>
+            <button type="button" class="cover-nav-arrow cover-nav-prev" id="prevEdition" style="display:none" aria-label="Previous cover">‹</button>
+            <button type="button" class="cover-nav-arrow cover-nav-next" id="nextEdition" style="display:none" aria-label="Next cover">›</button>
+            <div class="cover-nav-counter" id="editionInfo" style="display:none"></div>
+            <button type="button" class="cover-remove-btn" id="coverRemoveBtn" title="Remove cover" style="display:none">×</button>
+            <button type="button" class="cover-adjust-btn" id="coverAdjustBtn" title="Adjust cover (zoom &amp; pan)" aria-label="Adjust cover (zoom and pan)" style="display:none"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+            <input type="file" name="coverFile" accept="image/*" style="display:none" id="hiddenCoverInput"/>
+          </div>
+          <button type="button" class="cover-edit-link" id="changeCoverLink" aria-expanded="false">Change cover <span class="cover-edit-caret" aria-hidden="true">▾</span></button>
+          <div class="cover-actions" id="coverActions" style="display:none">
+            <button type="button" class="cover-action-btn" id="findCoversBtn" style="display:none">Browse covers</button>
+            <button type="button" class="cover-action-btn" id="uploadCoverBtn" style="display:none">Upload my own</button>
+          </div>
+          <div class="cover-adjust-controls" id="coverAdjustControls" style="display:none">
+            <input type="range" min="100" max="300" value="100" step="1" id="coverAdjustZoom" class="cover-adjust-zoom" aria-label="Cover zoom"/>
+            <div class="cover-adjust-buttons">
+              <button type="button" class="cover-adjust-cancel" id="coverAdjustCancel" aria-label="Cancel cover adjustment" title="Cancel"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4L12 12M12 4L4 12"/></svg></button>
+              <button type="button" class="cover-adjust-reset" id="coverAdjustReset" aria-label="Reset cover crop" title="Reset crop"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a4 4 0 1 1 1.17 2.83"/><path d="M4 4v3h3"/></svg></button>
+              <button type="button" class="cover-adjust-apply" id="coverAdjustApply" aria-label="Apply cover adjustment" title="Apply"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg></button>
+            </div>
+          </div>
+          <div class="cover-browse-controls" id="coverBrowseControls" style="display:none">
+            <div class="cover-adjust-buttons cover-browse-buttons">
+              <button type="button" class="cover-adjust-cancel cover-browse-cancel" id="coverBrowseCancel" aria-label="Cancel cover change" title="Cancel"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4L12 12M12 4L4 12"/></svg></button>
+              <button type="button" class="cover-adjust-apply cover-browse-apply" id="coverBrowseApply" aria-label="Use this cover" title="Use this cover"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="book-detail-placards">
+          <textarea class="placard placard-title" id="placardTitle" name="title" rows="1" required placeholder="Add a title" aria-label="Edit title" maxlength="500"></textarea>
+          <textarea class="placard placard-author" id="placardAuthor" name="author" rows="1" required placeholder="Add an author" aria-label="Edit author" maxlength="300"></textarea>
+        </div>
+      </div>
+      <div id="statusSelector" class="status-selector" role="radiogroup" aria-label="Reading status" style="display:none">
+        <button type="button" class="status-option active" data-status="want_to_read" role="radio" aria-checked="true">Want to Read</button>
+        <button type="button" class="status-option" data-status="reading" role="radio" aria-checked="false">Reading</button>
+        <button type="button" class="status-option" data-status="read" role="radio" aria-checked="false">Read</button>
+      </div>
+      <input type="hidden" name="readingStatus" id="readingStatusInput" value="want_to_read"/>
+      <div class="status-microcopy" id="statusMicrocopy" aria-live="polite"></div>
+      <div class="summary-row" id="summaryRow" style="display:none"></div>
+      <div class="detail-rows" id="detailRows">
+        <div class="detail-row" data-field="format">
+          <label>Format</label>
+          <select name="format" class="detail-value">
+            <option value="print">Print</option>
+            <option value="ebook">Ebook</option>
+            <option value="audio">Audio</option>
+          </select>
+        </div>
+        <div class="detail-row" data-field="dateRead">
+          <label id="dateReadLabel">Finished</label>
+          <input name="dateRead" type="date" class="detail-value">
+        </div>
+      </div>
+      <div class="optional-fields-zone" id="optionalFieldsZone">
+        <div class="optional-field" data-field="rating" style="display:none">
+          <div class="optional-field-header"><label>Rating</label><button type="button" class="field-deactivate" data-field="rating" title="Clear rating" aria-label="Clear rating">&times;</button></div>
+          <div class="star-rating" id="starRating" role="radiogroup" aria-label="Book rating">
+            <button type="button" class="star" data-value="1" role="radio" aria-label="1 star">☆</button><button type="button" class="star" data-value="2" role="radio" aria-label="2 stars">☆</button><button type="button" class="star" data-value="3" role="radio" aria-label="3 stars">☆</button><button type="button" class="star" data-value="4" role="radio" aria-label="4 stars">☆</button><button type="button" class="star" data-value="5" role="radio" aria-label="5 stars">☆</button>
+          </div>
+          <input type="hidden" name="rating" id="ratingInput" value=""/>
+        </div>
+        <div class="optional-field" data-field="owned" style="display:none">
+          <div class="optional-field-header"><label>Owned</label><button type="button" class="field-deactivate" data-field="owned" title="Clear owned" aria-label="Clear owned">&times;</button></div>
+          <label class="toggle-switch"><input type="checkbox" name="owned" id="ownedToggle"><span class="toggle-track"></span><span class="toggle-label" id="ownedLabel">No</span></label>
+        </div>
+        <div class="optional-field" data-field="tags" style="display:none">
+          <div class="optional-field-header"><label>Tags</label><button type="button" class="field-deactivate" data-field="tags" title="Clear tags" aria-label="Clear tags">&times;</button></div>
+          <input name="tags" placeholder="e.g. fiction, favorites" class="tags-input" id="tagsInput">
+          <div class="tags-pills" id="tagsPills"></div>
+        </div>
+        <div class="optional-field" data-field="notes" style="display:none">
+          <div class="optional-field-header"><label>Notes</label><button type="button" class="field-deactivate" data-field="notes" title="Clear notes" aria-label="Clear notes">&times;</button></div>
+          <div class="notes-block">
+            <textarea id="notesInput" name="notes" placeholder="Any thoughts about this book?" maxlength="10000" rows="3"></textarea>
+            <button type="button" class="notes-expand-btn" id="notesExpandBtn" title="Expand to full editor" aria-label="Expand notes">↗</button>
+          </div>
+        </div>
+        <div class="optional-chips" id="optionalChips" role="toolbar" aria-label="Add detail">
+          <button type="button" class="optional-chip" data-field="notes">+ Add notes</button>
+          <button type="button" class="optional-chip" data-field="rating">+ Rate</button>
+          <button type="button" class="optional-chip" data-field="owned">+ Owned</button>
+          <button type="button" class="optional-chip" data-field="tags">+ Add tags</button>
+        </div>
+      </div>
+      <input type="hidden" name="priorTxid"/>
+      <input type="hidden" name="is_private" id="isPrivateInput" value=""/>
+      <!-- Add-form privacy toggle (#129 / FRIENDS.md Surface 7; toggle pattern #143).
+           Visible only in add-mode; the book-detail page uses the lock-toggle
+           in the top-right (#privacyToggleBtn) for the same state. -->
+      <label class="toggle-switch privacy-add-toggle add-only" id="privacyAddRow">
+        <span class="privacy-add-text">Keep this one private (hidden from friends)</span>
+        <input type="checkbox" id="privacyAddCheckbox"/>
+        <span class="toggle-track"></span>
+      </label>
+      <div class="add-commit-bar add-only">
+        <button type="submit" class="add-commit-btn" id="addBookCommitBtn" disabled>Add to Want to Read</button>
+      </div>
+      <div class="autosave-microcopy" id="autosaveMicrocopy" aria-live="polite"></div>
+      <div class="delete-action edit-only">
+        <button type="button" class="btn-delete-link" id="deleteBtn">Delete this book</button>
+      </div>
+    </form>
+    <!-- Book-detail privacy lock toggle (#129 / FRIENDS.md Surface 7).
+         Sits in the top-right corner of the book-detail page, parallel to
+         the close button. Visible only in edit mode (existing books). -->
+    <button type="button" class="privacy-toggle-btn edit-only" id="privacyToggleBtn"
+            aria-pressed="false" title="Toggle privacy">
+      <svg class="privacy-icon-unlocked" width="20" height="20" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+      </svg>
+      <svg class="privacy-icon-locked" width="20" height="20" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      <span class="sr-only" id="privacyToggleLabel">Make private</span>
+    </button>
+  </div>
+</div>
+<script>
+ // Unified install button handling
+ let deferredPrompt; const installBtn=document.getElementById('installBtn');
+ const isInstalled=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+ const isDismissed=localStorage.getItem('bookish.installDismissed');
+ const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent);
+ const isAndroid=/Android/.test(navigator.userAgent)&&!/Chrome/.test(navigator.userAgent);
+
+ window.addEventListener('beforeinstallprompt',(e)=>{e.preventDefault();deferredPrompt=e;installBtn.style.display='inline-flex';});
+ if(!isInstalled&&!isDismissed&&(isIOS||isAndroid)){installBtn.style.display='inline-flex';}
+
+ function showInstallPopover(){
+   let existing=document.getElementById('installPopover');if(existing){existing.remove();}
+   const pop=document.createElement('div');pop.id='installPopover';pop.className='install-popover';
+   const msg=isIOS
+     ? '<div class="install-popover-title">Add Bookish to your Home Screen</div><div class="install-popover-copy">In Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</div>'
+     : '<div class="install-popover-title">Install Bookish</div><div class="install-popover-copy">Open the browser <strong>menu</strong>, then choose <strong>Add to Home Screen</strong>.</div>';
+   pop.innerHTML='<div class="install-popover-arrow"></div><div class="install-popover-body"><button class="install-popover-dismiss" title="Dismiss" aria-label="Dismiss install instructions">\u00d7</button>'+msg+'</div>';
+   installBtn.parentElement.style.position='relative';installBtn.parentElement.appendChild(pop);
+   const dismiss=()=>{pop.remove();localStorage.setItem('bookish.installDismissed','true');installBtn.style.display='none';};
+   pop.querySelector('.install-popover-dismiss').addEventListener('click',(e)=>{e.stopPropagation();dismiss();});
+   setTimeout(()=>{const handler=(e)=>{if(!pop.contains(e.target)&&e.target!==installBtn){dismiss();document.removeEventListener('click',handler);}};document.addEventListener('click',handler);},0);
+ }
+
+ installBtn?.addEventListener('click',async()=>{
+   if(deferredPrompt){installBtn.disabled=true;try{deferredPrompt.prompt();const choice=await deferredPrompt.userChoice;if(choice.outcome==='accepted')installBtn.style.display='none';}finally{deferredPrompt=null;installBtn.disabled=false;}return;}
+   if(isIOS||isAndroid){showInstallPopover();}
+ });
+ window.addEventListener('appinstalled',()=>{installBtn.style.display='none';});
+</script>
+<script type="module" src="js/cache.js"></script>
+<script type="module" src="js/sync_manager.js"></script>
+<script type="module" src="js/app.js"></script>
+<script defer src="js/date_picker.js"></script>
+<script type="module" src="js/book_search.js"></script>
+</body></html>
