@@ -6514,6 +6514,32 @@ body.modal-open{overscroll-behavior-y:contain;touch-action:pan-y}
   margin-top:1px;
 }
 
+/* --- Drawer-open skeletons (flicker fix) ---------------------------------
+   Painted synchronously from cached last-known sizes before the async
+   hydrate; same geometry as the real content so the swap is shift-free. */
+.friend-strip-skeleton-cell{pointer-events:none}
+.friend-strip-skeleton-avatar{
+  background:var(--color-bg-surface);
+  border-color:transparent;
+}
+.friend-strip-skeleton-name{
+  width:44px;height:10px;
+  border-radius:5px;
+  background:var(--color-bg-surface);
+}
+.friend-strip-skeleton-avatar,
+.friend-strip-skeleton-name{
+  animation:friend-skeleton-pulse 1.2s ease-in-out infinite;
+}
+@keyframes friend-skeleton-pulse{
+  0%,100%{opacity:.55}
+  50%{opacity:.95}
+}
+/* Transparent spacer holding the Recent-finishes region's expected height
+   while it hydrates — the region sits above the strip, so without this the
+   strip jumps downward when events land. */
+.friends-events-skeleton{background:transparent}
+
 /* All-friends-muted banner inside the drawer. Subtle informational tone —
    not an alert. Placed between the header and the events region so it
    reads as an inline-explanation, not a toast. */

@@ -253,6 +253,35 @@ export function renderFriendStrip(container, connections, opts = {}) {
   }
 }
 
+/**
+ * Synchronous skeleton for the strip, painted on drawer open BEFORE the
+ * async connections fetch resolves. Mirrors the populated scaffold's
+ * geometry (same header, same 64px cells) so the real render swaps in
+ * without a layout shift — the drawer-flicker fix.
+ *
+ * @param {HTMLElement} container
+ * @param {number} count - last-known connection count (cached by the
+ *   drawer); 0/unknown renders just the header scaffold.
+ */
+export function renderFriendStripSkeleton(container, count) {
+  if (!container) return;
+  const n = Math.max(0, Math.min(Number(count) || 0, 12));
+  const cells = Array.from({ length: n }, () => `
+    <div class="friend-strip-cell friend-strip-skeleton-cell" aria-hidden="true">
+      <div class="friend-avatar friend-strip-skeleton-avatar"></div>
+      <div class="friend-strip-name friend-strip-skeleton-name"></div>
+    </div>`).join('');
+  container.innerHTML = `
+    <div class="friend-strip-section" data-friend-strip-skeleton>
+      <div class="friend-strip-header">
+        <span class="friend-strip-heading">Your circle</span>
+        ${n > 0 ? '<button class="friend-strip-add" type="button" disabled>Invite</button>' : ''}
+      </div>
+      <div class="friend-strip-scroll" aria-hidden="true">${cells}</div>
+    </div>
+  `;
+}
+
 // Re-export displayNameForConnection from one place so callers can use it
 // without depending on this module if they only need the helper.
 export { escapeHtml as _escapeHtmlForTest };

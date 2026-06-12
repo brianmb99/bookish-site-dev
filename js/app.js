@@ -25,7 +25,7 @@ import { debugLog } from './core/debug_log.js';
 import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend_glyph_trigger.js';
 import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCardDetails, generatedCoverColor as sharedGeneratedCoverColor, escapeHtml as sharedEscapeHtml } from './components/book_card.js';
 import { renderPipOverlay } from './components/friend_pip.js';
-import { getMatchingFriendBookEntries as friendsGetMatchingFriendBookEntries, primeFriendLibraryCache as friendsPrimeFriendLibraryCache, invalidateFriendLibraryCache as friendsInvalidateLibraryCache } from './core/friends.js';
+import { getMatchingFriendBookEntries as friendsGetMatchingFriendBookEntries, primeFriendLibraryCache as friendsPrimeFriendLibraryCache, invalidateFriendLibraryCache as friendsInvalidateLibraryCache, maybePollConnectionsOnSyncCycle as friendsMaybePollConnections } from './core/friends.js';
 import { openFriendBookDetail } from './components/friend_book_detail.js';
 import { setStatusLine, showMarkAsReadUndoToast, showStatusToast, showSubscriptionSuccessToast, showUpdateReadyToast } from './components/status_helpers.js';
 import { createWtrDrawerController, sortWtrList } from './components/wtr_drawer.js';
@@ -2960,6 +2960,10 @@ async function initCacheLayer(){
     initSyncManager({
       onStatusChange: () => uiStatusManager.refresh(),
       onBookSync: syncBooksFromTarn,
+      // Friend-handshake heartbeat (the Tarn handshake only progresses
+      // inside listIncomingRequests polls — without this, invites never
+      // become connections). Cadence gating lives in friends.js.
+      onConnectionPoll: friendsMaybePollConnections,
     });
 
     // Only start sync loop if user is logged in

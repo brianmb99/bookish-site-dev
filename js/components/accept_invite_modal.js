@@ -134,9 +134,9 @@ function renderPreview(content, preview, params) {
       // sync loop and any later listConnections call.
       friends.clearPendingInvite();
       renderAccepted(content, label);
-      // Fire-and-forget poll for snappier propagation when the inviter
-      // happens to be online at the same moment.
-      friends.pollForConnectionUpdates().catch(() => {});
+      // No explicit poll here — acceptInvite() starts the polling burst
+      // that keeps checking for the inviter's auto-accept (5s ticks at
+      // first), and the sync loop carries the long tail.
       // Notify listeners (Friends header glyph, drawer if open) that the
       // connection set may have changed. The recipient's connection
       // materializes async — listeners that re-fetch will see the new

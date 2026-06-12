@@ -25,6 +25,7 @@ const COOLING_WINDOW_MS   = 300000;  // 5min
 // Callbacks
 let statusCallback = null;
 let bookSyncCallback = null;
+let connectionPollCallback = null;
 
 // Transient state for UI status manager
 let transientSyncState = {
@@ -55,10 +56,14 @@ function computeSyncInterval() {
  * @param {Object} config
  * @param {Function} config.onStatusChange — UI refresh callback
  * @param {Function} config.onBookSync — callback to sync books from Tarn
+ * @param {Function} [config.onConnectionPoll] — friend-handshake heartbeat,
+ *   piggybacked on each sync cycle. The callback owns its own cadence
+ *   gating; failures are logged and never surface in the sync error banner.
  */
 export function initSyncManager(config) {
   statusCallback = config.onStatusChange;
   bookSyncCallback = config.onBookSync;
+  connectionPollCallback = config.onConnectionPoll || null;
   debugLog('[Bookish:SyncManager] Initialized');
 }
 
@@ -132,6 +137,16 @@ async function runSyncCycle() {
   try {
     if (bookSyncCallback) {
       await bookSyncCallback();
+    }
+
+    // Friend-handshake heartbeat. Own try/catch: a failed poll must never
+    // count as a failed sync cycle (#237 banner) — books synced fine.
+    if (connectionPollCallback) {
+      try {
+        await connectionPollCallback();
+      } catch (err) {
+        debugLog('[Bookish:SyncManager] connection poll failed:', err?.message || err);
+      }
     }
 
     initialSynced = true;

@@ -261,13 +261,23 @@ export async function applyPendingLabels() {
 export async function generateInvite(opts = {}) {
   const tarn = await tarnService.getClient();
   const displayName = normalizeInviteDisplayName(opts.displayName ?? '');
+  // NOTE: `display_name` is deliberately NOT passed to createInvite — the
+  // SDK has no such option (it was silently ignored historically, and the
+  // SDK now throws on unknown options). The recipient-facing name travels
+  // in the URL fragment via withInviteDisplayName; migrating it into the
+  // SDK's encrypted `recipient_metadata` is planned for the next vendor
+  // bundle rebuild.
   const created = await tarn.connections.createInvite({
     label: displayName,
-    display_name: displayName,
     expiry_days: opts.expiryDays ?? 7,
   });
   const inviteUrl = withInviteDisplayName(created.invite_url, displayName);
   const parsed = parseInviteUrl(inviteUrl);
+  // The handshake completes only if our session polls the inbox after the
+  // recipient redeems — start the heartbeat (fast burst now, steady
+  // background cadence via the sync loop for the long tail).
+  noteHandshakeInterest();
+  startConnectionBurst();
   return { ...created, invite_url: inviteUrl, parsed };
 }
 
@@ -306,6 +316,10 @@ export async function acceptInvite({ token_id, payload_key, label }) {
   }
   // Best-effort: try to apply now in case the connection already exists.
   try { await applyPendingLabels(); } catch { /* ignore */ }
+  // Our connection materializes only after the inviter's session
+  // auto-accepts AND we poll the accept back — start the heartbeat.
+  noteHandshakeInterest();
+  startConnectionBurst();
   return { requestNonce: result.request_nonce, inviterSharePub };
 }
 
@@ -415,21 +429,158 @@ export async function removeConnection(connection) {
   emitConnectionsChanged();
 }
 
-/**
- * Trigger a poll of incoming connection requests. Used by the recipient
- * after `acceptInvite` — the inviter's auto-accept eventually lands in our
- * inbox; calling listIncomingRequests processes it and adds the new
- * connection. Safe to call repeatedly.
- */
-export async function pollForConnectionUpdates() {
-  if (!tarnService.isLoggedIn()) return;
-  let tarn;
-  try { tarn = await tarnService.getClient(); } catch { return; }
-  try { await tarn.connections.listIncomingRequests(); } catch (err) {
-    console.warn('[Bookish:Friends] listIncomingRequests failed:', err.message);
+// ============ Connection polling (handshake heartbeat) ============
+//
+// The Tarn handshake is poll-driven on BOTH sides: the inviter's session
+// auto-accepts an incoming redeem only inside `listIncomingRequests()`, and
+// the recipient's connection materializes only when a later
+// `listIncomingRequests()` processes the accept. Without a heartbeat the
+// handshake never completes — neither side sees the friend, ever.
+//
+// Cost model (drives every constant below): each poll fetches
+// (windows + 30) inbox tags against a 1800-fetches/hour/IP API budget —
+// the accepts scan is pinned at 30 windows SDK-side regardless of the
+// `windows` option. So a shallow poll costs ~32 fetches and the cadences
+// here keep worst-case usage near ~600/hr even with two clients (inviter +
+// recipient under test) sharing one IP.
+//
+//   - Burst: 5s ticks for 30s, then 15s ticks to 3min — started on
+//     createInvite / redeemInvite, stops early once the connection lands.
+//     Gives the "friend appears in seconds" UX when both parties are online.
+//   - Steady state (rides the sync loop): every ~4min while a handshake is
+//     plausibly pending (interest flag, 24h TTL), every ~15min as baseline.
+//   - First poll per session scans the full 30-window depth to catch
+//     handshakes that progressed while we were offline; the rest are shallow.
+
+const HANDSHAKE_INTEREST_KEY = 'bookish.friends.handshakeInterestUntil';
+const HANDSHAKE_INTEREST_TTL_MS = 24 * 60 * 60 * 1000;
+const POLL_WINDOWS_SHALLOW = 2;          // request scan depth; +30 fixed for accepts
+const BURST_FAST_TICK_MS = 5000;
+const BURST_FAST_PHASE_MS = 30000;
+const BURST_SLOW_TICK_MS = 15000;
+const BURST_TOTAL_MS = 3 * 60 * 1000;
+const STEADY_PENDING_MS = 4 * 60 * 1000;
+const STEADY_BASELINE_MS = 15 * 60 * 1000;
+
+let _pollInFlight = null;
+let _lastPollAt = 0;
+let _deepPolledThisSession = false;
+let _burstTimer = null;
+let _burstStartedAt = 0;
+let _burstBaselineCount = -1;
+
+/** Mark that a handshake is plausibly in flight (we issued or redeemed an
+ * invite recently), so the steady-state cadence tightens. Persisted so the
+ * faster cadence survives a reload while the other side catches up. */
+function noteHandshakeInterest() {
+  try {
+    localStorage.setItem(HANDSHAKE_INTEREST_KEY, String(Date.now() + HANDSHAKE_INTEREST_TTL_MS));
+  } catch { /* ignore */ }
+}
+
+function handshakeInterestActive() {
+  try {
+    const until = Number(localStorage.getItem(HANDSHAKE_INTEREST_KEY));
+    return Number.isFinite(until) && until > Date.now();
+  } catch {
+    return false;
   }
-  try { await applyPendingLabels(); } catch { /* ignore */ }
-  emitConnectionsChanged();
+}
+
+/**
+ * Trigger a poll of incoming connection requests. Processes both directions
+ * of the handshake: surfaces + auto-accepts incoming redeems (inviter side)
+ * and ingests incoming accepts (recipient side). Safe to call repeatedly;
+ * concurrent calls coalesce onto the in-flight poll.
+ *
+ * @param {{ windows?: number }} [opts] - request-scan depth in day-windows;
+ *   omit for the SDK's full 30-window default.
+ */
+export async function pollForConnectionUpdates(opts = {}) {
+  if (!tarnService.isLoggedIn()) return;
+  if (_pollInFlight) return _pollInFlight;
+  _pollInFlight = (async () => {
+    let tarn;
+    try { tarn = await tarnService.getClient(); } catch { return; }
+    _lastPollAt = Date.now();
+    const sdkOpts = Number.isInteger(opts.windows) && opts.windows > 0
+      ? { windows: opts.windows }
+      : {};
+    try { await tarn.connections.listIncomingRequests(sdkOpts); } catch (err) {
+      console.warn('[Bookish:Friends] listIncomingRequests failed:', err.message);
+    }
+    try { await applyPendingLabels(); } catch { /* ignore */ }
+    emitConnectionsChanged();
+  })();
+  try {
+    await _pollInFlight;
+  } finally {
+    _pollInFlight = null;
+  }
+}
+
+/**
+ * Start (or extend) the post-invite-activity polling burst. Idempotent —
+ * calling while a burst is running just pushes the deadline out. Stops
+ * early once the connection count grows past the burst-start baseline
+ * (handshake completed), on logout, or at the 3-minute deadline.
+ */
+export function startConnectionBurst() {
+  _burstStartedAt = Date.now();
+  // Baseline for early-stop. Best-effort — if it can't be read, the burst
+  // simply runs to its deadline.
+  listConnections()
+    .then(conns => { _burstBaselineCount = conns.length; })
+    .catch(() => { _burstBaselineCount = -1; });
+  if (_burstTimer) return;
+
+  const tick = async () => {
+    _burstTimer = null;
+    if (!tarnService.isLoggedIn()) return;
+    const elapsed = Date.now() - _burstStartedAt;
+    if (elapsed > BURST_TOTAL_MS) return;
+    try {
+      await pollForConnectionUpdates({ windows: POLL_WINDOWS_SHALLOW });
+      if (_burstBaselineCount >= 0) {
+        const count = (await listConnections()).length;
+        if (count > _burstBaselineCount) return; // handshake landed — done
+      }
+    } catch { /* keep ticking */ }
+    const interval = (Date.now() - _burstStartedAt) < BURST_FAST_PHASE_MS
+      ? BURST_FAST_TICK_MS
+      : BURST_SLOW_TICK_MS;
+    _burstTimer = setTimeout(tick, interval);
+  };
+  _burstTimer = setTimeout(tick, BURST_FAST_TICK_MS);
+}
+
+/**
+ * Steady-state heartbeat — called by the sync manager on every sync cycle;
+ * decides internally whether a poll is actually due so the caller doesn't
+ * carry any cadence logic. First call per session polls at full depth.
+ */
+export async function maybePollConnectionsOnSyncCycle() {
+  if (!tarnService.isLoggedIn()) return;
+  const now = Date.now();
+  if (!_deepPolledThisSession) {
+    _deepPolledThisSession = true;
+    await pollForConnectionUpdates();
+    return;
+  }
+  const due = handshakeInterestActive() ? STEADY_PENDING_MS : STEADY_BASELINE_MS;
+  if (now - _lastPollAt < due) return;
+  await pollForConnectionUpdates({ windows: POLL_WINDOWS_SHALLOW });
+}
+
+/** Test hook: reset module-level polling state between unit tests. */
+export function _resetConnectionPollingForTests() {
+  if (_burstTimer) { clearTimeout(_burstTimer); _burstTimer = null; }
+  _pollInFlight = null;
+  _lastPollAt = 0;
+  _deepPolledThisSession = false;
+  _burstStartedAt = 0;
+  _burstBaselineCount = -1;
+  try { localStorage.removeItem(HANDSHAKE_INTEREST_KEY); } catch { /* ignore */ }
 }
 
 // ============ Friend's-shelf read flow ============

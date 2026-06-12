@@ -30,7 +30,7 @@
 import * as friends from '../core/friends.js';
 import { attachSwipeDismiss } from '../core/swipe_dismiss.js';
 import { pushOverlayState, popOverlayState } from '../core/overlay_history.js';
-import { renderFriendStrip, displayNameForConnection } from './friend_strip.js';
+import { renderFriendStrip, renderFriendStripSkeleton, displayNameForConnection } from './friend_strip.js';
 import { setHideFriendsFromHeader } from './friend_glyph_trigger.js';
 import { hydrateRecentFinishes } from './recent_finishes.js';
 import { openFriendOverflowMenu } from './friend_overflow_menu.js';
@@ -50,6 +50,25 @@ let _isOpen = false;
 let _resetSwipe = null;
 let _focusReturnEl = null;
 let _keydownHandler = null;
+
+// Last-known region sizes, persisted so the NEXT drawer open can paint a
+// correctly-sized skeleton synchronously instead of an empty host that
+// jumps when the async hydrate lands (the drawer-flicker fix).
+const LAST_STRIP_COUNT_KEY = 'bookish.friends.lastStripCount';
+const LAST_EVENTS_COUNT_KEY = 'bookish.friends.lastEventsCount';
+
+function readCachedCount(key) {
+  try {
+    const n = Number(localStorage.getItem(key));
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeCachedCount(key, n) {
+  try { localStorage.setItem(key, String(n)); } catch { /* ignore */ }
+}
 
 function ensureMarkup() {
   if (document.getElementById(OVERLAY_ID)) return;
@@ -89,6 +108,16 @@ function ensureMarkup() {
   document.getElementById(CLOSE_ID).addEventListener('click', () => closeFriendsDrawer());
   const hideLink = document.getElementById(HIDE_LINK_ID);
   if (hideLink) hideLink.addEventListener('click', handleHideFromHeader);
+
+  // Keep the strip live while the drawer is open: background connection
+  // polls (sync loop / post-invite burst) emit this event when the
+  // handshake completes, and the new friend should materialize in place.
+  window.addEventListener('bookish:connections-changed', () => {
+    if (!_isOpen) return;
+    refreshStrip().catch(err =>
+      console.warn('[Bookish:FriendsDrawer] strip refresh on connections-changed failed:', err.message),
+    );
+  });
 }
 
 /**
@@ -144,6 +173,7 @@ async function refreshStrip() {
     onAvatarLongPress: (conn, anchor) => handleAvatarLongPress(conn, anchor, mutedSharePubs),
     mutedSharePubs,
   });
+  writeCachedCount(LAST_STRIP_COUNT_KEY, connections.length);
   updateAllMutedBanner(connections, mutedSharePubs);
 }
 
@@ -178,7 +208,26 @@ function updateAllMutedBanner(connections, mutedSharePubs) {
 async function refreshEvents() {
   const host = document.getElementById(EVENTS_HOST_ID);
   if (!host) return;
-  await hydrateRecentFinishes(host);
+  const { count } = await hydrateRecentFinishes(host);
+  writeCachedCount(LAST_EVENTS_COUNT_KEY, count || 0);
+}
+
+/**
+ * Reserve the events region's expected height before its async hydrate.
+ * The region sits ABOVE the strip, so it popping in late is what shoved
+ * the strip downward. A transparent spacer sized from the last-known row
+ * count keeps the strip anchored; `hydrateRecentFinishes` replaces the
+ * spacer with the real rows (or clears it when there are none).
+ */
+function reserveEventsSpace(host) {
+  const count = readCachedCount(LAST_EVENTS_COUNT_KEY);
+  if (!host || count === 0) return;
+  const spacer = document.createElement('div');
+  spacer.className = 'friends-events-skeleton';
+  spacer.setAttribute('aria-hidden', 'true');
+  // Heading (~24px) + rows (56px min-height + 6px gap each).
+  spacer.style.height = `${24 + count * 62}px`;
+  host.replaceChildren(spacer);
 }
 
 /**
@@ -367,6 +416,15 @@ export async function openFriendsDrawer(opts = {}) {
   _isOpen = true;
   pushOverlayState('friends');
 
+  // Paint correctly-sized placeholders SYNCHRONOUSLY from the last-known
+  // region sizes, so the async hydrates below swap content in place
+  // instead of pushing the layout around (the drawer-flicker fix).
+  renderFriendStripSkeleton(
+    document.getElementById(STRIP_HOST_ID),
+    readCachedCount(LAST_STRIP_COUNT_KEY),
+  );
+  reserveEventsSpace(document.getElementById(EVENTS_HOST_ID));
+
   // Hydrate the strip async (Tarn calls). The drawer chrome paints
   // immediately; the strip materializes a beat later.
   refreshStrip().catch(err =>
@@ -380,6 +438,10 @@ export async function openFriendsDrawer(opts = {}) {
   refreshEvents().catch(err =>
     console.warn('[Bookish:FriendsDrawer] events hydrate failed:', err.message),
   );
+  // Opening the drawer is an explicit "show me my friends" — a cheap
+  // shallow poll catches any handshake that completed since the last
+  // heartbeat; the connections-changed listener repaints the strip.
+  friends.pollForConnectionUpdates({ windows: 2 }).catch(() => { /* logged inside */ });
 
   // Keyboard: ESC + focus trap.
   _keydownHandler = trapFocusKeydown;

@@ -20,6 +20,7 @@
 import * as friends from './friends.js';
 import { debugLog } from './debug_log.js';
 import { normalizeCoverCrop } from './cover_crop.js';
+import { deleteTarnSdkLocalDbs } from './local_db_reset.js';
 
 export const READING_STATUS = {
   WANT_TO_READ: 'want_to_read',
@@ -353,6 +354,10 @@ export class BookRepository {
   clear() {
     this._purged = true;
     this._entries = [];
+    // Next authenticated sync must re-run the cursor/cache parity check —
+    // the account may have changed, and the new account's first delta must
+    // not run against an orphaned cursor (#230 invariant).
+    this._cursorParityChecked = false;
     this._emitChange();
   }
 
@@ -632,6 +637,26 @@ export class BookRepository {
     this._emitSyncProgress({ phase: 'fetching' });
     try {
       const client = await this._tarnService.getClient();
+
+      // #230-class invariant, enforced at the read site: a delta cursor
+      // must never outlive the cached entries it accounts for. If the
+      // active scope has NO remote-backed entries locally, a surviving
+      // cursor would make the delta below return only recent events and
+      // the library would render as "one recent book". Whatever wipe-path
+      // gap produced the divergence (e.g. a blocked deleteDatabase from a
+      // second tab), reset the SDK's local DBs here so this read returns
+      // the full library. Checked once per page life / per re-auth — not
+      // every cycle, so an empty-library account doesn't repeatedly nuke
+      // the blob cache that friend-shelf reads lean on.
+      if (!this._cursorParityChecked) {
+        this._cursorParityChecked = true;
+        const active = await this._cache.getAllActive();
+        const hasRemoteBacked = active.some(e => isRemoteBackedEntry(e));
+        if (!hasRemoteBacked) {
+          debugLog('[BookRepository] No remote-backed local entries — resetting SDK cursor/blob DBs before delta sync (#230 parity)');
+          await deleteTarnSdkLocalDbs();
+        }
+      }
 
       // Delta sync: returns only entries created/updated since the last
       // call and the Eids of entries deleted on other devices. Cursor is
