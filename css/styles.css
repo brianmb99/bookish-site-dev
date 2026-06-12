@@ -3841,7 +3841,8 @@ form.inline label.toggle-switch{display:flex}
 /* Security overlay — full-viewport scrim that sits ABOVE the account
    modal so the underlying panel stays mounted (and visible) under the
    dialog. Each invocation appends a fresh overlay; closing removes it.
-   z-index = 1200 (account-modal scrim is 1001, invite-modal is 1100). */
+   z-index = 1200 (account-modal scrim is 1001; invite/friends overlays
+   use their own higher stacks). */
 .security-overlay{
   position:fixed;
   inset:0;
@@ -5397,11 +5398,12 @@ body.modal-open{overscroll-behavior-y:contain;touch-action:pan-y}
 }
 .account-friends-toggle-label{flex:1 1 auto}
 
-/* Invite modal — shared structure for sender + recipient panes */
-/* Both bump z-index above .account-modal (1001) so they reliably layer on
-   top when an invite flow opens while the account modal is still mounted. */
+/* Invite modal — shared structure for sender + recipient panes.
+   Stack above the Friends drawer/backdrop (5000/5001) so an invite opened
+   from the drawer remains crisp and interactive instead of becoming part of
+   the blurred background layer. */
 #inviteModal,
-#acceptInviteModal{ z-index:1100; }
+#acceptInviteModal{ z-index:5700; }
 .invite-modal,
 .accept-invite-modal{
   background:var(--color-bg-elevated, var(--color-bg-base));
@@ -5414,7 +5416,7 @@ body.modal-open{overscroll-behavior-y:contain;touch-action:pan-y}
   padding:24px 22px 22px;
   position:relative;
   box-shadow:0 18px 36px -24px rgba(0,0,0,.78);
-  z-index:1101;
+  z-index:5701;
   visibility:visible;
   opacity:1;
 }
