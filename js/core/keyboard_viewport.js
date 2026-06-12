@@ -16,7 +16,15 @@ function getScrollBlock(el) {
 }
 
 function shouldResizeSheet(sheet) {
-  return !sheet?.classList?.contains('account-modal');
+  // #219: the inline display-name edit in Account & Security stays anchored —
+  // clamping the sheet around it made the viewport jump on focus. The
+  // exclusion is per-focused-element, not per-sheet: every other account
+  // modal field (signup, change-credentials, forgot-password) needs the
+  // clamp or its lower fields and submit sit unreachable behind the iOS
+  // keyboard (#236). Evaluated on every layout pass — the answer changes as
+  // focus moves while the keyboard is open.
+  if (!sheet?.classList?.contains('account-modal')) return true;
+  return !isInlineAccountEdit(sheet.querySelector(':focus'));
 }
 
 /**
@@ -38,7 +46,6 @@ export function attachKeyboardHandler({ sheet }) {
   let keyboardOpen = false;
   let rafId = null;
   let baselineHeight = Math.max(window.innerHeight || 0, vv.height || 0);
-  const resizeSheet = shouldResizeSheet(sheet);
 
   function onViewportResize() {
     if (rafId) cancelAnimationFrame(rafId);
@@ -47,6 +54,7 @@ export function attachKeyboardHandler({ sheet }) {
 
   function applyLayout() {
     rafId = null;
+    const resizeSheet = shouldResizeSheet(sheet);
     const viewportHeight = vv.height;
     // On iOS, window.innerHeight stays the same when keyboard opens; on
     // Android, both window.innerHeight and visualViewport.height may shrink.
@@ -107,6 +115,9 @@ export function attachKeyboardHandler({ sheet }) {
   // Also scroll into view when a new input is focused while keyboard is open
   function onFocusIn(e) {
     if (!keyboardOpen) return;
+    // Focus moved while the keyboard is open — the resize decision may have
+    // flipped (inline display-name edit vs regular field, #236).
+    onViewportResize();
     const el = e.target;
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
