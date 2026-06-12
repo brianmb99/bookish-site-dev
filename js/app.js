@@ -2976,6 +2976,11 @@ async function initCacheLayer(){
       retryPendingProvisioning({ onWarn: (...args) => console.warn(...args) }).catch(err =>
         console.warn('[Bookish] Deferred provisioning retry failed:', err?.message || err)
       );
+      // Land any rename whose profile write didn't make it last session
+      // (stashed under bookish.pendingDisplayName, #235). Fire-and-forget.
+      tarnService.flushPendingDisplayName().catch(err =>
+        console.warn('[Bookish] Pending display name flush failed:', err?.message || err)
+      );
       // Handle return from Stripe Checkout (?sub=success / ?sub=cancel).
       handleStripeReturn();
       // Friends invite redemption (#118). If the user landed on /invite/:token_id

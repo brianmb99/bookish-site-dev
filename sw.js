@@ -1,5 +1,5 @@
 // sw.js - basic PWA service worker
-const VERSION='v506';
+const VERSION='v507';
 const CACHE_NAME='bookish-precache-'+VERSION;
 const PRECACHE=[
   '/',

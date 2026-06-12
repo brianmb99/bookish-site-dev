@@ -29,6 +29,7 @@ const APP_ID = 'bookish';
 const STORAGE_KEYS = {
   EMAIL: 'bookish.email',
   DISPLAY_NAME: 'bookish.displayName',
+  PENDING_DISPLAY_NAME: 'bookish.pendingDisplayName',
   ACTIVE_FIELDS: 'bookish_active_fields',
 };
 const PROFILE_ID = 'self';
@@ -54,6 +55,9 @@ function buildClient() {
 function clearLocalMetadata() {
   localStorage.removeItem(STORAGE_KEYS.EMAIL);
   localStorage.removeItem(STORAGE_KEYS.DISPLAY_NAME);
+  // A queued rename must die with the identity that queued it — flushing it
+  // into a later account on this device would cross-contaminate (cf. #231).
+  localStorage.removeItem(STORAGE_KEYS.PENDING_DISPLAY_NAME);
   localStorage.removeItem(DLK_STORAGE_KEY);
 }
 
@@ -240,8 +244,11 @@ export async function authenticateWithPasskey(opts = {}) {
   // display name for this account. Clear any stale values left over from a
   // previous password sign-in to a *different* account on this browser, so
   // the Account modal cannot misrepresent the session identity (see #224).
+  // The pending-rename marker goes with them (#235): it belongs to the
+  // previous identity and must not flush into this one.
   localStorage.removeItem(STORAGE_KEYS.EMAIL);
   localStorage.removeItem(STORAGE_KEYS.DISPLAY_NAME);
+  localStorage.removeItem(STORAGE_KEYS.PENDING_DISPLAY_NAME);
   return result;
 }
 
@@ -391,6 +398,22 @@ export function displayName(name) {
 export async function hydrateDisplayName(opts = {}) {
   const fallback = normalizeDisplayName(opts.fallback || defaultDisplayName(opts.email));
 
+  // A queued local rename outranks the synced profile — it IS the newer
+  // intent. Try to land it, and never let a stale pull overwrite it (#235;
+  // same local-intent-survives-pull rule as the book sync paths).
+  if (localStorage.getItem(STORAGE_KEYS.PENDING_DISPLAY_NAME)) {
+    try {
+      await flushPendingDisplayName();
+    } catch (err) {
+      console.warn('[TarnService] pending display name flush failed:', err?.message || err);
+    }
+    if (localStorage.getItem(STORAGE_KEYS.PENDING_DISPLAY_NAME)) {
+      const pending = displayName();
+      if (pending) return normalizeDisplayName(pending, fallback);
+      return cacheDisplayName(fallback);
+    }
+  }
+
   try {
     const client = await getClient();
     const profiles = getProfilesCollection(client);
@@ -408,7 +431,11 @@ export async function hydrateDisplayName(opts = {}) {
 }
 
 /**
- * Persist the display name to the encrypted Tarn-backed profile record.
+ * Persist the display name. Local-first (#235): the rename takes effect on
+ * this device immediately (cache + pending marker), and the synced profile
+ * write happens in a background flush that survives failure — boot retries
+ * it via flushPendingDisplayName(), mirroring retryPendingProvisioning.
+ * Resolves with the normalized name without waiting on the network.
  *
  * @param {string} name
  * @param {{ fallback?: string, email?: string }} [opts]
@@ -417,18 +444,64 @@ export async function hydrateDisplayName(opts = {}) {
 export async function saveDisplayName(name, opts = {}) {
   const fallback = normalizeDisplayName(opts.fallback || defaultDisplayName(opts.email));
   const nextName = normalizeDisplayName(name, fallback);
-  const updatedAt = Date.now();
-  const client = await getClient();
-  const profiles = getProfilesCollection(client);
-  const existing = await profiles.get(PROFILE_ID);
+  cacheDisplayName(nextName);
+  localStorage.setItem(
+    STORAGE_KEYS.PENDING_DISPLAY_NAME,
+    JSON.stringify({ name: nextName, updatedAt: Date.now(), dlk: getDataLookupKey() || null })
+  );
+  flushPendingDisplayName().catch(err =>
+    console.warn('[TarnService] display name sync deferred:', err?.message || err)
+  );
+  return nextName;
+}
 
-  if (existing) {
-    await profiles.update(PROFILE_ID, { displayName: nextName, updatedAt });
-  } else {
-    await profiles.create({ profileId: PROFILE_ID, displayName: nextName, updatedAt });
-  }
+// Serializes profile writes so two rapid renames can't interleave their
+// get->update round-trips and land out of order.
+let displayNameFlushChain = Promise.resolve();
 
-  return cacheDisplayName(nextName);
+/**
+ * Push the pending display-name rename (if any) to the synced profile
+ * record. Clears the pending marker only when the write lands AND no newer
+ * rename was queued mid-flight. Errors propagate (the marker survives for
+ * the next boot/hydrate retry).
+ *
+ * @returns {Promise<string|null>} the flushed name, or null if nothing pending
+ */
+export function flushPendingDisplayName() {
+  const run = displayNameFlushChain.catch(() => {}).then(async () => {
+    const raw = localStorage.getItem(STORAGE_KEYS.PENDING_DISPLAY_NAME);
+    if (!raw) return null;
+
+    let pending = null;
+    try { pending = JSON.parse(raw); } catch {}
+    if (!pending?.name) {
+      localStorage.removeItem(STORAGE_KEYS.PENDING_DISPLAY_NAME);
+      return null;
+    }
+    // The marker belongs to the identity that queued it. If the active
+    // account changed underneath it, discard rather than cross-contaminate
+    // another account's profile (cf. #231 account-scoping incident).
+    if (pending.dlk && pending.dlk !== getDataLookupKey()) {
+      localStorage.removeItem(STORAGE_KEYS.PENDING_DISPLAY_NAME);
+      return null;
+    }
+
+    const client = await getClient();
+    const profiles = getProfilesCollection(client);
+    const existing = await profiles.get(PROFILE_ID);
+    if (existing) {
+      await profiles.update(PROFILE_ID, { displayName: pending.name, updatedAt: pending.updatedAt });
+    } else {
+      await profiles.create({ profileId: PROFILE_ID, displayName: pending.name, updatedAt: pending.updatedAt });
+    }
+
+    if (localStorage.getItem(STORAGE_KEYS.PENDING_DISPLAY_NAME) === raw) {
+      localStorage.removeItem(STORAGE_KEYS.PENDING_DISPLAY_NAME);
+    }
+    return pending.name;
+  });
+  displayNameFlushChain = run;
+  return run;
 }
 
 // ============ UI PREFERENCES ============
