@@ -281,6 +281,207 @@ export function renderCreateAccountForm(content, deps = {}) {
   });
 }
 
+// ============ Forgot password (account-key recovery) ============
+
+/**
+ * Normalize a typed/pasted 24-word account key. Tolerates newlines, mixed
+ * case, and numbered list prefixes ("1. word", "01) word", "(1) word") —
+ * the same friendliness layer as the Settings phrase entry (account_ui.js
+ * normalizePastedPhrase; duplicated here to keep this module dependency-
+ * free). The SDK's validateAccountKey applies its own strict NFKD
+ * normalization afterwards.
+ */
+export function normalizeAccountKeyInput(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  return raw
+    .replace(/[ \t]+/g, ' ')
+    .split(/\s+/)
+    .map(tok => tok.replace(/^[\(\[]?\d{1,2}[\)\.\]:\-]?$/i, ''))  // pure number tokens → drop
+    .map(tok => tok.replace(/^[\(\[]?\d{1,2}[\)\.\]:\-]/, ''))     // "1." / "(1)" prefix → strip
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Translate SDK recovery failures into human language. Error strings come
+ * from the SDK's recoverAccount()/validateAccountKey (tarn client):
+ * "expected 24 words, got N", "invalid BIP39 mnemonic (word not in list,
+ * or checksum mismatch)", "no account found for this account key + app",
+ * plus generic challenge/verify/network failures.
+ */
+export function humanizeRecoveryError(e) {
+  const msg = e?.message || '';
+  if (/no account found/i.test(msg)) {
+    return 'We couldn’t find an account for that key. Double-check the 24 words — the key is the only way to locate your account.';
+  }
+  if (/expected 24 words|invalid BIP39|mnemonic|checksum/i.test(msg)) {
+    return 'That doesn’t look like a valid account key. Check for missing or misspelled words — it should be exactly 24 words.';
+  }
+  if (e instanceof TypeError || /fetch|network|load failed/i.test(msg)) {
+    return 'Couldn’t reach the server. Check your connection and try again.';
+  }
+  return 'Couldn’t reset your password. Please try again.';
+}
+
+/**
+ * Forgot-password form: email + 24-word account key + new password.
+ * Rendered in place of the sign-in form (same content container), the same
+ * in-module view swap the stale-passkey repair flow uses. On success the
+ * user is signed in (the SDK re-authenticates inside recoverAccount).
+ */
+export function renderForgotPasswordForm(content, deps = {}) {
+  const {
+    tarnService,
+    onSignedIn = noop,
+    onSwitchToSignIn = noop,
+    onError = noop,
+    prefillEmail = '',
+  } = deps;
+
+  content.innerHTML = `
+    <div class="auth-form auth-form-recover">
+      <div class="auth-header">
+        <div class="auth-icon">${SVG_SHIELD}</div>
+        <h2>Reset Your Password</h2>
+        <p>Enter your 24-word account key to set a new password. Your books stay exactly as they are.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="recoverEmail">Email</label>
+        <input type="email" id="recoverEmail" autocomplete="email" placeholder="you@example.com" required />
+        <span class="field-hint">This becomes your sign-in email from now on.</span>
+      </div>
+
+      <div class="form-group">
+        <label for="recoverAccountKey">Account key</label>
+        <textarea id="recoverAccountKey" class="account-key-input" rows="3" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Your 24 words, separated by spaces"></textarea>
+        <span class="field-hint" id="recoverKeyHint">The 24 words Bookish showed you at signup — also under Settings → Account &amp; Security on any device where you’re still signed in.</span>
+      </div>
+
+      <div class="form-group">
+        <label for="recoverPassword">New password</label>
+        <div class="password-field">
+          <input type="password" id="recoverPassword" minlength="8" autocomplete="new-password" placeholder="At least 8 characters" required />
+          <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
+        </div>
+        <div class="password-strength">
+          <div class="strength-bar"><div class="strength-fill" id="recoverStrengthFill"></div></div>
+          <span class="strength-label" id="recoverStrengthLabel"></span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="recoverConfirmPassword">Confirm new password</label>
+        <div class="password-field">
+          <input type="password" id="recoverConfirmPassword" autocomplete="new-password" placeholder="Re-enter password" required />
+          <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
+        </div>
+        <span class="field-match" id="recoverConfirmHint"></span>
+      </div>
+
+      <button id="recoverBtn" class="btn primary auth-submit" disabled>
+        Reset Password &amp; Sign In
+      </button>
+
+      <div id="recoverError" class="auth-error" style="display:none;"></div>
+      <div id="recoverProgress" class="auth-progress" style="display:none;"></div>
+
+      <div class="auth-switch">
+        <a href="#" id="recoverBackToSignIn">Back to sign in</a>
+      </div>
+
+      <div class="auth-note">
+        Don’t have your account key? Without it, a password can’t be reset — that’s what keeps your books private, even from us.
+      </div>
+    </div>
+  `;
+
+  const emailInput = content.querySelector('#recoverEmail');
+  const keyInput = content.querySelector('#recoverAccountKey');
+  const passwordInput = content.querySelector('#recoverPassword');
+  const confirmInput = content.querySelector('#recoverConfirmPassword');
+  const recoverBtn = content.querySelector('#recoverBtn');
+  const backLink = content.querySelector('#recoverBackToSignIn');
+
+  if (prefillEmail) emailInput.value = prefillEmail;
+  wirePasswordToggles(content);
+
+  function keyWordCount() {
+    const normalized = normalizeAccountKeyInput(keyInput.value);
+    return normalized ? normalized.split(' ').length : 0;
+  }
+
+  function validate() {
+    const emailOk = !!emailInput.value.trim();
+    const keyOk = keyWordCount() === 24;
+    const password = passwordInput.value;
+    const passwordOk = password.length >= 8 && password === confirmInput.value;
+    recoverBtn.disabled = !(emailOk && keyOk && passwordOk);
+  }
+
+  emailInput.addEventListener('input', validate);
+  keyInput.addEventListener('input', validate);
+
+  passwordInput.addEventListener('input', () => {
+    const { pct, label, cls } = assessPasswordStrength(passwordInput.value);
+    const fill = content.querySelector('#recoverStrengthFill');
+    const labelEl = content.querySelector('#recoverStrengthLabel');
+    fill.style.width = `${pct}%`;
+    fill.className = `strength-fill ${cls}`;
+    labelEl.textContent = label;
+    validate();
+  });
+
+  confirmInput.addEventListener('input', () => {
+    const hint = content.querySelector('#recoverConfirmHint');
+    if (confirmInput.value && confirmInput.value !== passwordInput.value) {
+      hint.textContent = 'Passwords do not match';
+      hint.className = 'field-match match-error';
+    } else if (confirmInput.value) {
+      hint.textContent = 'Passwords match';
+      hint.className = 'field-match match-success';
+    } else {
+      hint.textContent = '';
+      hint.className = 'field-match';
+    }
+    validate();
+  });
+
+  recoverBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim().toLowerCase();
+    const accountKey = normalizeAccountKeyInput(keyInput.value);
+    const password = passwordInput.value;
+
+    recoverBtn.disabled = true;
+    const progress = content.querySelector('#recoverProgress');
+    const error = content.querySelector('#recoverError');
+    error.style.display = 'none';
+    progress.style.display = 'block';
+    progress.textContent = 'Checking your account key...';
+
+    try {
+      progress.textContent = 'Setting your new password...';
+      await tarnService.recoverAccount(email, accountKey, password);
+      await hydrateSignedInDisplayName(tarnService, email.split('@')[0]);
+      progress.textContent = 'Signed in!';
+      onSignedIn();
+    } catch (e) {
+      onError('[AccountUI] Password recovery failed:', e);
+      error.style.display = 'block';
+      error.textContent = humanizeRecoveryError(e);
+      progress.style.display = 'none';
+      recoverBtn.disabled = false;
+    }
+  });
+
+  backLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    onSwitchToSignIn();
+  });
+}
+
 export function renderSignInForm(content, deps = {}) {
   const {
     tarnService,
@@ -309,6 +510,7 @@ export function renderSignInForm(content, deps = {}) {
           <input type="password" id="signInPassword" autocomplete="current-password" placeholder="Your password" required />
           <button type="button" class="password-toggle" tabindex="-1">${SVG_EYE}</button>
         </div>
+        <div class="auth-forgot"><a href="#" id="forgotPasswordLink">Forgot password?</a></div>
       </div>
 
       <button id="signInBtn" class="btn primary auth-submit" disabled>
@@ -419,6 +621,20 @@ export function renderSignInForm(content, deps = {}) {
   switchLink.addEventListener('click', (e) => {
     e.preventDefault();
     onSwitchToCreate();
+  });
+
+  // Forgot password → in-place swap to the account-key recovery form (same
+  // content container; "Back to sign in" re-renders this form with the same
+  // deps). Carries the typed email across so the user doesn't re-enter it.
+  content.querySelector('#forgotPasswordLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    renderForgotPasswordForm(content, {
+      tarnService,
+      onSignedIn,
+      onError,
+      prefillEmail: emailInput.value.trim(),
+      onSwitchToSignIn: () => renderSignInForm(content, deps),
+    });
   });
 
   getPasskeysSupported().then((supported) => {

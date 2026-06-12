@@ -12,6 +12,8 @@ import { msToDateInputUtc } from './core/id_core.js';
 import * as friends from './core/friends.js';
 import * as friendsRouter from './core/friends_router.js';
 import * as accountKeyReminder from './core/account_key_reminder.js';
+import { applySignInScopeHygiene, clearLastSyncedDlk, GUEST_SCOPE } from './core/account_scope.js';
+import { deleteTarnSdkLocalDbs } from './core/local_db_reset.js';
 import { debugLog } from './core/debug_log.js';
 import {
   isFriendsHiddenFromHeader,
@@ -80,37 +82,25 @@ async function performLogout() {
     if (window.bookishCache?.clearAll) await window.bookishCache.clearAll();
   } catch {}
 
-  // Wipe Tarn SDK's per-account local stores. session.clear() only clears
-  // the wrapped session blob in localStorage — these two IDB databases
-  // survive logout and cause a stuck state on next login:
-  //   - tarn-sync-cursors: keyed by (appId, dlk, type). A stale cursor
-  //     here makes getEntriesSince() return an empty delta after the
-  //     Bookish cache has been wiped, leaving the user with no books.
-  //   - tarn-blob-cache:   keyed by (appId, dlk, txid). Privacy-relevant
-  //     too — the next user on this browser shouldn't inherit any
-  //     ciphertext blobs from the previous account.
-  // Belongs in the SDK long-term (logout should wipe all per-account
-  // local state); patching here in the meantime.
-  await deleteIndexedDb('tarn-sync-cursors');
-  await deleteIndexedDb('tarn-blob-cache');
+  // Wipe the Tarn SDK's per-account local stores (tarn-sync-cursors +
+  // tarn-blob-cache). As of tarn dev commit 8d7d5b5 the SDK's
+  // session.clear() (called inside tarnService.logout() above) wipes
+  // these itself, so this is belt-and-suspenders on the logout path —
+  // kept because cache and cursor must live and die together on EVERY
+  // wipe path (#230), and the boot-path wipe in app.js shares this
+  // helper. See core/local_db_reset.js for the failure mode.
+  await deleteTarnSdkLocalDbs();
+
+  // #231: this device no longer holds any account's synced books, so the
+  // last-synced-account marker is meaningless — clear it, and return the
+  // cache to the logged-out (guest) scope.
+  clearLastSyncedDlk();
+  window.bookishCache?.setActiveScope?.(GUEST_SCOPE);
 
   // Clear in-memory book entries so the UI redraws immediately
   if (window.bookishApp?.clearBooks) window.bookishApp.clearBooks();
 
   uiStatusManager.refresh();
-}
-
-/** Best-effort IDB database deletion. Resolves on success, error, or
- *  block (so logout can't hang). Silent — failures are non-fatal. */
-function deleteIndexedDb(name) {
-  return new Promise((resolve) => {
-    try {
-      const req = indexedDB.deleteDatabase(name);
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-      req.onblocked = () => resolve();
-    } catch { resolve(); }
-  });
 }
 
 const BOOKISH_API = window.BOOKISH_API_URL || 'https://bookish-api.bookish.workers.dev';
@@ -287,6 +277,17 @@ async function completePostCreateAccount(content, { email, displayName, accountK
   await saveInitialDisplayName({ email, displayName });
   localStorage.setItem('bookish.hasHadAccount', 'true');
 
+  // #231: same hygiene as sign-in — scope the cache to the new account,
+  // prune any other account's leftovers, adopt the guest's local books
+  // (they replay-upload to this account on the first sync), update the
+  // last-account marker. Must finish before startSync() runs in
+  // finishPostCreateAccount().
+  try {
+    await applySignInScopeHygiene({ dlk: tarnService.getDataLookupKey?.() });
+  } catch (err) {
+    console.warn('[Bookish:AccountUI] post-signup scope hygiene failed:', err?.message || err);
+  }
+
   transientState.justCreated = true;
   transientState.createdTime = Date.now();
   markInitialSyncDone(); // New account - no books to sync
@@ -362,7 +363,21 @@ function completePostSignIn() {
   subscription.resetStatus();
   subscription.fetchStatus().catch(() => {});
 
-  setTimeout(() => {
+  setTimeout(async () => {
+    // #231: sign-in cache hygiene — runs for BOTH the password and the
+    // passkey path (both funnel through onSignedIn → here) and MUST
+    // complete before startSync() kicks off the first sync. Detects an
+    // account switch via the bookish.lastDlk marker; on switch it wipes
+    // the SDK cursor/blob DBs (#230 invariant) and prunes the previous
+    // account's cached books, while adopting the guest's local books into
+    // this account. Failure is logged but doesn't block sign-in — the
+    // scope-filtered read path in cache.js still prevents cross-account
+    // display on its own.
+    try {
+      await applySignInScopeHygiene({ dlk: tarnService.getDataLookupKey?.() });
+    } catch (err) {
+      console.warn('[Bookish:AccountUI] sign-in scope hygiene failed:', err?.message || err);
+    }
     closeAccountModal();
     startSync();
     uiStatusManager.refresh();

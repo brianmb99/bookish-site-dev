@@ -3404,6 +3404,42 @@ form.inline label.toggle-switch{display:flex}
   text-decoration: underline;
 }
 
+/* Forgot-password affordance on the sign-in form */
+.auth-forgot {
+  margin-top: 6px;
+  text-align: right;
+  font-size: 0.78rem;
+}
+.auth-forgot a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+.auth-forgot a:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+/* 24-word account-key entry on the recovery form. Mirrors the auth input
+   styling; monospace so word boundaries read clearly. */
+.auth-form .form-group textarea.account-key-input {
+  width: 100%;
+  padding: 12px;
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.5;
+  resize: none;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+.auth-form .form-group textarea.account-key-input:focus {
+  outline: none;
+  border-color: rgba(245,158,11,.68);
+}
+
 /* Account-key view (post-register) — surfaces the 24-word account key
    with a copy button. No save-proof gate; the user can re-view it any
    time from Settings → Account & Security. */

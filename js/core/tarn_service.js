@@ -144,6 +144,47 @@ export async function login(email, password) {
 }
 
 /**
+ * Forgot-password recovery: prove account ownership with the 24-word
+ * account key and set a new password. The SDK re-wraps the existing data
+ * keys under the new credentials (all pre-recovery books stay decryptable)
+ * and re-authenticates internally — when this resolves, the user is
+ * SIGNED IN under the new password. Server-side, every OTHER active
+ * session is revoked by the recovery; registered passkeys survive
+ * unchanged (recovery does not mint a new key generation).
+ *
+ * `email` becomes the account's sign-in username going forward — the
+ * account is located by the key alone, so the email here is a SET, not a
+ * check. The form copy makes this explicit.
+ *
+ * Side effects mirror login(): cache email + dataLookupKey for the
+ * subscription routes and the Account modal.
+ *
+ * Throwing contract: rejects on a malformed key ("expected 24 words…",
+ * "invalid BIP39 mnemonic…"), an unknown key ("no account found for this
+ * account key + app"), or network/server failures. Callers surface these
+ * via humanizeRecoveryError in components/account_auth_flows.js.
+ *
+ * @param {string} email - new sign-in email (username)
+ * @param {string} accountKey - the 24-word account key
+ * @param {string} newPassword
+ * @returns {Promise<{dataLookupKey?: string}>}
+ */
+export async function recoverAccount(email, accountKey, newPassword) {
+  const client = await ensureClient();
+  const result = await client.recoverAccount({
+    phrase: accountKey,
+    newUsername: email,
+    newPassword,
+  });
+  if (email) localStorage.setItem(STORAGE_KEYS.EMAIL, email);
+  if (result?.dataLookupKey) {
+    _dataLookupKey = result.dataLookupKey;
+    localStorage.setItem(DLK_STORAGE_KEY, result.dataLookupKey);
+  }
+  return result;
+}
+
+/**
  * Authenticate using a registered passkey (recovery v2 — phase 4). Peer
  * of `login()`: no prior session required, succeeds the same way (JWT +
  * DEK chain installed, persisted session blob written by the SDK), and

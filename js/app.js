@@ -32,6 +32,9 @@ import { createWtrDrawerController, sortWtrList } from './components/wtr_drawer.
 import { activeEntryCount as countActiveEntries, createOmniboxController } from './components/omnibox_controller.js';
 import { openConfirmDialog } from './components/confirm_dialog.js';
 import { retryPendingProvisioning } from './components/account_auth_flows.js';
+import { deleteTarnSdkLocalDbs } from './core/local_db_reset.js';
+import { setLastSyncedDlk } from './core/account_scope.js';
+import { resolveBootScope } from './core/scope_core.js';
 
 // Friends invite-link routing (#118). Capture the invite parameters from
 // /invite/:token_id#:payload_key BEFORE anything else touches window.location
@@ -2858,7 +2861,28 @@ async function initCacheLayer(){
     // follow-up issue.
     if (hadPersistedTarnSession && !tarnService.isLoggedIn()) {
       await window.bookishCache.clearAll();
+      // #230: the SDK's delta cursor must die with the books cache, on
+      // EVERY wipe path. If `tarn-sync-cursors` survived this clearAll,
+      // the next sign-in would delta-sync only post-cursor events into an
+      // empty cache and render "one recent book" instead of the library
+      // (confirmed in production 2026-06-11). `tarn-blob-cache` goes with
+      // it for privacy. Same trio as performLogout (account_ui.js).
+      await deleteTarnSdkLocalDbs();
     }
+
+    // #231: establish the per-account cache scope for this page life and
+    // run the one-time migration that tags legacy (pre-scoping) entries:
+    //   - session restored  → they belong to that session's account (dlk);
+    //   - no session        → 'guest' (logged-out books are intentional
+    //     local state and must never be wiped, see #113).
+    // Must run BEFORE loadFromCache() so the first render is scope-filtered.
+    // For already-signed-in users we also backfill the last-synced-account
+    // marker so their next explicit sign-in takes the warm (delta) path.
+    const bootDlk = tarnService.isLoggedIn() ? tarnService.getDataLookupKey() : null;
+    const bootScope = resolveBootScope({ isLoggedIn: tarnService.isLoggedIn(), dlk: bootDlk });
+    window.bookishCache.setActiveScope(bootScope);
+    await window.bookishCache.migrateUnscopedEntries(bootScope);
+    if (bootDlk) setLastSyncedDlk(bootDlk);
 
     // Create the BookRepository — single owner of all book data operations.
     // deriveBookId is required for the schema-first SDK (every record needs a
