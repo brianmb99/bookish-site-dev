@@ -70,6 +70,15 @@ function writeCachedCount(key, n) {
   try { localStorage.setItem(key, String(n)); } catch { /* ignore */ }
 }
 
+function friendStripRenderOptions(mutedSharePubs = new Set()) {
+  return {
+    onAddClick: openInviteFlow,
+    onAvatarTap: handleAvatarTap,
+    onAvatarLongPress: (conn, anchor) => handleAvatarLongPress(conn, anchor, mutedSharePubs),
+    mutedSharePubs,
+  };
+}
+
 function ensureMarkup() {
   if (document.getElementById(OVERLAY_ID)) return;
   const root = document.createElement('div');
@@ -167,12 +176,7 @@ async function refreshStrip() {
   } catch (err) {
     console.warn('[Bookish:FriendsDrawer] refreshStrip parallel-fetch failed:', err.message);
   }
-  renderFriendStrip(host, connections, {
-    onAddClick: openInviteFlow,
-    onAvatarTap: handleAvatarTap,
-    onAvatarLongPress: (conn, anchor) => handleAvatarLongPress(conn, anchor, mutedSharePubs),
-    mutedSharePubs,
-  });
+  renderFriendStrip(host, connections, friendStripRenderOptions(mutedSharePubs));
   writeCachedCount(LAST_STRIP_COUNT_KEY, connections.length);
   updateAllMutedBanner(connections, mutedSharePubs);
 }
@@ -419,10 +423,16 @@ export async function openFriendsDrawer(opts = {}) {
   // Paint correctly-sized placeholders SYNCHRONOUSLY from the last-known
   // region sizes, so the async hydrates below swap content in place
   // instead of pushing the layout around (the drawer-flicker fix).
-  renderFriendStripSkeleton(
-    document.getElementById(STRIP_HOST_ID),
-    readCachedCount(LAST_STRIP_COUNT_KEY),
-  );
+  const cachedStripCount = readCachedCount(LAST_STRIP_COUNT_KEY);
+  const stripHost = document.getElementById(STRIP_HOST_ID);
+  if (cachedStripCount > 0) {
+    renderFriendStripSkeleton(stripHost, cachedStripCount);
+  } else {
+    // First-run / zero-friends path: render the real empty state immediately
+    // instead of a header-only skeleton. If the async fetch finds friends
+    // after all, refreshStrip will replace this with the populated strip.
+    renderFriendStrip(stripHost, [], friendStripRenderOptions());
+  }
   reserveEventsSpace(document.getElementById(EVENTS_HOST_ID));
 
   // Hydrate the strip async (Tarn calls). The drawer chrome paints
