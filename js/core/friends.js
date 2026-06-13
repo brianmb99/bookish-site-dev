@@ -157,23 +157,6 @@ function readInviteDisplayNameFromFragment(fragment) {
   }
 }
 
-function withInviteDisplayName(inviteUrl, displayName) {
-  const normalized = normalizeInviteDisplayName(displayName);
-  if (!normalized) return inviteUrl;
-  try {
-    const url = new URL(inviteUrl);
-    const fragment = url.hash.replace(/^#/, '');
-    if (!fragment) return inviteUrl;
-    const payloadKey = fragment.split('&')[0];
-    const params = new URLSearchParams(fragment.includes('&') ? fragment.slice(fragment.indexOf('&') + 1) : '');
-    params.set('from', normalized);
-    url.hash = `${payloadKey}&${params.toString()}`;
-    return url.toString();
-  } catch {
-    return inviteUrl;
-  }
-}
-
 // ============ Pending-label storage (recipient side) ============
 //
 // The recipient's chosen label can't be set on the SDK redeemInvite call
@@ -261,17 +244,18 @@ export async function applyPendingLabels() {
 export async function generateInvite(opts = {}) {
   const tarn = await tarnService.getClient();
   const displayName = normalizeInviteDisplayName(opts.displayName ?? '');
-  // NOTE: `display_name` is deliberately NOT passed to createInvite — the
-  // SDK has no such option (it was silently ignored historically, and the
-  // SDK now throws on unknown options). The recipient-facing name travels
-  // in the URL fragment via withInviteDisplayName; migrating it into the
-  // SDK's encrypted `recipient_metadata` is planned for the next vendor
-  // bundle rebuild.
+  // The recipient-facing name rides INSIDE the encrypted invite payload
+  // (SDK `recipient_metadata`) and comes back decrypted from
+  // previewInvite() — integrity-bound by the payload's GCM tag, unlike the
+  // old `&from=` fragment suffix a link-forwarder could edit. New links
+  // therefore carry no `from=`; parseInviteUrl keeps fragment parsing as a
+  // fallback for links minted before this change.
   const created = await tarn.connections.createInvite({
     label: displayName,
     expiry_days: opts.expiryDays ?? 7,
+    ...(displayName ? { recipient_metadata: { display_name: displayName } } : {}),
   });
-  const inviteUrl = withInviteDisplayName(created.invite_url, displayName);
+  const inviteUrl = created.invite_url;
   const parsed = parseInviteUrl(inviteUrl);
   // The handshake completes only if our session polls the inbox after the
   // recipient redeems — start the heartbeat (fast burst now, steady

@@ -603,7 +603,15 @@ export function renderSignInForm(content, deps = {}) {
     } catch (e) {
       onError('[AccountUI] Sign in failed:', e);
       let msg = 'Sign in failed. Please check your email and password.';
-      if (e.message?.includes('not found')) msg = 'Account not found. Check your email address.';
+      if (e?.name === 'TarnSharingKeysMissingError') {
+        // tarn#73: the account predates envelope-carried sharing keys and
+        // needs the one-shot migration before password sign-in works again.
+        // Detected by name (the bundled SDK class identity survives
+        // minification via the explicit .name assignment).
+        msg = 'This account needs a one-time upgrade before signing in. ' +
+          'Please contact support (or run the Tarn sharing-keys migration for this account).';
+      }
+      else if (e.message?.includes('not found')) msg = 'Account not found. Check your email address.';
       else if (e instanceof TypeError || /fetch|network|load failed/i.test(e.message || '')) {
         msg = 'Couldn’t reach the server. Check your connection and try again.';
       }

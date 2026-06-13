@@ -69,9 +69,11 @@ export function renderPendingInviteRows(invites) {
       const expires = inv.expires_at
         ? new Date(inv.expires_at * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' })
         : '';
-      const namePart = inv.display_name?.trim()
-        ? `for ${escapeHtml(inv.display_name)}`
-        : 'unnamed';
+      // Issued-invite rows carry the inviter's local `label` (the SDK has
+      // no display_name field on listIssuedInvites) — reading display_name
+      // here was dead code that rendered every pending invite as 'unnamed'.
+      const pendingName = (inv.label ?? inv.display_name)?.trim();
+      const namePart = pendingName ? `for ${escapeHtml(pendingName)}` : 'unnamed';
       return `
           <li class="account-friend-row account-friend-row-pending" data-pending-token="${escapeHtml(inv.token_id)}">
             <span class="account-friend-label">Invite ${namePart}</span>

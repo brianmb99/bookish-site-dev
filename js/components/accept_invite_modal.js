@@ -83,7 +83,13 @@ function renderUnavailable(content, reason) {
 }
 
 function renderPreview(content, preview, params) {
-  const inviterName = preview.inviter_display_name?.trim() || params.display_name?.trim() || 'Your friend';
+  // Inviter name preference order: the app-defined metadata decrypted from
+  // the invite payload (new links), then the legacy `&from=` fragment
+  // carried through params (links minted before recipient_metadata), then
+  // a neutral fallback. Inviter-asserted either way — context, not identity.
+  const inviterName = preview.recipient_metadata?.display_name?.trim()
+    || params.display_name?.trim()
+    || 'Your friend';
   const fingerprint = preview.inviter_share_pub_fingerprint || '';
   content.innerHTML = `
     <div class="invite-pane">
