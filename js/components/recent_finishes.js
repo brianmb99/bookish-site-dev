@@ -1,18 +1,20 @@
 // recent_finishes.js — Region A of the Friends drawer (#125).
 //
 // Renders the vertical list of friends' recent `finished` events as the
-// primary content above the friend strip. Each row:
+// primary content above the friend strip. The book COVER is the hero — a
+// reading feed is about books — with the friend as a small pip on its corner:
 //
-//   ┌──┬───┬──────────────────────────────┐
-//   │ A│COV│ Maya finished                │
-//   │  │ER │ Piranesi · 2h                │
-//   └──┴───┴──────────────────────────────┘
+//   ┌─────┬──────────────────────────────┐
+//   │ COV │ Piranesi                     │   ← book title (primary)
+//   │ ER◓ │ Maya finished · 2h           │   ← friend + time (secondary)
+//   └─────┴──────────────────────────────┘
 //
 // where:
-//   A      = 28px friend-avatar circle (renderFriendAvatar)
-//   COVER  = small ~32px cover thumbnail (book.coverImage data-URL or the
-//            generated-cover gradient placeholder from book_card.js)
-//   text   = two lines, primary-color top + secondary-color bottom
+//   COVER  = ~42px-wide 2:3 cover (book.coverImage data-URL or the
+//            generated-cover gradient placeholder from book_card.js).
+//   ◓      = small friend-avatar PIP on the cover's corner (the #126
+//            friend-pip language) — whose finish it is, at a glance.
+//   text   = book title (primary) over "<friend> finished · <time>" (secondary)
 //
 // Tap the row → openFriendBookDetail({ book, connection }).
 //
@@ -53,18 +55,13 @@ export function buildRecentFinishRow(event, opts = {}) {
   row.setAttribute('aria-label', ariaLabel);
   row.dataset.sharePub = connection.share_pub || '';
 
-  // Avatar (28px). The avatar component handles deterministic color +
-  // initial; the size variant comes from the recent-finish-row CSS sizing
-  // applied to descendant .friend-avatar.
-  const avatar = renderFriendAvatar(connection, { size: 'sm', ariaLabel: name });
-  avatar.classList.add('recent-finish-avatar');
-  row.appendChild(avatar);
+  // The book cover is the hero — a reading feed is about BOOKS. It leads the
+  // row, sized as a proper 2:3 with a subtle frame + shadow so it has presence.
+  // Reuses the same data-URL / generated-cover pattern as book_card.js so the
+  // drawer's covers look consistent with the Library.
+  const coverWrap = document.createElement('div');
+  coverWrap.className = 'recent-finish-cover-wrap';
 
-  // Cover thumbnail. Reuses the same data-URL pattern as book_card.js. When
-  // there's no cover bytes, fall back to the generated-cover gradient
-  // placeholder — same palette + initial treatment as the user's own
-  // missing-cover books, so the drawer's covers look consistent with the
-  // Library.
   const cover = document.createElement('div');
   cover.className = 'recent-finish-cover';
   if (book.coverImage) {
@@ -85,17 +82,23 @@ export function buildRecentFinishRow(event, opts = {}) {
     initial.setAttribute('aria-hidden', 'true');
     cover.appendChild(initial);
   }
-  row.appendChild(cover);
+  coverWrap.appendChild(cover);
 
-  // Two-line text block.
+  // Friend identity as a small avatar PIP on the cover's corner — the same
+  // friend-pip visual language the Library uses (#126). Tells you whose finish
+  // it is at a glance without stealing the cover's pride of place.
+  const pip = renderFriendAvatar(connection, { size: 'sm', ariaLabel: name });
+  pip.classList.add('recent-finish-pip');
+  coverWrap.appendChild(pip);
+  row.appendChild(coverWrap);
+
+  // Text: the book TITLE leads (primary); the friend + time are quiet metadata.
   const text = document.createElement('div');
   text.className = 'recent-finish-text';
   text.innerHTML = `
-    <div class="recent-finish-line-top">${escapeHtml(name)} finished</div>
-    <div class="recent-finish-line-bottom">
-      <span class="recent-finish-title">${escapeHtml(title)}</span>
-      <span class="recent-finish-sep" aria-hidden="true"> · </span>
-      <span class="recent-finish-time">${escapeHtml(relative)}</span>
+    <div class="recent-finish-title">${escapeHtml(title)}</div>
+    <div class="recent-finish-meta">
+      <span class="recent-finish-who">${escapeHtml(name)}</span> finished<span class="recent-finish-sep" aria-hidden="true"> · </span><span class="recent-finish-time">${escapeHtml(relative)}</span>
     </div>
   `;
   row.appendChild(text);
