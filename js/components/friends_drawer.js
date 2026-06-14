@@ -35,6 +35,7 @@ import { setHideFriendsFromHeader } from './friend_glyph_trigger.js';
 import { hydrateRecentFinishes } from './recent_finishes.js';
 import { openFriendOverflowMenu } from './friend_overflow_menu.js';
 import { openConfirmDialog } from './confirm_dialog.js';
+import { openPromptDialog } from './prompt_dialog.js';
 import { showStatusToast } from './status_helpers.js';
 
 const OVERLAY_ID = 'friendsOverlay';
@@ -295,6 +296,7 @@ function handleAvatarLongPress(connection, anchorEl, mutedSharePubs) {
     anchor: anchorEl,
     label,
     isMuted: wasMuted,
+    onRename: () => handleRename(connection, label),
     onMute: () => handleMute(connection, label),
     onUnmute: () => handleUnmute(connection, label),
     onRemove: () => handleRemove(connection, label),
@@ -351,6 +353,36 @@ async function handleRemove(connection, label) {
   } catch (err) {
     console.warn('[Bookish:FriendsDrawer] removeConnection failed:', err.message);
     showFriendsToast(`Couldn't remove ${label}.`);
+    return;
+  }
+  await Promise.all([
+    refreshStrip().catch(() => {}),
+    refreshEvents().catch(() => {}),
+  ]);
+}
+
+async function handleRename(connection, label) {
+  let newName = null;
+  try {
+    newName = await openPromptDialog({
+      title: 'Rename friend',
+      body: 'Only you see this name.',
+      initialValue: connection.label || '',
+      placeholder: 'Their name',
+      confirmLabel: 'Save',
+      maxLength: 64,
+    });
+  } catch {
+    newName = null;
+  }
+  if (newName == null) return;                          // cancelled / dismissed
+  if (newName === (connection.label || '')) return;     // unchanged — no write
+
+  try {
+    await friends.renameConnection(connection, newName);
+  } catch (err) {
+    console.warn('[Bookish:FriendsDrawer] renameConnection failed:', err.message);
+    showFriendsToast(`Couldn't rename ${label}.`);
     return;
   }
   await Promise.all([

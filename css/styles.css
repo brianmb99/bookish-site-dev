@@ -5751,23 +5751,60 @@ body.modal-open{overscroll-behavior-y:contain;touch-action:pan-y}
 .friend-strip-scroll::-webkit-scrollbar-thumb{background:var(--color-border-subtle);border-radius:3px}
 
 .friend-strip-cell{
+  position:relative;
   flex-shrink:0;
+  width:64px;
+}
+.friend-strip-cell-main{
   display:flex;flex-direction:column;align-items:center;gap:6px;
+  width:100%;
   background:transparent;
   border:none;
   padding:6px 4px;
   cursor:pointer;
   border-radius:8px;
-  width:64px;
   min-height:auto!important;
   font-family:var(--font-body);
   color:var(--color-text-primary);
   transition:background .15s;
   box-shadow:none;
 }
-.friend-strip-cell:hover,
-.friend-strip-cell:focus-visible{
+.friend-strip-cell-main:hover,
+.friend-strip-cell-main:focus-visible{
   background:var(--color-bg-surface);
+}
+/* Visible overflow (⋯) trigger — discoverable Rename/Mute/Remove. Subtle by
+   default; brightens on hover/focus, and stays clearly visible on touch (no
+   hover to reveal it there). */
+.friend-strip-more{
+  position:absolute;
+  top:-2px;right:0;
+  width:26px;height:26px;
+  display:flex;align-items:center;justify-content:center;
+  padding:0;
+  border:1px solid var(--color-border-subtle);
+  border-radius:50%;
+  background:var(--color-bg-elevated);
+  color:var(--color-text-secondary);
+  font-size:.95rem;line-height:1;
+  cursor:pointer;
+  box-shadow:0 1px 3px rgba(0,0,0,.28);
+  opacity:.6;
+  transition:opacity .15s,background .15s,color .15s,border-color .15s;
+  min-height:auto!important;
+}
+.friend-strip-cell:hover .friend-strip-more,
+.friend-strip-cell:focus-within .friend-strip-more,
+.friend-strip-more:focus-visible{
+  opacity:1;
+}
+.friend-strip-more:hover{
+  background:var(--color-bg-surface);
+  color:var(--color-text-primary);
+  border-color:var(--color-border-default);
+}
+@media (pointer: coarse){
+  .friend-strip-more{opacity:.85}
 }
 .friend-strip-name{
   font-size:.72rem;
@@ -6693,6 +6730,24 @@ body.modal-open{overscroll-behavior-y:contain;touch-action:pan-y}
   font-size:.9rem;
   color:var(--color-text-secondary);
   line-height:1.45;
+}
+/* Prompt-dialog text field (rename, etc.) — mirrors the invite name input. */
+.prompt-dialog-input{
+  width:100%;box-sizing:border-box;
+  margin:0 0 18px;
+  background:var(--color-bg-base);
+  border:1px solid var(--color-border-default);
+  border-radius:8px;
+  padding:10px 12px;
+  font-family:var(--font-body);font-size:1rem;
+  color:var(--color-text-primary);
+  transition:border-color .15s,box-shadow .15s;
+}
+.prompt-dialog-input::placeholder{color:var(--color-text-muted)}
+.prompt-dialog-input:focus{
+  outline:none;
+  border-color:rgba(245,158,11,.68);
+  box-shadow:0 0 0 2px var(--color-accent-muted);
 }
 .confirm-dialog-actions{
   display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;

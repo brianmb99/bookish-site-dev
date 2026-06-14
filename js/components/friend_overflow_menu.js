@@ -79,6 +79,7 @@ function positionMenu(menu, anchor) {
  *   anchor: HTMLElement,
  *   label: string,
  *   isMuted: boolean,
+ *   onRename?: () => void,
  *   onMute?: () => void,
  *   onUnmute?: () => void,
  *   onRemove?: () => void,
@@ -110,6 +111,9 @@ export function openFriendOverflowMenu(args) {
   const muteLabel = args.isMuted ? 'Unmute' : 'Mute';
   const muteHandler = args.isMuted ? args.onUnmute : args.onMute;
   menu.innerHTML = `
+    <button type="button" class="friend-overflow-item" role="menuitem" data-action="rename">
+      Rename…
+    </button>
     <button type="button" class="friend-overflow-item" role="menuitem" data-action="mute">
       ${muteLabel}
     </button>
@@ -119,9 +123,16 @@ export function openFriendOverflowMenu(args) {
   `;
 
   // Wire actions. The menu closes synchronously before invoking the handler
-  // so the caller's confirm dialog / toast renders against a clean DOM.
+  // so the caller's confirm / prompt dialog / toast renders against a clean DOM.
+  const renameBtn = menu.querySelector('[data-action="rename"]');
   const muteBtn = menu.querySelector('[data-action="mute"]');
   const removeBtn = menu.querySelector('[data-action="remove"]');
+  if (renameBtn) {
+    renameBtn.addEventListener('click', () => {
+      ensureClosed();
+      if (typeof args.onRename === 'function') args.onRename();
+    });
+  }
   if (muteBtn) {
     muteBtn.addEventListener('click', () => {
       ensureClosed();
@@ -155,7 +166,8 @@ export function openFriendOverflowMenu(args) {
 
   // Initial focus on the first menu item so keyboard users can navigate.
   requestAnimationFrame(() => {
-    if (muteBtn) muteBtn.focus({ preventScroll: true });
+    const first = renameBtn || muteBtn;
+    if (first) first.focus({ preventScroll: true });
   });
 }
 

@@ -158,8 +158,10 @@ export function renderFriendStrip(container, connections, opts = {}) {
     : new Set(Array.isArray(opts.mutedSharePubs) ? opts.mutedSharePubs : []);
 
   for (const conn of sorted) {
-    const cell = document.createElement('button');
-    cell.type = 'button';
+    // The cell is a CONTAINER (not a button) so it can hold two real buttons:
+    // the main avatar+name tap target AND a visible "⋯" overflow trigger. A
+    // button can't legally contain another button, hence the restructure.
+    const cell = document.createElement('div');
     cell.className = 'friend-strip-cell';
     cell.setAttribute('role', 'listitem');
     cell.dataset.sharePub = conn.share_pub || '';
@@ -171,34 +173,63 @@ export function renderFriendStrip(container, connections, opts = {}) {
     }
 
     const name = displayNameForConnection(conn);
-    cell.setAttribute('aria-label', isMuted ? `${name}, muted` : name);
+
+    const openMenu = (anchorEl) => {
+      if (typeof opts.onAvatarLongPress === 'function') {
+        opts.onAvatarLongPress(conn, anchorEl);
+      } else {
+        debugLog('[Bookish:FriendStrip] overflow (no handler):', name);
+      }
+    };
+
+    // Main tap target: avatar + name (+ muted badge). Tap → friend's shelf.
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'friend-strip-cell-main';
+    main.setAttribute('aria-label', isMuted ? `${name}, muted` : name);
 
     const avatar = renderFriendAvatar(conn, { ariaLabel: name });
-    cell.appendChild(avatar);
+    main.appendChild(avatar);
 
     const nameEl = document.createElement('div');
     nameEl.className = 'friend-strip-name';
     nameEl.textContent = name;
-    cell.appendChild(nameEl);
+    main.appendChild(nameEl);
 
     if (isMuted) {
       const badge = document.createElement('div');
       badge.className = 'friend-strip-muted';
       badge.textContent = 'Muted';
-      cell.appendChild(badge);
+      main.appendChild(badge);
     }
 
-    // Tap → navigation handler stub. Issue 4 wires the friend's shelf.
-    cell.addEventListener('click', () => {
+    cell.appendChild(main);
+
+    // Visible overflow trigger — the discoverable way to Rename / Mute / Remove
+    // (the long-press / right-click gestures below still work as shortcuts).
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'friend-strip-more';
+    more.setAttribute('aria-label', `More options for ${name}`);
+    more.setAttribute('aria-haspopup', 'menu');
+    more.textContent = '⋯';
+    more.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openMenu(more);
+    });
+    cell.appendChild(more);
+
+    // Tap on the main cell → friend's shelf.
+    main.addEventListener('click', () => {
       if (typeof opts.onAvatarTap === 'function') {
         opts.onAvatarTap(conn);
       } else {
-        // Stub breadcrumb for dev — handler arrives in issue 4.
+        // Stub breadcrumb for dev.
         debugLog('[Bookish:FriendStrip] tap (no handler):', name);
       }
     });
 
-    // Long-press → overflow menu stub. Issue 10 wires Mute/Remove.
+    // Long-press (touch) / right-click (desktop) on the main cell → same menu.
     let pressTimer = null;
     let pressed = false;
     const startPress = () => {
@@ -206,36 +237,27 @@ export function renderFriendStrip(container, connections, opts = {}) {
       clearTimeout(pressTimer);
       pressTimer = setTimeout(() => {
         pressed = true;
-        if (typeof opts.onAvatarLongPress === 'function') {
-          opts.onAvatarLongPress(conn, cell);
-        } else {
-          debugLog('[Bookish:FriendStrip] long-press (no handler):', name);
-        }
+        openMenu(cell);
       }, LONG_PRESS_MS);
     };
     const cancelPress = () => {
       clearTimeout(pressTimer);
       pressTimer = null;
     };
-    cell.addEventListener('touchstart', startPress, { passive: true });
-    cell.addEventListener('touchmove', cancelPress, { passive: true });
-    cell.addEventListener('touchend', cancelPress);
-    cell.addEventListener('touchcancel', cancelPress);
-    cell.addEventListener('mousedown', startPress);
-    cell.addEventListener('mouseup', cancelPress);
-    cell.addEventListener('mouseleave', cancelPress);
-    // Right-click → also surface overflow on desktop (parity with long-press).
-    cell.addEventListener('contextmenu', (e) => {
+    main.addEventListener('touchstart', startPress, { passive: true });
+    main.addEventListener('touchmove', cancelPress, { passive: true });
+    main.addEventListener('touchend', cancelPress);
+    main.addEventListener('touchcancel', cancelPress);
+    main.addEventListener('mousedown', startPress);
+    main.addEventListener('mouseup', cancelPress);
+    main.addEventListener('mouseleave', cancelPress);
+    main.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       cancelPress();
-      if (typeof opts.onAvatarLongPress === 'function') {
-        opts.onAvatarLongPress(conn, cell);
-      } else {
-        debugLog('[Bookish:FriendStrip] context menu (no handler):', name);
-      }
+      openMenu(cell);
     });
     // If long-press fired, suppress the click-tap that would otherwise follow.
-    cell.addEventListener('click', (e) => {
+    main.addEventListener('click', (e) => {
       if (pressed) {
         e.stopPropagation();
         e.preventDefault();
