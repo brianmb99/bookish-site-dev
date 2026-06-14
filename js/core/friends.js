@@ -243,22 +243,22 @@ export async function applyPendingLabels() {
  */
 export async function generateInvite(opts = {}) {
   const tarn = await tarnService.getClient();
+  // `displayName` is OUR OWN name — it travels ONLY as recipient-facing
+  // metadata (so the person we invite sees who invited them), never as the
+  // connection label. Carried INSIDE the encrypted invite payload (SDK
+  // `recipient_metadata`), integrity-bound by the payload's GCM tag, unlike
+  // the old `&from=` fragment a forwarder could edit. New links carry no
+  // `from=`; parseInviteUrl keeps fragment parsing as a fallback for old links.
   const displayName = normalizeInviteDisplayName(opts.displayName ?? '');
-  // `displayName` is OUR OWN name — it must travel only as recipient-facing
-  // metadata, never as the invite `label`. The SDK applies the invite `label`
-  // to the ISSUER's own connection record (it's meant for pre-naming the
-  // invitee), so passing our own name there made us see ourselves in our
-  // friends list instead of the person who accepted. We don't know the
-  // invitee's name at link-creation time, so we set no label — the connection
-  // then falls back to the accepter's username (correct), and the user can
-  // rename the friend later.
-  //
-  // The recipient-facing name rides INSIDE the encrypted invite payload
-  // (SDK `recipient_metadata`) and comes back decrypted from previewInvite()
-  // — integrity-bound by the payload's GCM tag, unlike the old `&from=`
-  // fragment a link-forwarder could edit. New links carry no `from=`;
-  // parseInviteUrl keeps fragment parsing as a fallback for older links.
+  // `friendName` is the name WE choose for this friend (required at invite
+  // time by the UI). The SDK applies the invite `label` to OUR OWN connection
+  // record, so this is exactly the right field — it becomes how the friend
+  // shows up in our list. We deliberately do NOT derive a name from the
+  // accepter's account, so their email/identity is never exposed to us; the
+  // inviter names them, and can Rename later.
+  const friendName = normalizeInviteDisplayName(opts.friendName ?? '');
   const created = await tarn.connections.createInvite({
+    ...(friendName ? { label: friendName } : {}),
     expiry_days: opts.expiryDays ?? 7,
     ...(displayName ? { recipient_metadata: { display_name: displayName } } : {}),
   });
@@ -418,6 +418,28 @@ export async function removeConnection(connection) {
   await tarn.connections.remove(connection);
   invalidateFriendLibraryCache();
   emitConnectionsChanged();
+}
+
+/**
+ * Rename a connection — set the local, private label we display for this
+ * friend. The labeled party never learns what we called them (the label
+ * lives only in our own connections record). Returns the normalized label
+ * that was stored.
+ *
+ * @param {{ share_pub: string }} connection
+ * @param {string} name
+ * @returns {Promise<string>}
+ */
+export async function renameConnection(connection, name) {
+  if (!connection || !connection.share_pub) {
+    throw new Error('renameConnection: connection.share_pub is required');
+  }
+  const label = normalizeInviteDisplayName(typeof name === 'string' ? name : '');
+  const tarn = await tarnService.getClient();
+  await tarn.connections.setLabel(connection, label);
+  invalidateFriendLibraryCache();
+  emitConnectionsChanged();
+  return label;
 }
 
 // ============ Connection polling (handshake heartbeat) ============

@@ -61,10 +61,10 @@ export function displayNameForConnection(connection) {
   if (!connection) return 'Friend';
   const label = (connection.label || '').trim();
   if (label) return label;
-  if (connection.email) {
-    const local = connection.email.split('@')[0];
-    if (local) return local;
-  }
+  // Privacy: NEVER surface the peer's email/username as a display name. The
+  // inviter names the friend at invite time (required) and can Rename later,
+  // so a label is normally always present. Until one exists, fall back to a
+  // short, non-PII share-pub prefix, then a generic label.
   if (connection.share_pub) return connection.share_pub.slice(0, 8);
   return 'Friend';
 }

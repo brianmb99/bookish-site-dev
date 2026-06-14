@@ -158,7 +158,49 @@ function renderInvite(content, invite) {
 }
 
 /**
- * Open the invite modal and kick off invite generation.
+ * Step 1 of the invite flow: ask who this is. The name is REQUIRED and
+ * becomes the connection's label (how the friend shows up in our circle).
+ * We deliberately collect it from the inviter rather than the accepter's
+ * account so we never expose the accepter's email/identity.
+ */
+function renderNameForm(content, { onSubmit, initialValue = '' }) {
+  content.innerHTML = `
+    <div class="invite-pane invite-pane-form">
+      <h2 id="inviteModalTitle">Invite a friend</h2>
+      <p class="invite-pane-helper">
+        They'll see your shelf and you'll see theirs. Give them a name so you
+        can recognize them in your circle — only you ever see it.
+      </p>
+      <form class="invite-name-form" data-invite-form novalidate>
+        <label class="invite-name-label" for="inviteFriendName">Their name</label>
+        <input id="inviteFriendName" class="invite-name-input" type="text"
+               name="friendName" maxlength="64" autocomplete="off"
+               autocapitalize="words" placeholder="e.g. Maya"
+               value="${escapeHtml(initialValue)}" required />
+        <div class="invite-actions">
+          <button type="submit" class="btn primary" data-invite-create disabled>Create invite</button>
+        </div>
+      </form>
+    </div>
+  `;
+  const form = content.querySelector('[data-invite-form]');
+  const input = content.querySelector('#inviteFriendName');
+  const submitBtn = content.querySelector('[data-invite-create]');
+  const sync = () => { submitBtn.disabled = input.value.trim().length === 0; };
+  input.addEventListener('input', sync);
+  sync();
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    onSubmit(name);
+  });
+  requestAnimationFrame(() => { try { input.focus(); } catch { /* ignore */ } });
+}
+
+/**
+ * Open the invite modal. Step 1 collects a required name for the friend;
+ * step 2 generates + shows the link.
  *
  * @param {{ displayName?: string }} [opts]
  */
@@ -179,9 +221,7 @@ export async function openInviteModal(opts = {}) {
   _isOpen = true;
   pushOverlayState('invite');
 
-  renderLoading(content);
-
-  const generate = async () => {
+  const generate = async (friendName) => {
     renderLoading(content);
     try {
       const hydrateDisplayName = Object.prototype.hasOwnProperty.call(tarnService, 'hydrateDisplayName')
@@ -191,21 +231,22 @@ export async function openInviteModal(opts = {}) {
       const syncedName = hydrateDisplayName
         ? await hydrateDisplayName()
         : null;
+      // Our OWN name → recipient_metadata so the invitee sees who invited them.
       // Final fallback for passkey-only users without a synced profile name
-      // (#224): every prior link in the chain returns empty, so we'd send an
-      // invite with displayName: '' and the recipient sees "Invite unnamed".
-      // Use a clear placeholder that mirrors the account-hub passkey phrasing.
+      // (#224): every prior link returns empty, so without this the recipient
+      // sees "Invite unnamed". Mirrors the account-hub passkey phrasing.
       const displayName = (opts.displayName || syncedName || tarnService.displayName() || tarnService.getEmail()?.split('@')[0] || 'Passkey user').trim();
-      const invite = await friends.generateInvite({ displayName, expiryDays: 7 });
+      const invite = await friends.generateInvite({ displayName, friendName, expiryDays: 7 });
       if (!_isOpen) return; // user closed before generation finished
       renderInvite(content, invite);
     } catch (err) {
       console.error('[Bookish:InviteModal] generate failed:', err);
-      if (_isOpen) renderError(content, err.message, generate);
+      // Retry returns to the name form, preserving what they typed.
+      if (_isOpen) renderError(content, err.message, () => renderNameForm(content, { onSubmit: generate, initialValue: friendName }));
     }
   };
 
-  generate();
+  renderNameForm(content, { onSubmit: generate });
 }
 
 /**

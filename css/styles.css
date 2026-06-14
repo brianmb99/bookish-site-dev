@@ -5423,6 +5423,26 @@ body.modal-open{overscroll-behavior-y:contain;touch-action:pan-y}
 .invite-pane{display:flex;flex-direction:column;gap:14px;align-items:stretch}
 .invite-pane h2{margin:0;font-family:var(--font-body);font-size:1.05rem;font-weight:600;line-height:1.3}
 .invite-pane-helper{margin:0;font-size:.88rem;color:var(--color-text-secondary);line-height:1.45}
+/* Step 1: required "their name" form. Mirrors the omnibox input treatment. */
+.invite-name-form{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.invite-name-label{font-size:.78rem;color:var(--color-text-secondary);font-weight:500}
+.invite-name-input{
+  width:100%;box-sizing:border-box;
+  background:var(--color-bg-base);
+  border:1px solid var(--color-border-default);
+  border-radius:8px;
+  padding:10px 12px;
+  font-family:var(--font-body);font-size:.95rem;
+  color:var(--color-text-primary);
+  transition:border-color .15s,box-shadow .15s;
+}
+.invite-name-input::placeholder{color:var(--color-text-muted)}
+.invite-name-input:focus{
+  outline:none;
+  border-color:rgba(245,158,11,.68);
+  box-shadow:0 0 0 2px var(--color-accent-muted);
+}
+.invite-name-form .invite-actions{margin-top:4px}
 .invite-pane-loading,
 .invite-pane-error{align-items:center;text-align:center}
 .invite-pane-error-msg{
