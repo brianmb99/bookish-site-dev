@@ -6332,6 +6332,12 @@ body.modal-open{overscroll-behavior-y:contain;touch-action:pan-y}
   overflow:hidden;
 }
 .friend-shelf-header{
+  /* Override the global `header{position:fixed}` (meant for the app's
+     #mainHeader). Without this, the friend-shelf <header> is pulled out of
+     the chrome's flex column, the scrolling body fills the full height, and
+     the fixed header overlaps + clips the top row of cover cards. Keep it in
+     normal flow so it sits above the body, not on top of it. */
+  position:relative;
   display:flex;align-items:center;justify-content:space-between;
   padding:14px 0 12px;
   flex-shrink:0;
