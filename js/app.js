@@ -27,6 +27,7 @@ import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCa
 import { renderPipOverlay } from './components/friend_pip.js';
 import { getMatchingFriendBookEntries as friendsGetMatchingFriendBookEntries, primeFriendLibraryCache as friendsPrimeFriendLibraryCache, invalidateFriendLibraryCache as friendsInvalidateLibraryCache, maybePollConnectionsOnSyncCycle as friendsMaybePollConnections } from './core/friends.js';
 import { openFriendBookDetail } from './components/friend_book_detail.js';
+import { installShareSeedProvider, reconcileConnectionShares, publicBookIdsFrom } from './core/friends_backfill.js';
 import { setStatusLine, showMarkAsReadUndoToast, showStatusToast, showSubscriptionSuccessToast, showUpdateReadyToast } from './components/status_helpers.js';
 import { createWtrDrawerController, sortWtrList } from './components/wtr_drawer.js';
 import { activeEntryCount as countActiveEntries, createOmniboxController } from './components/omnibox_controller.js';
@@ -443,6 +444,11 @@ function resetMobileBookSheetViewport(){
 let entries=[];
 // Book repository — single owner of all book data operations
 let bookRepo = null;
+// §6.6 backfill: SDK client captured once for the boot-time share
+// reconciliation, plus a one-shot guard so it runs only on the first
+// populated sync.
+let _backfillClient = null;
+let _backfillReconciled = false;
 
 // Export for any external callers that need to force-clear auth state
 export function resetKeyState() {
@@ -2901,6 +2907,18 @@ async function initCacheLayer(){
       render();
       uiStatusManager.refresh();
       showAccountNudge();
+      // §6.6 backfill: once the shelf has loaded for the first time,
+      // reconcile existing connections' shared libraries (one-shot,
+      // idempotent — repairs seed failures, backfills pre-feature
+      // connections, catches offline drift). Reads the live shelf.
+      if (_backfillClient && !_backfillReconciled && repoEntries.length) {
+        _backfillReconciled = true;
+        reconcileConnectionShares(
+          _backfillClient,
+          () => publicBookIdsFrom(bookRepo ? bookRepo.getAll() : []),
+          { onWarn: (...a) => console.warn(...a) },
+        ).catch(err => console.warn('[Bookish] share reconcile failed:', err?.message || err));
+      }
     });
     bookRepo.on('error', ({ code, message }) => {
       if (code) { appError = message; }
@@ -2984,6 +3002,16 @@ async function initCacheLayer(){
       // (stashed under bookish.pendingDisplayName, #235). Fire-and-forget.
       tarnService.flushPendingDisplayName().catch(err =>
         console.warn('[Bookish] Pending display name flush failed:', err?.message || err)
+      );
+      // §6.6 backfill: register the seed provider NOW (early) so any
+      // connection formed this session is born carrying our public shelf.
+      // The boot reconciliation (one-shot) fires from bookRepo 'change'
+      // once the shelf has synced. Reads the live shelf at call time.
+      tarnService.getClient().then(client => {
+        _backfillClient = client;
+        installShareSeedProvider(client, () => publicBookIdsFrom(bookRepo ? bookRepo.getAll() : []));
+      }).catch(err =>
+        console.warn('[Bookish] backfill provider install failed:', err?.message || err)
       );
       // Handle return from Stripe Checkout (?sub=success / ?sub=cancel).
       handleStripeReturn();
