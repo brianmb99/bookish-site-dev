@@ -244,14 +244,21 @@ export async function applyPendingLabels() {
 export async function generateInvite(opts = {}) {
   const tarn = await tarnService.getClient();
   const displayName = normalizeInviteDisplayName(opts.displayName ?? '');
+  // `displayName` is OUR OWN name — it must travel only as recipient-facing
+  // metadata, never as the invite `label`. The SDK applies the invite `label`
+  // to the ISSUER's own connection record (it's meant for pre-naming the
+  // invitee), so passing our own name there made us see ourselves in our
+  // friends list instead of the person who accepted. We don't know the
+  // invitee's name at link-creation time, so we set no label — the connection
+  // then falls back to the accepter's username (correct), and the user can
+  // rename the friend later.
+  //
   // The recipient-facing name rides INSIDE the encrypted invite payload
-  // (SDK `recipient_metadata`) and comes back decrypted from
-  // previewInvite() — integrity-bound by the payload's GCM tag, unlike the
-  // old `&from=` fragment suffix a link-forwarder could edit. New links
-  // therefore carry no `from=`; parseInviteUrl keeps fragment parsing as a
-  // fallback for links minted before this change.
+  // (SDK `recipient_metadata`) and comes back decrypted from previewInvite()
+  // — integrity-bound by the payload's GCM tag, unlike the old `&from=`
+  // fragment a link-forwarder could edit. New links carry no `from=`;
+  // parseInviteUrl keeps fragment parsing as a fallback for older links.
   const created = await tarn.connections.createInvite({
-    label: displayName,
     expiry_days: opts.expiryDays ?? 7,
     ...(displayName ? { recipient_metadata: { display_name: displayName } } : {}),
   });
