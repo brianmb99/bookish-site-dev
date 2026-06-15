@@ -112,7 +112,7 @@ export function renderOmniboxApiResults({ results = [], refs = {}, emptyMessage 
     const workKey = (result.work_key && typeof result.work_key === 'string') ? result.work_key : '';
     const wkAttr = workKey ? ` data-work-key="${escapeHtml(workKey)}"` : '';
     const addLabel = result.title ? `Add ${result.title}` : 'Add book';
-    const payload = escapeHtml(encodeURIComponent(JSON.stringify(result)));
+    const payload = encodeURIComponent(JSON.stringify(result));
     return `<div class="omnibox-result" data-add-json="${payload}"${wkAttr}>
       <div class="omnibox-result-cover">${coverHtml}</div>
       <div class="omnibox-result-info">
