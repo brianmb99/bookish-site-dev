@@ -663,7 +663,13 @@ export class BookRepository {
       // persisted inside the SDK (per appId+dlk+type). First call after
       // login on a fresh device — or after clearing site data — returns
       // the full library since the cursor is absent.
+      // Perf (Step 1, temporary): turn on the SDK's getEntriesSince timing
+      // line and clock each local phase. Removed once cold-sync work is done.
+      if (typeof globalThis !== 'undefined') globalThis.__tarnPerf = true;
+      const __perf = () => (typeof performance !== 'undefined' ? performance.now() : 0);
+      const __t = { start: __perf() };
       const { entries, deleted } = await client.books.getEntriesSince();
+      __t.afterGet = __perf();
       debugLog('[BookRepository] Delta: +', entries.length, ' −', deleted.length);
       this._emitSyncProgress({ phase: 'applying', loaded: 0, total: entries.length, deleted: deleted.length });
 
@@ -734,6 +740,7 @@ export class BookRepository {
           if (entry.bookId) workingByBookId.delete(entry.bookId);
         }
       }
+      __t.afterDeletes = __perf();
 
       // Apply upserts. Skip any entry that has a local pending mutation —
       // replayPending() above either succeeded (status was reset to
@@ -781,6 +788,7 @@ export class BookRepository {
           this._emitSyncProgress({ phase: 'applying', loaded, total: entries.length, deleted: deleted.length });
         }
       }
+      __t.afterUpserts = __perf();
 
       // Apply the canonical sort (newest first by dateRead, then createdAt).
       // This is the order the library UI reads — keep it stable across syncs.
@@ -793,6 +801,15 @@ export class BookRepository {
 
       this._emitSyncProgress({ phase: 'complete', total: entries.length, deleted: deleted.length });
       this._emitChange();
+      __t.afterRender = __perf();
+      console.log(
+        `[bookish-perf] sync: ${entries.length} books, ${deleted.length} del — ` +
+        `getEntriesSince ${(__t.afterGet - __t.start).toFixed(0)}ms | ` +
+        `deletes ${(__t.afterDeletes - __t.afterGet).toFixed(0)}ms | ` +
+        `upserts(putEntry) ${(__t.afterUpserts - __t.afterDeletes).toFixed(0)}ms | ` +
+        `sort+render ${(__t.afterRender - __t.afterUpserts).toFixed(0)}ms | ` +
+        `total ${(__t.afterRender - __t.start).toFixed(0)}ms`,
+      );
     } catch (e) {
       console.error('[BookRepository] Sync failed:', e.message);
       this._emitSyncProgress({ phase: 'error', error: e.message });
