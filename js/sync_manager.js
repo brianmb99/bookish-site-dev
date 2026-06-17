@@ -135,34 +135,27 @@ async function runSyncCycle() {
   if (statusCallback) statusCallback();
 
   try {
-    // Friend-handshake heartbeat, kicked off CONCURRENTLY with the books sync
-    // rather than after it. On a cold login the books pull can take tens of
-    // seconds; running the connection poll in parallel means the connection
-    // list + friend libraries (and the friend-pip match cache) load DURING
-    // that window instead of only starting once books finish — for users with
-    // friends that was the dominant tail of post-login data load.
-    //
-    // Own try/catch: a failed poll must never count as a failed sync cycle
-    // (#237 banner) — books synced fine regardless. Starting the IIFE here
-    // begins the poll immediately; we await it after books so the cycle still
-    // settles both before reporting completion. The two touch disjoint
-    // collections (books vs connections/share-log), so overlapping is safe.
-    const connectionPoll = connectionPollCallback
-      ? (async () => {
-          try {
-            await connectionPollCallback();
-          } catch (err) {
-            debugLog('[Bookish:SyncManager] connection poll failed:', err?.message || err);
-          }
-        })()
-      : null;
-
+    // Books FIRST, friends AFTER — deliberately sequential, do NOT parallelize.
+    // The user's own library is the priority on login; friend data (the
+    // connection list + each friend's published shelf) must not compete with
+    // it for bandwidth on a slow connection, or the library the user actually
+    // came for renders late. So the books sync (which paints the grid) fully
+    // resolves before the friend/handshake poll runs. The poll's heavy leg —
+    // priming each friend's library for the pip match cache — is itself
+    // fire-and-forget (kicked off via the `connections-changed` event), so
+    // friend shelves trickle in the background after the library is already up.
     if (bookSyncCallback) {
       await bookSyncCallback();
     }
 
-    if (connectionPoll) {
-      await connectionPoll;
+    // Friend-handshake heartbeat. Own try/catch: a failed poll must never
+    // count as a failed sync cycle (#237 banner) — books synced fine.
+    if (connectionPollCallback) {
+      try {
+        await connectionPollCallback();
+      } catch (err) {
+        debugLog('[Bookish:SyncManager] connection poll failed:', err?.message || err);
+      }
     }
 
     initialSynced = true;
