@@ -135,18 +135,34 @@ async function runSyncCycle() {
   if (statusCallback) statusCallback();
 
   try {
+    // Friend-handshake heartbeat, kicked off CONCURRENTLY with the books sync
+    // rather than after it. On a cold login the books pull can take tens of
+    // seconds; running the connection poll in parallel means the connection
+    // list + friend libraries (and the friend-pip match cache) load DURING
+    // that window instead of only starting once books finish — for users with
+    // friends that was the dominant tail of post-login data load.
+    //
+    // Own try/catch: a failed poll must never count as a failed sync cycle
+    // (#237 banner) — books synced fine regardless. Starting the IIFE here
+    // begins the poll immediately; we await it after books so the cycle still
+    // settles both before reporting completion. The two touch disjoint
+    // collections (books vs connections/share-log), so overlapping is safe.
+    const connectionPoll = connectionPollCallback
+      ? (async () => {
+          try {
+            await connectionPollCallback();
+          } catch (err) {
+            debugLog('[Bookish:SyncManager] connection poll failed:', err?.message || err);
+          }
+        })()
+      : null;
+
     if (bookSyncCallback) {
       await bookSyncCallback();
     }
 
-    // Friend-handshake heartbeat. Own try/catch: a failed poll must never
-    // count as a failed sync cycle (#237 banner) — books synced fine.
-    if (connectionPollCallback) {
-      try {
-        await connectionPollCallback();
-      } catch (err) {
-        debugLog('[Bookish:SyncManager] connection poll failed:', err?.message || err);
-      }
+    if (connectionPoll) {
+      await connectionPoll;
     }
 
     initialSynced = true;
