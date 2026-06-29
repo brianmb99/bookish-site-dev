@@ -54,13 +54,12 @@ export function renderAccountHub(content, {
           </span>
           <span class="account-hub-chevron" aria-hidden="true">&rarr;</span>
         </button>
-        <button type="button" class="account-hub-row" data-account-view="archive">
-          <span class="account-hub-row-main">
-            <span class="account-hub-row-title">Permanent Archive</span>
-            <span class="account-hub-row-desc">Open your permanent archive link</span>
-          </span>
-          <span class="account-hub-chevron" aria-hidden="true">&rarr;</span>
-        </button>
+        <!-- "Permanent Archive" row hidden pre-launch: the subview shipped a
+             hard-coded placeholder Arweave URL (fake txid) shown to every user,
+             which undercuts the core trust claim. Restore this row once a real
+             per-user archive link exists. The CSV "Data Export" below + the
+             standalone forever.html recovery page remain the real export paths.
+             View + routing left dormant in account_archive_view.js / account_ui.js. -->
         <button type="button" class="account-hub-row" data-account-view="export">
           <span class="account-hub-row-main">
             <span class="account-hub-row-title">Data Export</span>
