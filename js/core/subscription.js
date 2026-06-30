@@ -13,10 +13,18 @@ import { getDataLookupKey } from './tarn_service.js';
 
 const BOOKISH_API = window.BOOKISH_API_URL || 'https://bookish-api.bookish.workers.dev';
 
-/** Max books a free-tier user may save. Must match bookish-api FREE_TIER_RULES. */
-export const FREE_LIMIT = 5;
+/** Max books a free-tier user may save. Must match bookish-api FREE_TIER_RULES.
+ *  Launch posture: Bookish is free with a generous fair-use cap, so no real
+ *  reader hits a wall. Lower this (and the server constant) to reintroduce a
+ *  paywall — the "N of X" count chrome and the add-block both key off it. */
+export const FREE_LIMIT = 10000;
 
-/** Show the "N of 5" count once the user has at least this many books.
+/** Don't show the usage count when the free cap is generous (free-for-all
+ *  launch). The "N of X" chrome only makes sense as paywall pressure, so it
+ *  reappears automatically if FREE_LIMIT is lowered for paid tiers. */
+const COUNT_CHROME_MAX_LIMIT = 50;
+
+/** Show the "N of X" count once the user has at least this many books.
  *  Below this threshold the count is hidden to avoid anxious chrome for new users. */
 export const COUNT_THRESHOLD = 3;
 
@@ -92,6 +100,7 @@ export function isAddBlocked(entryCount) {
  * Only for free-tier users at/above COUNT_THRESHOLD.
  */
 export function shouldShowCount(entryCount) {
+  if (FREE_LIMIT > COUNT_CHROME_MAX_LIMIT) return false; // generous cap → no paywall chrome
   return _status === 'free' && entryCount >= COUNT_THRESHOLD;
 }
 

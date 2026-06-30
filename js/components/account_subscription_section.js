@@ -4,12 +4,14 @@ export function renderSubscriptionSection({
 } = {}) {
   const subStatus = subscription?.getStatus?.();
   if (subStatus === 'free') {
+    // Free-for-all launch: no paywall, no dead-end checkout (Stripe is dormant).
+    // Keep the Subscription concept visible but honest \u2014 paid plans may arrive
+    // later as optional support; nothing is gated today.
     return `
       <div class="account-panel-subscription">
         <div class="account-panel-sub-label">Subscription</div>
-        <div class="account-panel-sub-value">Trial \u2014 ${activeEntryCount} of ${subscription.FREE_LIMIT} books used</div>
-        <div class="account-panel-sub-pitch">Add unlimited books: <strong>$10/year</strong> \u00B7 cancel anytime</div>
-        <button type="button" id="accountSubscribeBtn" class="account-panel-sub-btn" data-subscribe-action="subscribe">Subscribe \u2014 $10/year</button>
+        <div class="account-panel-sub-value">Bookish is free \u2014 no subscription needed.</div>
+        <div class="account-panel-sub-pitch">Save as many books as you like. Paid plans may arrive later to support permanent storage \u2014 you'll never lose access to anything you've saved.</div>
       </div>
     `;
   }
