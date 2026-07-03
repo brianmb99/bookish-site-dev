@@ -385,7 +385,7 @@ if(tileCoverWrap){
   });
 }
 if(tileCoverClick && coverFileInput){ tileCoverClick.addEventListener('click',(e)=>{ if(e.target.closest('.cover-remove-btn,.cover-nav-arrow,.cover-adjust-btn')) return; if(modal.querySelector('.modal-inner')?.classList.contains('adjusting-cover')) return; coverFileInput.click(); }); }
-if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.add('no-cover'); updateDirty(); if(form.priorTxid.value) _autoSaveIfDirty(); }); }
+if(coverRemoveBtn){ coverRemoveBtn.addEventListener('click',(e)=>{ e.stopPropagation(); clearCoverPreview(); coverPreview.dataset.removed='1'; /* #233: explicit removal intent — the only signal that unsets the remote cover */ const inner=modal.querySelector('.modal-inner'); if(inner) inner.classList.add('no-cover'); updateDirty(); if(form.priorTxid.value) _autoSaveIfDirty(); }); }
 // #147 item B: collapsed "+ Add cover" CTA expands the cover slot. Removes
 // the .no-cover class on .modal-inner (so the full tile + dashed-border
 // placeholder + ADD COVER text become visible) and opens the Change-cover
@@ -415,8 +415,12 @@ function setCoverPreviewCrop(crop){
   else delete coverPreview.dataset.crop;
   applyCoverCropToImage(coverPreview, normalized);
 }
-function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Add cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; delete coverPreview.dataset.fit; setCoverPreviewCrop(null); coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn(); }
+function clearCoverPreview(){ coverPreview.style.display='none'; coverPlaceholder.style.display='block'; if(coverPlaceholder) coverPlaceholder.innerHTML='<div class="placeholder-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Add cover</span></div>'; delete coverPreview.dataset.b64; delete coverPreview.dataset.mime; delete coverPreview.dataset.fit; delete coverPreview.dataset.removed; setCoverPreviewCrop(null); coverPreview.src=''; if(coverRemoveBtn) coverRemoveBtn.style.display='none'; coverFileInput.value=''; tileCoverClick.style.removeProperty('--cover-url'); if(window.__bookishRefreshAdjustBtn) window.__bookishRefreshAdjustBtn(); }
 function showCoverLoaded(){
+  // A cover just attached (open-with-cover, search prefill, upload, browse) —
+  // clear any prior explicit-removal intent (#233). Removal is re-asserted only
+  // by the remove button.
+  delete coverPreview.dataset.removed;
   if(coverRemoveBtn) coverRemoveBtn.style.display='inline-flex';
   // Round 2 (#147) introduced the .no-cover collapsed state and a small
   // "+ Add cover" CTA that shows when .no-cover is set on .modal-inner.
@@ -1203,7 +1207,11 @@ function _buildPayloadFromForm(){
     payload.coverFit = coverPreview.dataset.fit || '';
     const coverCrop = normalizeCoverCrop(coverPreview.dataset.crop);
     payload.coverCrop = coverCrop || '';
-  } else if(form.priorTxid.value){
+  } else if(form.priorTxid.value && coverPreview.dataset.removed === '1'){
+    // #233: only send the unset sentinels on EXPLICIT removal. Otherwise (no
+    // cover in the preview because it hasn't hydrated / wasn't loaded) omit
+    // cover fields entirely so an edit of other fields can't silently wipe the
+    // book's existing cover on the permanent record.
     payload.coverImage = '';
     payload.mimeType = '';
     payload.coverCrop = '';
@@ -2735,7 +2743,9 @@ function _buildSubmitPayloadFromForm(priorTxid){
     const coverCrop = normalizeCoverCrop(coverPreview.dataset.crop);
     if(coverCrop) payload.coverCrop = coverCrop;
     else if(priorTxid) payload.coverCrop = '';
-  } else if(priorTxid){
+  } else if(priorTxid && coverPreview.dataset.removed === '1'){
+    // #233: explicit removal only — otherwise omit cover fields so an edit
+    // never unsets an existing cover that just wasn't loaded into the preview.
     payload.coverImage = '';
     payload.mimeType = '';
     payload.coverCrop = '';
