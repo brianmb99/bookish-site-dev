@@ -31,7 +31,10 @@
 // the rule.
 
 import { formatMonthYearDisplay } from '../core/id_core.js';
-import { READING_STATUS, normalizeReadingStatus } from '../core/book_repository.js';
+// From the dependency-free vocabulary module, NOT book_repository.js: these
+// builders must stay portable enough for the standalone recovery page
+// (tools/forever/) to render a recovered shelf with zero networked deps.
+import { READING_STATUS, normalizeReadingStatus } from '../core/reading_status.js';
 import { coverCropStyleAttr } from '../core/cover_crop.js';
 
 // Generated covers should feel like quiet shelf objects, not generic color

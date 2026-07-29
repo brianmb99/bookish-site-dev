@@ -20,13 +20,16 @@
 import * as friends from './friends.js';
 import { debugLog } from './debug_log.js';
 import { normalizeCoverCrop } from './cover_crop.js';
+// Local binding for this module's own use — the `export ... from` below only
+// re-exports, it doesn't bind these names in this scope.
+import { READING_STATUS, normalizeReadingStatus } from './reading_status.js';
 import { deleteTarnSdkLocalDbs } from './local_db_reset.js';
 
-export const READING_STATUS = {
-  WANT_TO_READ: 'want_to_read',
-  READING: 'reading',
-  READ: 'read'
-};
+// Reading-status vocabulary now lives in its own dependency-free module so
+// pure render code (components/book_card.js, and through it the standalone
+// recovery page) can use it without importing this entire sync stack.
+// Re-exported here so every existing importer keeps working unchanged.
+export { READING_STATUS, normalizeReadingStatus } from './reading_status.js';
 
 const DEFAULT_EDIT_UPLOAD_DEBOUNCE_MS = 2500;
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
@@ -53,11 +56,7 @@ function bookCreateIdempotencyKey(bookId) {
   return bookId ? `book-create:${bookId}` : undefined;
 }
 
-export function normalizeReadingStatus(entry) {
-  const s = entry?.readingStatus;
-  if (s === READING_STATUS.WANT_TO_READ || s === READING_STATUS.READING || s === READING_STATUS.READ) return s;
-  return READING_STATUS.READ;
-}
+// (definition moved to reading_status.js; imported above, re-exported below)
 
 function addUnset(unset, field) {
   if (!unset.includes(field)) unset.push(field);
