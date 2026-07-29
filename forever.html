@@ -7299,6 +7299,48 @@ code {
 }
 
 .shelf-empty-note { color: var(--color-text-muted); font-size: 0.92rem; }
+
+/* ===== Neutralize structural bleed from the inlined app stylesheet =====
+ *
+ * public/css/styles.css is inlined for its card + shelf rules, but it also
+ * carries the live app SHELL's element-level layout, which has no business
+ * here and lands on this page's own elements:
+ *
+ *   header{position:fixed;height:var(--header-height);display:flex;…}
+ *     → turned this page's <header> into a squashed, full-width fixed bar
+ *       with the brand, title and lede jammed onto one line.
+ *   body{display:flex;justify-content:center}
+ *     → the app centers #app as a flex child; here it would lay the auth
+ *       column and the recovered shelf out SIDE BY SIDE instead of stacked.
+ *
+ * These rules load first, so re-asserting them here wins. Scoped to this
+ * page's own elements — every card/shelf rule we actually came for is
+ * untouched.
+ */
+
+body {
+  display: block;
+  justify-content: normal;
+}
+
+.page-header {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  height: auto;
+  display: block;
+  gap: normal;
+  align-items: normal;
+  padding: 0;
+  background: none;
+  border-bottom: 0;
+}
+
+/* App `footer{margin-top:40px;text-align:center}` — this page's footer sets
+ * its own rhythm and reads left-aligned with the rest of the prose. */
+.page-footer {
+  text-align: left;
+}
 </style>
 </head>
 <body>
