@@ -41,11 +41,11 @@ if [[ "$(cat "$SRC/CNAME")" != "dev.getbookish.app" ]]; then
   exit 1
 fi
 
-app_version=$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' "$SRC/index.html" | head -1 || true)
+app_version=$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' "$SRC/index.html" | sed -n 1p || true)
 sw_version=$(sed -n "s/.*VERSION='\(v[0-9]*\)'.*/\1/p" "$SRC/sw.js")
 src_sha=$(git -C "$SRC" rev-parse --short HEAD)
 live_app=""
-[[ -f "$DEST/index.html" ]] && live_app=$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' "$DEST/index.html" | head -1 || true)
+[[ -f "$DEST/index.html" ]] && live_app=$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' "$DEST/index.html" | sed -n 1p || true)
 info "Promoting ${app_version:-?} (SW ${sw_version:-?}) from bookish-site-dev ${src_sha}; production is ${live_app:-empty}"
 
 find "$DEST" -mindepth 1 -maxdepth 1 -not -name '.git' -not -name '.github' -exec rm -rf {} +
@@ -86,7 +86,7 @@ if git diff --cached --quiet; then
   exit 0
 fi
 git commit -q -m "Deploy: $(date -u '+%Y-%m-%d %H:%M:%S') - ${app_version} (from bookish-site-dev ${src_sha})"
-git --no-pager log -1 --stat --format='%s' | tail -n 3
+git --no-pager log -1 --shortstat --format='%s'
 
 if $DRY_RUN; then
   info "Dry run: committed locally, not pushing"
