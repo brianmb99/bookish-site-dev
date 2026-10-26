@@ -1,0 +1,110 @@
+name: Release production
+
+# Promotes this repo (what dev.getbookish.app serves) to brianmb99/bookish-site
+# (getbookish.app). The push to production happens only in the "production"
+# environment: Brian approves each run, and BOOKISH_SITE_TOKEN lives there as
+# an environment secret.
+#
+# Start a release: push a tag release-<yyyymmdd-hhmm> on main, or run this
+# workflow from the Actions tab. Roll back: run it with `commit` set to an
+# older commit of main.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    tags: ['release-*']
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Commit of main to release (blank = latest main)
+        required: false
+        default: ''
+
+concurrency:
+  group: release-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scope:
+    name: Token is approval-gated
+    runs-on: ubuntu-latest
+    steps:
+      - name: BOOKISH_SITE_TOKEN must not be a repository secret
+        env:
+          REPO_LEVEL_TOKEN: ${{ secrets.BOOKISH_SITE_TOKEN }}
+        run: |
+          if [ -n "$REPO_LEVEL_TOKEN" ]; then
+            echo "::error::BOOKISH_SITE_TOKEN is a repository secret, so any workflow can push to production without approval. Delete it under Settings > Secrets and variables > Actions and add it to the production environment instead."
+            exit 1
+          fi
+          echo "OK: no repository-level BOOKISH_SITE_TOKEN."
+
+  dry-run:
+    name: Release dry run
+    if: github.event_name == 'pull_request'
+    needs: secret-scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: site-dev
+      - name: Scratch copy of bookish-site
+        run: |
+          git clone --depth 1 https://github.com/brianmb99/bookish-site.git prod
+          git -C prod remote remove origin
+      - name: Git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Promote (no push)
+        run: bash site-dev/.github/scripts/promote.sh site-dev prod --dry-run
+
+  release:
+    name: Release to getbookish.app
+    if: github.event_name != 'pull_request'
+    needs: secret-scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://getbookish.app
+    steps:
+      - name: Release scripts
+        uses: actions/checkout@v4
+        with:
+          path: release-tools
+          sparse-checkout: .github
+      - name: Site to release
+        uses: actions/checkout@v4
+        with:
+          path: site-dev
+          ref: ${{ inputs.commit || github.sha }}
+          fetch-depth: 0
+      - name: Only release commits on main
+        run: |
+          sha=$(git -C site-dev rev-parse HEAD)
+          if ! git -C site-dev merge-base --is-ancestor "$sha" origin/main; then
+            echo "::error::$sha is not on main of bookish-site-dev."
+            exit 1
+          fi
+          echo "Releasing bookish-site-dev $sha"
+      - name: Check out bookish-site
+        env:
+          SITE_TOKEN: ${{ secrets.BOOKISH_SITE_TOKEN }}
+        run: |
+          if [ -z "$SITE_TOKEN" ]; then
+            echo "::error::Environment secret BOOKISH_SITE_TOKEN is not set in the production environment (fine-grained token, bookish-site only, Contents: read and write)."
+            exit 1
+          fi
+          git clone "https://x-access-token:${SITE_TOKEN}@github.com/brianmb99/bookish-site.git" prod
+      - name: Git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Promote and push
+        run: bash release-tools/.github/scripts/promote.sh site-dev prod
