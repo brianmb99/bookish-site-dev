@@ -3,24 +3,16 @@ export function renderSubscriptionSection({
   activeEntryCount = 0,
 } = {}) {
   const subStatus = subscription?.getStatus?.();
-  if (subStatus === 'free') {
+  if (subStatus === 'free' || subStatus === 'lapsed') {
     // Free-for-all launch: no paywall, no dead-end checkout (Stripe is dormant).
     // Keep the Subscription concept visible but honest \u2014 paid plans may arrive
-    // later as optional support; nothing is gated today.
+    // later as optional support; nothing is gated today. A lapsed subscriber is
+    // back on the free tier, so they see the same thing.
     return `
       <div class="account-panel-subscription">
         <div class="account-panel-sub-label">Subscription</div>
         <div class="account-panel-sub-value">Bookish is free \u2014 no subscription needed.</div>
         <div class="account-panel-sub-pitch">Save as many books as you like. Paid plans may arrive later to support permanent storage \u2014 you'll never lose access to anything you've saved.</div>
-      </div>
-    `;
-  }
-  if (subStatus === 'lapsed') {
-    return `
-      <div class="account-panel-subscription">
-        <div class="account-panel-sub-label">Subscription</div>
-        <div class="account-panel-sub-value">Expired \u2014 renew to keep adding books</div>
-        <button type="button" id="accountSubscribeBtn" class="account-panel-sub-btn" data-subscribe-action="renew">Renew \u2014 $10/year</button>
       </div>
     `;
   }

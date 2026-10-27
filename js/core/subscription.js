@@ -84,14 +84,15 @@ export function resetStatus() {
 
 /**
  * Whether the user should be blocked from adding another book right now.
- * Subscribed: never. Lapsed: always. Free: when at/over FREE_LIMIT.
+ * Subscribed: never. Free and lapsed: when at/over FREE_LIMIT — a lapsed
+ * subscriber is back on the free tier (bookish-api demotes them to
+ * FREE_TIER_RULES), so they get exactly what a never-paid reader gets.
  * Unknown status (pre-fetch, fetch failed): never — fail open.
  * @param {number} entryCount — non-tombstoned entry count
  */
 export function isAddBlocked(entryCount) {
   if (_status === 'subscribed') return false;
-  if (_status === 'lapsed') return true;
-  if (_status === 'free') return entryCount >= FREE_LIMIT;
+  if (_status === 'free' || _status === 'lapsed') return entryCount >= FREE_LIMIT;
   return false;
 }
 

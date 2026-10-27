@@ -42,8 +42,8 @@ expects the Tarn repo to be a sibling directory (`../tarn/`).
 After rebuilding:
 
 1. Verify nothing in `tarn_service.js` needs to change for the new SDK.
-2. Bump the SW version (the publish-dev.sh deploy does this automatically,
-   but rebuild + commit on its own should still bump if shipping).
+2. No SW version bump needed: the dev deploy stamps a new one into the
+   deployed `sw.js`, so returning clients fetch the new bundle.
 3. Smoke-test register / login / CRUD and a Friends invite/share read path
    against `api.tarn.dev` before merging.
 
