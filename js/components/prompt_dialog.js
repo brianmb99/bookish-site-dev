@@ -15,8 +15,10 @@
 //   if (value != null) { ... }   // null === cancelled / dismissed / unchanged-empty
 //
 // Resolves to the TRIMMED string on confirm, or null on cancel / backdrop /
-// ESC. Confirm is disabled while the field is empty. Idempotent open: a second
-// call dismisses the previous one (resolving it to null) first.
+// ESC. Confirm is disabled while the field is empty, or, with
+// `requiredValue`, until the field matches it (case-insensitive, so phone
+// auto-capitalization doesn't block a typed "DELETE"). Idempotent open: a
+// second call dismisses the previous one (resolving it to null) first.
 
 const OVERLAY_ID = 'bookishPromptDialog';
 const TITLE_ID = 'bookishPromptDialogTitle';
@@ -65,6 +67,8 @@ function teardown(resultIfStillPending = null) {
  *   confirmLabel?: string,
  *   cancelLabel?: string,
  *   maxLength?: number,
+ *   requiredValue?: string,
+ *   destructive?: boolean,
  * }} args
  * @returns {Promise<string|null>}
  */
@@ -79,7 +83,12 @@ export function openPromptDialog(args) {
     confirmLabel = 'Save',
     cancelLabel = 'Cancel',
     maxLength = 64,
+    requiredValue = null,
+    destructive = false,
   } = args || {};
+  const accepts = (v) => (requiredValue == null
+    ? v.length > 0
+    : v.toLowerCase() === String(requiredValue).toLowerCase());
 
   _focusReturnEl = (typeof document !== 'undefined') ? document.activeElement : null;
 
@@ -100,7 +109,7 @@ export function openPromptDialog(args) {
                maxlength="${Number(maxLength) || 64}" autocomplete="off" autocapitalize="words" />
         <div class="confirm-dialog-actions">
           <button type="button" class="btn confirm-dialog-cancel" id="${CANCEL_ID}">${escapeHtml(cancelLabel)}</button>
-          <button type="button" class="btn primary confirm-dialog-confirm" id="${CONFIRM_ID}">${escapeHtml(confirmLabel)}</button>
+          <button type="button" class="btn ${destructive ? 'destructive' : 'primary'} confirm-dialog-confirm" id="${CONFIRM_ID}">${escapeHtml(confirmLabel)}</button>
         </div>
       </div>
     `;
@@ -116,10 +125,10 @@ export function openPromptDialog(args) {
       if (r) r(val);
     };
 
-    const syncDisabled = () => { confirmBtn.disabled = input.value.trim().length === 0; };
+    const syncDisabled = () => { confirmBtn.disabled = !accepts(input.value.trim()); };
     const submit = () => {
       const v = input.value.trim();
-      if (!v) { input.focus(); return; }
+      if (!accepts(v)) { input.focus(); return; }
       close(v);
     };
 

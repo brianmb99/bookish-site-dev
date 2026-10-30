@@ -48,6 +48,15 @@ export function renderAccountSecurityView(content, {
             <button type="button" id="changeCredentialsBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary">Change username or password</button>
           </div>
         </div>
+
+        <div class="account-security-block" id="accountDeleteBlock">
+          <div class="account-security-subtitle">Delete account</div>
+          <div class="account-security-desc">Permanently delete your account and sign out on every device. To keep a copy of your books, download one from Data Export first.</div>
+          <div id="deleteAccountError" class="account-security-error" hidden></div>
+          <div class="account-security-actions">
+            <button type="button" id="deleteAccountBtn" class="account-panel-sub-btn account-panel-sub-btn-secondary account-delete-btn">Delete account</button>
+          </div>
+        </div>
       </div>
     `,
     onBack,

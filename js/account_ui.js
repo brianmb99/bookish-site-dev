@@ -5,6 +5,7 @@ import uiStatusManager from './ui_status_manager.js';
 import { stopSync, startSync, markInitialSyncDone } from './sync_manager.js';
 import * as tarnService from './core/tarn_service.js';
 import * as subscription from './core/subscription.js';
+import * as storageProtection from './core/storage_protection.js';
 import { pushOverlayState, popOverlayState } from './core/overlay_history.js';
 import { attachSwipeDismiss } from './core/swipe_dismiss.js';
 import { attachKeyboardHandler } from './core/keyboard_viewport.js';
@@ -49,6 +50,8 @@ import {
   humanizeCredentialChangeError,
   startChangeCredentialsFlow as startChangeCredentialsFlowModule,
 } from './components/account_credentials_flow.js';
+import { openPromptDialog } from './components/prompt_dialog.js';
+import * as statusHelpers from './components/status_helpers.js';
 
 // Track the swipe-dismiss cleanup so we can detach on close.
 let _accountResetSwipe = null;
@@ -317,6 +320,8 @@ function finishPostCreateAccount() {
   closeAccountModal();
   startSync();
   uiStatusManager.refresh();
+  // Don't wait for the first sync's 'change' event; it can take seconds.
+  storageProtection.refresh();
   if (typeof window.updateBookDots === 'function') window.updateBookDots();
   friendsRouter.maybeOpenPendingAcceptModal().catch(err =>
     console.warn('[Bookish:AccountUI] friends invite handler failed:', err?.message || err)
@@ -381,6 +386,7 @@ function completePostSignIn() {
     closeAccountModal();
     startSync();
     uiStatusManager.refresh();
+    storageProtection.refresh();
     if (typeof window.updateBookDots === 'function') window.updateBookDots();
     // Friends invite redemption (#118). If the user signed in to redeem
     // an invite they clicked while logged out, fire the accept modal
@@ -556,6 +562,47 @@ function wireAccountSecuritySection(content) {
   // list() both touch the SDK.
   hydratePasskeysSection(content).catch(err =>
     console.warn('[AccountUI] passkeys hydrate failed:', err?.message || err)
+  );
+  content.querySelector('#deleteAccountBtn')?.addEventListener('click', () => startDeleteAccountFlow(content));
+}
+
+async function startDeleteAccountFlow(content) {
+  const btn = content.querySelector('#deleteAccountBtn');
+  const errorEl = content.querySelector('#deleteAccountError');
+  const typed = await openPromptDialog({
+    title: 'Delete your account?',
+    body: "This permanently deletes your account and signs you out on every device. You won't be able to sign in again or restore your library in Bookish. Encrypted copies of your books stay in Arweave's permanent archive: they can't be erased, and no one can read them without your password or account key. Type DELETE to confirm.",
+    placeholder: 'DELETE',
+    confirmLabel: 'Delete account',
+    requiredValue: 'DELETE',
+    destructive: true,
+  });
+  if (typed == null) return;
+
+  if (errorEl) { errorEl.hidden = true; errorEl.textContent = ''; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+  stopSync();
+  let deleted = false;
+  try {
+    await tarnService.deleteAccount();
+    deleted = true;
+  } catch (err) {
+    console.warn('[Bookish:AccountUI] delete account failed:', err?.message || err);
+    if (tarnService.isLoggedIn()) {
+      startSync();
+      if (btn) { btn.disabled = false; btn.textContent = 'Delete account'; }
+      if (errorEl) {
+        errorEl.textContent = "Couldn't delete your account. Check your connection and try again.";
+        errorEl.hidden = false;
+      }
+      return;
+    }
+  }
+  closeAccountModal();
+  await performLogout();
+  statusHelpers.showStatusToast(
+    deleted ? 'Your account was deleted.' : 'You were signed out. Sign in to try again.',
+    { durationMs: 5000 },
   );
 }
 

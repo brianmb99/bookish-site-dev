@@ -21,6 +21,7 @@ import { getFieldPref, setFieldPref } from './core/field_prefs.js';
 import * as subscription from './core/subscription.js';
 import * as friendsRouter from './core/friends_router.js';
 import * as accountKeyReminder from './core/account_key_reminder.js';
+import * as storageProtection from './core/storage_protection.js';
 import { debugLog } from './core/debug_log.js';
 import { wireFriendGlyphTrigger, refreshFriendGlyphTrigger } from './components/friend_glyph_trigger.js';
 import { buildCardHTML as sharedBuildCardHTML, buildCardDetails as sharedBuildCardDetails, generatedCoverColor as sharedGeneratedCoverColor, escapeHtml as sharedEscapeHtml } from './components/book_card.js';
@@ -1492,6 +1493,8 @@ export function showAccountNudge(){
 
   if(entries.length < 3) return;
 
+  if(storageProtection.isBannerVisible()) return;
+
   if(accountNudgeBanner){
     accountNudgeBanner.style.display='flex';
   }
@@ -2916,6 +2919,7 @@ async function initCacheLayer(){
       orderEntries();
       render();
       uiStatusManager.refresh();
+      storageProtection.refresh();
       showAccountNudge();
       // §6.6 backfill: once the shelf has loaded for the first time,
       // reconcile existing connections' shared libraries (one-shot,

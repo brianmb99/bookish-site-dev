@@ -1918,6 +1918,28 @@ html.modal-transitioning::view-transition-new(root){
   .account-key-reminder-close{order:2;margin-left:auto}
   .account-key-reminder-actions{order:3;flex-basis:100%;justify-content:flex-start;margin-top:4px}
 }
+/* Home Screen prompt (core/storage_protection.js): iPhone/iPad browser tabs
+   only, same slot and look as .account-key-reminder. */
+.home-screen-prompt{background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);border-radius:10px;padding:12px 16px;margin:16px 0;display:none;opacity:0;transition:opacity 150ms ease-out}
+.home-screen-prompt.is-visible{display:flex;opacity:1;animation:fadeIn .3s ease-out}
+.home-screen-prompt-content{display:flex;align-items:center;gap:12px;width:100%}
+.home-screen-prompt-icon{flex:0 0 auto;color:var(--color-accent);display:flex;align-items:center;justify-content:center}
+.home-screen-prompt-text{flex:1 1 auto;display:flex;flex-direction:column;gap:2px;min-width:0}
+.home-screen-prompt-title{font-size:.85rem;font-weight:600;color:var(--color-text-primary)}
+.home-screen-prompt-body{font-size:.75rem;color:var(--color-text-secondary);line-height:1.4}
+.home-screen-prompt-body strong{font-weight:600;color:var(--color-text-primary)}
+.home-screen-prompt-actions{flex:0 0 auto;display:flex;gap:8px;align-items:center}
+.home-screen-prompt-actions[hidden]{display:none}
+.home-screen-prompt-actions .btn{font-size:.8rem;padding:6px 12px;min-height:0;white-space:nowrap}
+.home-screen-prompt-close{flex:0 0 auto;align-self:flex-start;background:transparent;border:none;color:var(--color-text-muted);cursor:pointer;padding:6px;border-radius:4px;display:flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;box-shadow:none}
+.home-screen-prompt-close:hover{color:var(--color-text-secondary);background:var(--color-bg-surface)}
+@media (max-width: 600px){
+  .home-screen-prompt-content{flex-wrap:wrap}
+  .home-screen-prompt-text{flex-basis:calc(100% - 80px);order:1}
+  .home-screen-prompt-icon{order:0}
+  .home-screen-prompt-close{order:2;margin-left:auto}
+  .home-screen-prompt-actions{order:3;flex-basis:100%;justify-content:flex-start;margin-top:4px}
+}
 /* Install popover (iOS/Android instructions) */
 .install-popover{position:absolute;top:100%;right:0;margin-top:8px;z-index:999;animation:fadeIn .2s ease-out}
 .install-popover-arrow{position:absolute;top:-6px;right:18px;width:12px;height:6px;overflow:hidden}
@@ -3557,6 +3579,16 @@ form.inline label.toggle-switch{display:flex}
   margin-top:0;
   align-self:flex-start;
 }
+.account-panel-sub-btn-secondary.account-delete-btn{
+  color:#fca5a5;
+  border-color:rgba(220,38,38,.42);
+}
+.account-panel-sub-btn-secondary.account-delete-btn:hover{
+  color:#fecaca;
+  background:rgba(220,38,38,.12);
+  border-color:rgba(220,38,38,.58);
+}
+#deleteAccountError:not([hidden]){margin-bottom:8px}
 .account-display-name-summary{
   display:grid;
   grid-template-columns:minmax(0,1fr) auto;

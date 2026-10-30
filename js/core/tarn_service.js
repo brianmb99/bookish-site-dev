@@ -292,6 +292,35 @@ export async function logout() {
 }
 
 /**
+ * Permanently delete the signed-in account. Tarn removes the account
+ * record (sign-in credentials and stored key wraps) and every session, and
+ * marks the credential deleted on Arweave; the SDK then wipes this
+ * device's session and per-account stores. Encrypted entries already on
+ * Arweave are permanent and stay unreadable without the account's keys.
+ *
+ * Detaches the client first, like logout(), so nothing the SDK fires while
+ * clearing can be read as this module's live session. If the server
+ * refuses, the still-signed-in client is put back and the error rethrown.
+ *
+ * @returns {Promise<void>}
+ */
+export async function deleteAccount() {
+  const client = _client;
+  if (!client || !client.isLoggedIn()) throw new Error('Not logged in');
+  _client = null;
+  try {
+    await client.account.delete();
+  } catch (err) {
+    if (client.isLoggedIn()) _client = client;
+    throw err;
+  }
+  _initPromise = null;
+  _dataLookupKey = null;
+  try { localStorage.removeItem('tarn:session:v1'); } catch {}
+  clearLocalMetadata();
+}
+
+/**
  * Check if user is logged in.
  * @returns {boolean}
  */
