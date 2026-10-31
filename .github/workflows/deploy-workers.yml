@@ -1,0 +1,203 @@
+name: Deploy Bookish workers
+
+# Deploys the bookish-api and bookish-ops Cloudflare Workers from the private
+# brianmb99/bookish repo, and flips bookish-api's sign-up pause switch. It runs
+# here because GitHub only enforces required reviewers on public repositories
+# (Free, Pro, and Team plans), and bookish is private.
+#
+# Push one of these tags on a commit of main:
+#   bookish-api-deploy-<bookish sha>[-note]  deploy bookish-api at that bookish dev commit
+#   ops-deploy-<bookish sha>[-note]          deploy bookish-ops at that bookish dev commit
+#   signups-pause-<note>                     REGISTRATIONS_PAUSED=true on bookish-api
+#   signups-resume-<note>                    REGISTRATIONS_PAUSED=false on bookish-api
+# Deploy bookish-api before ops when ops binds to a new bookish-api entrypoint.
+#
+# Every run waits for Brian's approval in the "production" environment, which
+# holds CLOUDFLARE_API_TOKEN (Edit Cloudflare Workers) and BOOKISH_REPO_TOKEN
+# (fine-grained, brianmb99/bookish only, Contents: read-only). Runs refuse to
+# start if that environment has no required reviewer.
+
+on:
+  push:
+    tags:
+      - 'bookish-api-deploy-*'
+      - 'ops-deploy-*'
+      - 'signups-pause-*'
+      - 'signups-resume-*'
+
+concurrency:
+  group: bookish-workers
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Approval gate and request
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.parse.outputs.action }}
+      sha: ${{ steps.parse.outputs.sha }}
+    steps:
+      - name: Secrets must be environment secrets
+        env:
+          REPO_LEVEL_CF: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          REPO_LEVEL_BOOKISH: ${{ secrets.BOOKISH_REPO_TOKEN }}
+        run: |
+          bad=false
+          if [ -n "$REPO_LEVEL_CF" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is a repository secret, so any workflow can deploy without approval. Delete it under Settings > Secrets and variables > Actions and add it to the production environment instead."
+            bad=true
+          fi
+          if [ -n "$REPO_LEVEL_BOOKISH" ]; then
+            echo "::error::BOOKISH_REPO_TOKEN is a repository secret. Move it to the production environment."
+            bad=true
+          fi
+          if $bad; then exit 1; fi
+          echo "OK: no repository-level Cloudflare or bookish tokens."
+      - name: production must require a reviewer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          types=$(gh api "repos/${GITHUB_REPOSITORY}/environments/production" --jq '[.protection_rules[]?.type] | join(",")')
+          case ",${types}," in
+            *,required_reviewers,*) echo "OK: production requires a reviewer." ;;
+            *)
+              echo "::error::The production environment has no required reviewer, so this deploy would run without approval. Add one under Settings > Environments > production."
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - name: Parse tag
+        id: parse
+        run: |
+          bash .github/scripts/parse-worker-tag.sh "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  deploy:
+    name: ${{ needs.preflight.outputs.action }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://bookish-api.bookish.workers.dev/api/config
+    env:
+      ACTION: ${{ needs.preflight.outputs.action }}
+      BOOKISH_SHA: ${{ needs.preflight.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: site-dev
+      - name: Only tags on main
+        run: |
+          if ! git -C site-dev merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag ${GITHUB_REF_NAME} is on ${GITHUB_SHA}, which is not on main of bookish-site-dev."
+            exit 1
+          fi
+      - name: Require credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          BOOKISH_REPO_TOKEN: ${{ secrets.BOOKISH_REPO_TOKEN }}
+          ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Add CLOUDFLARE_API_TOKEN (Edit Cloudflare Workers) to the production environment."
+            exit 1
+          fi
+          if [ "$ACTION" = bookish-api ] || [ "$ACTION" = ops ]; then
+            if [ -z "$BOOKISH_REPO_TOKEN" ]; then
+              echo "::error::Add BOOKISH_REPO_TOKEN (fine-grained, brianmb99/bookish only, Contents: read-only) to the production environment."
+              exit 1
+            fi
+          fi
+          # Some wrangler paths treat an empty CLOUDFLARE_ACCOUNT_ID as an account id.
+          if [ -n "$ACCOUNT_ID" ]; then
+            echo "CLOUDFLARE_ACCOUNT_ID=$ACCOUNT_ID" >> "$GITHUB_ENV"
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check out bookish dev
+        if: env.ACTION == 'bookish-api' || env.ACTION == 'ops'
+        uses: actions/checkout@v4
+        with:
+          repository: brianmb99/bookish
+          token: ${{ secrets.BOOKISH_REPO_TOKEN }}
+          ref: dev
+          fetch-depth: 0
+          path: bookish
+          persist-credentials: false
+      - name: Only bookish commits on dev
+        if: env.ACTION == 'bookish-api' || env.ACTION == 'ops'
+        run: |
+          sha=$(git -C bookish rev-parse --verify --quiet "${BOOKISH_SHA}^{commit}") || {
+            echo "::error::${BOOKISH_SHA} is not a commit in brianmb99/bookish."
+            exit 1
+          }
+          if ! git -C bookish merge-base --is-ancestor "$sha" origin/dev; then
+            echo "::error::bookish ${sha} is not on dev. Deploys only ship commits that are on dev."
+            exit 1
+          fi
+          git -C bookish checkout --quiet --detach "$sha"
+          echo "Deploying $ACTION from bookish $(git -C bookish log -1 --format='%h %s')"
+
+      - name: Deploy bookish-api
+        if: env.ACTION == 'bookish-api'
+        working-directory: bookish/bookish-api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CI: "true"
+        run: |
+          npm ci
+          npx wrangler deploy
+      - name: Deploy ops
+        if: env.ACTION == 'ops'
+        working-directory: bookish/ops
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CI: "true"
+        run: |
+          npm ci
+          npx wrangler deploy
+
+      # No bookish checkout needed: --name selects the Worker. Version matches
+      # bookish-api/package-lock.json.
+      - name: Pause sign-ups
+        if: env.ACTION == 'signups-pause'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CI: "true"
+        run: printf 'true' | npx --yes wrangler@4.81.1 secret put REGISTRATIONS_PAUSED --name bookish-api
+      # Overwrite rather than delete: deleting a secret that was never set
+      # fails, and bookish-api only pauses on the exact value "true".
+      - name: Resume sign-ups
+        if: env.ACTION == 'signups-resume'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CI: "true"
+        run: printf 'false' | npx --yes wrangler@4.81.1 secret put REGISTRATIONS_PAUSED --name bookish-api
+
+      - name: Verify
+        run: |
+          case "$ACTION" in
+            bookish-api)    url=https://bookish-api.bookish.workers.dev/health;     want='"ok":true' ;;
+            ops)            url=https://bookish-ops.bookish.workers.dev/health;     want='"ok":true' ;;
+            signups-pause)  url=https://bookish-api.bookish.workers.dev/api/config; want='"registrationsPaused":true' ;;
+            signups-resume) url=https://bookish-api.bookish.workers.dev/api/config; want='"registrationsPaused":false' ;;
+          esac
+          for attempt in 1 2 3 4 5 6; do
+            body=$(curl -sS -m 15 "$url" || true)
+            if printf '%s' "$body" | grep -qF "$want"; then
+              echo "OK: $url -> $body"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::$url did not return $want after $ACTION. Last response: $body"
+          exit 1
