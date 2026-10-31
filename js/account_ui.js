@@ -16,6 +16,7 @@ import * as accountKeyReminder from './core/account_key_reminder.js';
 import { applySignInScopeHygiene, clearLastSyncedDlk, GUEST_SCOPE } from './core/account_scope.js';
 import { deleteTarnSdkLocalDbs } from './core/local_db_reset.js';
 import { debugLog } from './core/debug_log.js';
+import { showStatusToast } from './components/status_helpers.js';
 import {
   isFriendsHiddenFromHeader,
   setHideFriendsFromHeader,
@@ -127,8 +128,17 @@ export function getAccountStatus() {
   };
 }
 
+async function handleRemoteSignOut() {
+  debugLog('[Bookish:AccountUI] Session ended by the server; signing out locally');
+  const modal = document.getElementById('accountModal');
+  if (modal && modal.style.display && modal.style.display !== 'none') closeAccountModal();
+  await performLogout();
+  showStatusToast('You were signed out on this device. Sign in to see your books.', { durationMs: 6000 });
+}
+
 export async function initAccountUI() {
   debugLog('[Bookish:AccountUI] Initializing...');
+  tarnService.onRemoteSignOut(handleRemoteSignOut);
   if (tarnService.isLoggedIn()) {
     localStorage.setItem('bookish.hasHadAccount', 'true');
     hydrateDisplayNameCache().catch(err =>

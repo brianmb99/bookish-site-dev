@@ -43,13 +43,55 @@ let _initPromise = null;
 let _dataLookupKey = null;
 const DLK_STORAGE_KEY = 'bookish.tarn.dlk';
 
+const _remoteSignOutListeners = new Set();
+let _remoteSignOutNotifiedFor = null;
+
 function buildClient() {
   return TarnClient.create({
     apiBase: TARN_API,
     appId: APP_ID,
     schema: bookishSchema,
-    storage: TarnStorage.localStorage(),
+    storage: watchSdkSignOut(TarnStorage.localStorage()),
   });
+}
+
+// The SDK signs the device out by itself when a silent token refresh learns
+// the server session is gone (signed out from another device, password
+// recovered elsewhere, or 90 days idle): it drops its credentials, then
+// clears the stored blob through this adapter. logout() nulls _client before
+// it clears, so a clear that leaves the live client logged out is the SDK's.
+function watchSdkSignOut(storage) {
+  return {
+    read: () => storage.read(),
+    write: blob => storage.write(blob),
+    async clear() {
+      await storage.clear();
+      if (_client && !_client.isLoggedIn()) notifyRemoteSignOut(_client);
+    },
+  };
+}
+
+function notifyRemoteSignOut(client) {
+  if (_remoteSignOutNotifiedFor === client) return;
+  _remoteSignOutNotifiedFor = client;
+  for (const listener of _remoteSignOutListeners) {
+    Promise.resolve()
+      .then(listener)
+      .catch(err => console.warn('[TarnService] remote sign-out listener failed:', err?.message || err));
+  }
+}
+
+/**
+ * Subscribe to sign-outs the SDK performs on its own (see watchSdkSignOut).
+ * Not called for logout(). The SDK client is already logged out when the
+ * listener runs; the listener owns the app-side cleanup.
+ *
+ * @param {() => void | Promise<void>} listener
+ * @returns {() => void} unsubscribe
+ */
+export function onRemoteSignOut(listener) {
+  _remoteSignOutListeners.add(listener);
+  return () => _remoteSignOutListeners.delete(listener);
 }
 
 function clearLocalMetadata() {

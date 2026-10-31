@@ -11,5 +11,5 @@ Source code, tests, tools, and private utilities live in a separate private repo
 Do not edit files here directly; changes will be overwritten on next publish.
 Production releases promote this repo's main branch with .github/workflows/release.yml.
 
-Version: v0.2.444 (SW v537) from bookish 42d309e
-Last publish: 2026-10-30 23:49:14 +0000
+Version: v0.2.445 (SW v538) from bookish 12b946d
+Last publish: 2026-10-31 01:23:38 +0000

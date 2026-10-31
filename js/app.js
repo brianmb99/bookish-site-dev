@@ -2874,10 +2874,9 @@ async function initCacheLayer(){
     // clear for true guest mode: logged-out books intentionally live in
     // IndexedDB on this device. See #113 and the guest persistence fix.
     //
-    // Mid-session auth failures (401 during sync) are intentionally NOT handled
-    // here — that requires distinguishing real auth death from transient network
-    // hiccups inside sync_manager.js, which is its own design problem. See the
-    // follow-up issue.
+    // A session the server ends mid-session (signed out from another device,
+    // password recovered elsewhere, 90 days idle) is handled by
+    // handleRemoteSignOut in account_ui.js, which the SDK triggers itself.
     if (hadPersistedTarnSession && !tarnService.isLoggedIn()) {
       await window.bookishCache.clearAll();
       // #230: the SDK's delta cursor must die with the books cache, on
