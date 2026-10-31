@@ -181,6 +181,7 @@ export function renderCreateAccountForm(content, deps = {}) {
 
       <div class="auth-note">
         Your reading list is private \u2014 even Bookish can't read it or reset your password. After signup we'll show you a 24-word account key. You can view it again any time in Settings.
+        By creating an account, you agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.
       </div>
 
       <button id="createAccountBtn" class="btn primary auth-submit" disabled>

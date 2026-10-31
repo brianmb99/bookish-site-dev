@@ -3269,6 +3269,11 @@ form.inline label.toggle-switch{display:flex}
   border-radius: 8px;
   margin: 0 0 10px;
 }
+.auth-note a {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 /* Success message after account creation — larger than regular progress
    so the "check your email" sub-message is readable. */

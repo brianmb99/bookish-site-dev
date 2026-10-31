@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Privacy Policy — Bookish</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="description" content="How Bookish handles your data: what is encrypted, what our servers keep, who else is involved, and what permanent storage means."/>
+  <meta name="theme-color" content="#0f1114"/>
+  <meta name="view-transition" content="same-origin"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-192.png"/>
+  <link rel="preload" href="fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/fraunces-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/static-pages.css"/>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Nav -->
+  <nav class="nav">
+    <a href="/" class="nav-brand">Bookish</a>
+    <div class="nav-links">
+      <a href="/about.html">About</a>
+      <span class="sep">|</span>
+      <a href="/faq.html">FAQ</a>
+      <span class="sep">|</span>
+      <a href="/forever.html">Forever</a>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <div class="page-header">
+    <h1>Privacy Policy</h1>
+    <p>Last updated October 31, 2026</p>
+  </div>
+
+  <article class="legal">
+
+    <section class="legal-summary" aria-labelledby="short-version">
+      <h2 id="short-version">The short version</h2>
+      <ul>
+        <li>Your books, notes, ratings, and covers are encrypted on your device before they're uploaded. We can't read them.</li>
+        <li>We don't keep your email address on our servers. We use it once, at sign-up, to send a welcome email.</li>
+        <li>No ads, no analytics, no tracking cookies, and we never sell your data.</li>
+        <li>Encrypted copies of your library are stored permanently on a public network called Arweave. They can't be erased, even after you delete your account, but they can't be read without your password or account key.</li>
+        <li>Book searches go straight from your device to public book catalogs (Open Library, Apple, Google Books) and cover images load from those catalogs and Amazon.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="who">
+      <h2 id="who">1. Who we are</h2>
+      <p>Bookish is an independent reading-list app at getbookish.app, run by Brian Bulthuis ("Bookish," "we," "us"). Questions or requests about privacy go to <a href="mailto:hello@getbookish.app">hello@getbookish.app</a>.</p>
+      <p>This policy covers the Bookish app and website. Services you reach from Bookish, such as the book catalogs listed below, have their own privacy policies.</p>
+    </section>
+
+    <section aria-labelledby="device">
+      <h2 id="device">2. What stays on your device</h2>
+      <p>Bookish keeps your library in your browser's storage on each device so it works offline. Before you create an account, the books you add exist only there. Anyone who can use that browser can see them.</p>
+      <p>When you sign out, or delete your account, Bookish clears the copy of your library stored in that browser.</p>
+    </section>
+
+    <section aria-labelledby="account">
+      <h2 id="account">3. Your account and encryption</h2>
+      <p>When you create an account, your device turns your email address and password into encryption keys (using Argon2id). Your password never leaves your device. Everything you save is encrypted on your device (AES-256-GCM) before it's uploaded.</p>
+      <p>Our servers keep:</p>
+      <ul>
+        <li>Your encrypted records, which we can't decrypt.</li>
+        <li>Locked copies of your encryption keys. Only your password, your 24-word account key, or a passkey you set up can unlock them.</li>
+        <li>Account identifiers computed from your credentials with one-way functions. They don't reveal your email address or password.</li>
+        <li>Account settings, such as your storage limit.</li>
+        <li>A record of each signed-in session: a device label, when the session started, and when it was last used.</li>
+      </ul>
+      <p>Because your password unlocks your data, we can't reset it. If you forget it, you can get back in with your account key or a passkey. If you lose all of them, your data can't be recovered by anyone, including us.</p>
+    </section>
+
+    <section aria-labelledby="email">
+      <h2 id="email">4. Your email address</h2>
+      <ul>
+        <li><strong>On your device:</strong> your email is part of what your encryption keys are made from.</li>
+        <li><strong>At sign-up:</strong> your device sends your email to our server once so we can send a welcome email through our email provider, Resend. We don't save it. Resend keeps delivery records under its own privacy policy.</li>
+        <li><strong>Finding friends:</strong> your account stores a one-way value computed from your email address, so the sharing system can find you. Someone who already knows your email address could use it to check whether that address has a Bookish account. It doesn't let them read anything.</li>
+      </ul>
+      <p>Because we don't keep a list of email addresses, we can't email you announcements, and we can't look up your account from your email address.</p>
+    </section>
+
+    <section aria-labelledby="friends">
+      <h2 id="friends">5. Friends and sharing</h2>
+      <p>You connect with a friend by sending them an invite link. Each link works once and expires after 7 days.</p>
+      <ul>
+        <li><strong>What friends see.</strong> Once you're connected, your friends can see the books on your shelf, along with your display name, and you can see theirs. Books you mark as private stay off your friends' shelves.</li>
+        <li><strong>What we see.</strong> Shared books are encrypted so that only you and your friend can read them. Our servers do keep some information about sharing activity: when invites are created and used, and the account identifiers attached to shared records. We can't see the books, notes, or names you share.</li>
+        <li><strong>Removing a friend or making a book private</strong> stops sharing from then on. Anything your friend already saw could have been copied, and earlier encrypted shares stay on Arweave (see section 7).</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="search">
+      <h2 id="search">6. Book search and covers</h2>
+      <p>When you search for a book or pick a cover, your device contacts these services directly. We don't route or log these requests.</p>
+      <ul>
+        <li><strong>Open Library</strong> (Internet Archive): titles, authors, and search text; cover images.</li>
+        <li><strong>Apple</strong> (iTunes Search): search text, for audiobook results and artwork.</li>
+        <li><strong>Google Books</strong>: ISBNs, to find editions.</li>
+        <li><strong>Amazon</strong>: cover images, requested by ISBN.</li>
+      </ul>
+      <p>Like any website your browser visits, these services receive your IP address and basic browser information along with the request. The cover you choose is saved inside your encrypted book record.</p>
+    </section>
+
+    <section aria-labelledby="permanent">
+      <h2 id="permanent">7. Permanent storage on Arweave</h2>
+      <p>Your encrypted records are uploaded through our servers to Arweave, a public network designed to store data permanently. We use ArDrive's Turbo service to upload them.</p>
+      <ul>
+        <li><strong>It's permanent.</strong> Nobody can delete data from Arweave: not you, not us, not Arweave.</li>
+        <li><strong>It's public but encrypted.</strong> Anyone can download the encrypted bytes. Without your password, account key, or passkey, they're unreadable.</li>
+        <li><strong>Some labels are public.</strong> Each upload carries a few public labels, such as the record type, the time it was written, and an account identifier that doesn't reveal your email.</li>
+      </ul>
+      <p>Because the encrypted copies are public and permanent, your password and account key are what keep them private. Use a strong password you don't use anywhere else, and keep your account key safe.</p>
+    </section>
+
+    <section aria-labelledby="services">
+      <h2 id="services">8. Services we use, and what they see</h2>
+      <ul>
+        <li><strong>GitHub Pages</strong> hosts the Bookish website and app files. GitHub receives your IP address when your browser loads them.</li>
+        <li><strong>Cloudflare</strong> runs our servers and stores the encrypted records, account data, and logs described in this policy.</li>
+        <li><strong>ArDrive Turbo and Arweave</strong> receive and store your encrypted records.</li>
+        <li><strong>Resend</strong> receives your email address to deliver the welcome email.</li>
+      </ul>
+      <p>We don't take payments today. If we ever offer paid plans, a payment processor will handle your payment details, and we'll update this policy first.</p>
+    </section>
+
+    <section aria-labelledby="logs">
+      <h2 id="logs">9. IP addresses and logs</h2>
+      <ul>
+        <li><strong>Abuse limits.</strong> We use your IP address, in a hashed form, to limit how fast requests can be made, for example sign-ups. These counters expire after about an hour.</li>
+        <li><strong>Security log.</strong> When you view or change your account key, or add, use, or remove a passkey, we record the time, a hashed form of your IP address, and your browser's user-agent string. We keep these entries for 90 days to help spot misuse of an account.</li>
+        <li><strong>Server logs.</strong> Our servers' request logs, including IP addresses, are kept by Cloudflare for about a week or less, for troubleshooting.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="tracking">
+      <h2 id="tracking">10. No ads, analytics, or tracking</h2>
+      <p>Bookish has no ads, no analytics, and no third-party trackers. Our fonts are served from our own site. We don't use cookies. The app uses your browser's storage (IndexedDB, localStorage, and sessionStorage) for your library, your sign-in, and your preferences, and a service worker so the app loads offline.</p>
+      <p>We don't sell your data, use it for advertising, or use it to train AI models.</p>
+    </section>
+
+    <section aria-labelledby="delete">
+      <h2 id="delete">11. Deleting your account</h2>
+      <p>You can delete your account in the app under Account &amp; Security. Here's what happens:</p>
+      <ul>
+        <li><strong>Deleted right away:</strong> your account record, including the locked copies of your keys, your settings, and the value used for finding friends, along with all of your sign-in sessions. Every device is signed out.</li>
+        <li><strong>Added:</strong> a public deletion marker on Arweave, so recovery tools can tell the account was deleted.</li>
+        <li><strong>What remains:</strong> your encrypted records on Arweave, permanently. Encrypted copies we keep on our servers to make syncing faster, and records of past sharing activity, also remain. All of it is unreadable without your keys. Security log entries expire after 90 days, and unused invites expire after 7 days.</li>
+      </ul>
+      <p>If you want a copy of your books, download one from Data Export before you delete your account.</p>
+    </section>
+
+    <section aria-labelledby="rights">
+      <h2 id="rights">12. Your choices and rights</h2>
+      <p>You can do most things yourself in the app:</p>
+      <ul>
+        <li><strong>See and export your data:</strong> your whole library is in the app, and Data Export downloads a copy. The <a href="/forever.html">Forever page</a> can recover your books straight from Arweave using your account key, or your email address and password.</li>
+        <li><strong>Correct it:</strong> edit any book, change your display name, or change your email address or password under Account &amp; Security.</li>
+        <li><strong>Delete it:</strong> see section 11.</li>
+      </ul>
+      <p>Depending on where you live, you may have legal rights to access, correct, or delete personal information, and to opt out of its sale. We honor these for everyone. We don't sell or "share" personal information as California law defines those terms, so there's nothing to opt out of. Email <a href="mailto:hello@getbookish.app">hello@getbookish.app</a> with any request. Because we don't store names or email addresses, we usually can't match a request to an account from an email alone, so we may ask you to complete it in the app.</p>
+    </section>
+
+    <section aria-labelledby="children">
+      <h2 id="children">13. Children</h2>
+      <p>Bookish isn't meant for children under 13, and they may not create an account. If you believe a child under 13 has an account, email us and we'll help remove it.</p>
+    </section>
+
+    <section aria-labelledby="international">
+      <h2 id="international">14. Where data is processed</h2>
+      <p>Bookish is run from the United States. Our servers run on Cloudflare's global network, and Arweave stores data on computers around the world. By using Bookish, you understand that your information is processed in the United States and other countries.</p>
+    </section>
+
+    <section aria-labelledby="security">
+      <h2 id="security">15. Security</h2>
+      <p>We protect your data with encryption on your device, HTTPS for every connection, and rate limits on our servers. No system is perfectly secure. If we learn of a breach that affects you, we'll post a notice in the app and on this site explaining what happened and what you should do.</p>
+    </section>
+
+    <section aria-labelledby="changes">
+      <h2 id="changes">16. Changes to this policy</h2>
+      <p>If we change this policy, we'll update the date at the top. For important changes, we'll show a notice in the app at least 30 days before they take effect.</p>
+    </section>
+
+    <section aria-labelledby="contact">
+      <h2 id="contact">17. Contact</h2>
+      <p>Questions, requests, or security concerns: <a href="mailto:hello@getbookish.app">hello@getbookish.app</a>.</p>
+    </section>
+
+  </article>
+
+  <!-- Footer -->
+  <footer class="about-footer">
+    <p>Bookish &bull; <a href="/about.html">About</a> &bull; <a href="/faq.html">FAQ</a> &bull; <a href="/forever.html">Forever</a> &bull; <a href="/privacy.html">Privacy</a> &bull; <a href="/terms.html">Terms</a></p>
+  </footer>
+
+</div>
+
+</body>
+</html>

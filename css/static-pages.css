@@ -321,6 +321,52 @@ body::before{
 
 .faq-entry p{line-height:1.6}
 
+.legal{margin-bottom:56px}
+.legal section{margin-bottom:40px}
+
+.legal h2{
+  font-family:var(--font-display);
+  font-size:1.25rem;
+  font-weight:500;
+  color:var(--color-text-primary);
+  margin-bottom:14px;
+  scroll-margin-top:24px;
+}
+
+.legal p,
+.legal li{
+  font-size:.95rem;
+  line-height:1.65;
+  color:var(--color-text-secondary);
+}
+
+.legal p{margin-bottom:14px}
+.legal p:last-child{margin-bottom:0}
+.legal ul,
+.legal ol{margin:0 0 14px;padding-left:1.25rem}
+.legal ul:last-child,
+.legal ol:last-child{margin-bottom:0}
+.legal li{margin-bottom:8px}
+.legal li:last-child{margin-bottom:0}
+.legal strong{color:var(--color-text-primary);font-weight:600}
+
+.legal a{
+  color:var(--color-primary-hover);
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
+
+.legal a:hover{color:var(--color-text-primary)}
+
+.legal .legal-summary{
+  background:var(--color-bg-surface);
+  border:1px solid var(--color-border-subtle);
+  border-radius:14px;
+  padding:24px;
+}
+
+.legal .legal-summary h2{color:var(--color-accent)}
+
 .about-footer{
   text-align:center;
   padding-top:40px;
